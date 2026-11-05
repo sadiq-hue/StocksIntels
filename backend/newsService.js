@@ -826,12 +826,14 @@ const CATALYST_RULES = [
     'raises guidance', 'raised guidance', 'raises outlook', 'raised outlook', 'boosts outlook',
     'raises full-year', 'increases guidance', 'upgrades guidance', 'raises forecast',
     'record revenue', 'record earnings', 'beats estimates', 'beat estimates', 'tops estimates',
+    'beats expectations', 'beat expectations', 'tops expectations',
     'earnings beat', 'ahead of expectations', 'above consensus', 'strong guidance',
   ]},
   { type: 'Guidance', direction: 'negative', strength: 2, keywords: [
     'cuts guidance', 'cut guidance', 'lowers guidance', 'lowered guidance', 'cuts outlook',
     'lowers outlook', 'slashes forecast', 'slashes guidance', 'profit warning',
-    'misses estimates', 'missed estimates', 'misses revenue', 'earnings miss',
+    'misses estimates', 'missed estimates', 'misses expectations', 'missed expectations',
+    'misses revenue', 'earnings miss',
     'below expectations', 'below consensus', 'weak guidance', 'withdraws guidance',
     'suspends guidance',
   ]},
@@ -2005,7 +2007,345 @@ async function fetchFromFDA() {
   }
 }
 
-// Wrapper that aborts slow calls (rate-limiters can queue for minutes)
+// ─── SEC EDGAR Full-Text Search (8-K Filings) ─────────────────────────────
+// Free, no API key. SEC EDGAR browse-edgar RSS for recent 8-K filings
+// (material corporate events: M&A, guidance, leadership changes, litigation,
+// bankruptcy, etc.). Company names are resolved to tickers via the alias map
+// in extractRelatedStocks().
+async function fetchFromSECEdgar() {
+  try {
+    const url = 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&date=&owner=include&count=40&output=atom';
+    const res = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'StocksIntels research contact@stocksintels.com',
+        'Accept': 'application/atom+xml,application/xml,text/xml,*/*',
+      },
+    });
+    const data = await rssParser.parseString(res.data);
+    const articles = [];
+    for (const item of (data.items || []).slice(0, 30)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const excerpt = stripHtml(item.summary || item.content || item.description || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = extractRelatedStocks(`${title} ${excerpt}`);
+      if (!relatedStocks.length) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      articles.push({
+        id: `edgar-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'SEC EDGAR',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt,
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} tracked-company articles from SEC EDGAR`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from SEC EDGAR:', e.message);
+    return [];
+  }
+}
+
+// SEC Form 4 (officer/director beneficial ownership) — authoritative insider
+// filing source. OpenInsider's public screener is currently unreachable from
+// the production host, so Form 4 is used as the free, no-key equivalent.
+async function fetchFromSECForm4() {
+  try {
+    const url = 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&date=&owner=include&count=40&output=atom';
+    const res = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'StocksIntels research contact@stocksintels.com',
+        'Accept': 'application/atom+xml,application/xml,text/xml,*/*',
+      },
+    });
+    const data = await rssParser.parseString(res.data);
+    const articles = [];
+    for (const item of (data.items || []).slice(0, 30)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const excerpt = stripHtml(item.summary || item.content || item.description || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = extractRelatedStocks(`${title} ${excerpt}`);
+      if (!relatedStocks.length) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      articles.push({
+        id: `edgar-form4-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'SEC Form 4',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt,
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} tracked-company articles from SEC Form 4`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from SEC Form 4:', e.message);
+    return [];
+  }
+}
+
+// ─── ClinicalTrials.gov API v2 (Biotech / Regulatory Catalysts) ─────────────
+// Free, no API key. JSON API for clinical trial studies. Returns trial status,
+// sponsor/lead organization, conditions, interventions, and locations — ideal
+// for biotech/regulatory catalyst detection.
+async function fetchFromClinicalTrials() {
+  try {
+    const url = 'https://clinicaltrials.gov/api/v2/studies?format=json&pageSize=50&filter.overallStatus=RECRUITING';
+    const res = await axios.get(url, {
+      timeout: 15000,
+      headers: { 'User-Agent': 'StocksIntels research contact@stocksintels.com', Accept: 'application/json' },
+    });
+    const data = res.data || {};
+    const studies = data.studies || [];
+    const articles = [];
+    for (const study of studies) {
+      const proto = study.protoSection || {};
+      const ident = proto.identificationModule || {};
+      const conditions = proto.conditionsModule || {};
+      const statusMod = proto.statusModule || {};
+      const sponsorMod = proto.sponsorCollaboratorsModule || {};
+      const title = String(ident.briefTitle || '').trim();
+      if (!title || title.length < 10) continue;
+      const sponsor = String(
+        sponsorMod.leadSponsor?.name
+        || ident.organization?.fullName
+        || ident.officialTitle
+        || ''
+      ).trim();
+      const conditionsList = Array.isArray(conditions.conditions) ? conditions.conditions : [];
+      const excerpt = `${conditionsList.join(', ')}${sponsor ? ` | Sponsor: ${sponsor}` : ''}`.slice(0, 300);
+      const relatedStocks = extractRelatedStocks(`${title} ${excerpt} ${sponsor || ''}`);
+      if (!relatedStocks.length) continue;
+      const pubDate = statusMod.statusStartDate ? new Date(statusMod.statusStartDate) : new Date();
+      articles.push({
+        id: `clinicaltrials-${ident.nctId || String(title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'ClinicalTrials.gov',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt,
+        url: `https://clinicaltrials.gov/study/${ident.nctId}`,
+        imageUrl: null,
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} tracked-company articles from ClinicalTrials.gov`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from ClinicalTrials.gov:', e.message);
+    return [];
+  }
+}
+
+// ─── OpenInsider Screener (Insider Trading) ─────────────────────────────────
+// Free, no API key. HTML table scrape of insider trading filings (Form 4).
+// High-value signal for institutional / insider moves on small/mid caps.
+async function fetchFromOpenInsider() {
+  try {
+    const url = 'https://www.openinsider.com/screener?s=&fd=0&fdr=&td=0&fdr=&df=1&fdate=&pl=&ph=&ll=&lh=&fd2=&td2=&scl=1&sho=&sal=&sic=&ind=&sector=&country=&state=&city=&zip=&jobtitle=&officer=&isdir=&isdir2=&isofficer=&iscode=&isgroup=&grp=&mincap=&maxcap=&minprice=&maxprice=&minadvvol=&maxadvvol=&minsharevol=&maxsharevol=&minpatentdate=&maxpatentdate=&mininvdate=&maxinvdate=&mindate=&maxdate=&sortcol=0&sortdir=asc&aggregate=0&screen=1&display=50&submit=Search';
+    const res = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+    const $ = cheerio.load(res.data);
+    const articles = [];
+    // OpenInsider screener table rows: each row has ticker, name, officer, relationship, date, transaction, cost, #shares, value, #shares total, SEC form, filed date
+    $('table.tinytable tr').each((_, tr) => {
+      const cells = $(tr).find('td').map((__, td) => $(td).text().trim()).get();
+      if (cells.length < 6) return;
+      const ticker = cells[0] || '';
+      const companyName = cells[1] || '';
+      const officer = cells[2] || '';
+      const relationship = cells[3] || '';
+      const tradeDate = cells[4] || '';
+      const transaction = cells[5] || '';
+      const cost = cells[6] || '';
+      const shares = cells[7] || '';
+      const value = cells[8] || '';
+      const sharesTotal = cells[9] || '';
+      const secForm = cells[10] || '';
+      const filedDate = cells[11] || '';
+      if (!ticker || !companyName || !tradeDate) return;
+      const headline = `${ticker} Insider Transaction: ${transaction}${officer ? ` by ${officer}` : ''}${relationship ? ` (${relationship})` : ''}`;
+      const excerpt = `${tradeDate} - ${transaction}${shares ? ` - ${shares} shares` : ''}${cost ? ` @ $${cost}` : ''}${value ? ` = $${value}` : ''}${secForm ? ` (${secForm})` : ''}`;
+      const relatedStocks = extractRelatedStocks(`${ticker} ${companyName} ${officer} ${transaction} ${transaction}`);
+      if (!relatedStocks.length) return;
+      const pubDate = tradeDate ? new Date(tradeDate) : new Date();
+      articles.push({
+        id: `openinsider-${ticker}-${tradeDate.replace(/[^a-z0-9]/gi, '')}-${value || shares}`,
+        headline: headline.substring(0, 200),
+        source: 'OpenInsider',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${headline} ${excerpt}`),
+        excerpt: excerpt.substring(0, 300),
+        url: `https://www.openinsider.com/screener?s=${ticker}`,
+        imageUrl: null,
+      });
+    });
+    console.log(`✅ Fetched ${articles.length} tracked-company insider trades from OpenInsider`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from OpenInsider:', e.message);
+    return [];
+  }
+}
+
+// ─── Forex Factory Calendar (Macroeconomic Calendar) ────────────────────────
+// Free, no API key. HTML scrape of Forex Factory economic calendar.
+// High-impact events (NFP, CPI, FOMC, etc.) are macro catalysts that move
+// broad markets and currency-sensitive stocks.
+async function fetchFromForexFactory() {
+  try {
+    const res = await axios.get('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+      },
+    });
+    const events = Array.isArray(res.data) ? res.data : [];
+    const articles = [];
+    for (const ev of events) {
+      if (!/high/i.test(String(ev.impact || ''))) continue;
+      const country = String(ev.country || '');
+      const title = String(ev.title || '');
+      if (!title) continue;
+      const pubDate = ev.date ? new Date(ev.date) : new Date();
+      const headline = country + ' ' + title
+        + (ev.actual ? ' - Actual: ' + ev.actual : '')
+        + (ev.forecast ? ' (Forecast: ' + ev.forecast + ')' : '');
+      const excerpt = 'Macroeconomic event: ' + title
+        + (ev.forecast ? ' forecast: ' + ev.forecast : '')
+        + (ev.actual ? ' actual: ' + ev.actual : '')
+        + (ev.previous ? ' previous: ' + ev.previous : '');
+      const relatedStocks = extractRelatedStocks(country + ' ' + title + ' ' + excerpt);
+      const cleanId = String(country + '-' + title + '-' + (ev.date || '')).replace(/[^a-z0-9]/gi, '').slice(-40);
+      articles.push({
+        id: 'forexfactory-' + cleanId,
+        headline: headline.substring(0, 200),
+        source: 'Forex Factory',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(headline + ' ' + excerpt),
+        excerpt: excerpt.substring(0, 300),
+        url: 'https://www.forexfactory.com/calendar',
+        imageUrl: null,
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} high-impact macro events from Forex Factory`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from Forex Factory:', e.message);
+    return [];
+  }
+}
+
+// ─── Earnings Whispers (Earnings Calendar + Results) ───────────────────────
+// Free, no API key. The homepage exposes the upcoming earnings calendar and
+// recent beat/miss headlines with tickers in the links. These are high-signal
+// short-term catalysts for mid/small caps.
+async function fetchFromEarningsWhispers() {
+  try {
+    const res = await axios.get('https://www.earningswhispers.com/', {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+    });
+    const $ = cheerio.load(res.data);
+    const articles = [];
+
+    // Upcoming earnings calendar rows: "Before the Open, Thursday, November 5: DIBS, CELH, U, CAH, HTZ"
+    $('a[href^="/calendar/"]').each((_, a) => {
+      if (articles.length >= 60) return;
+      const text = $(a).text().replace(/\s+/g, ' ').trim();
+      if (!text || !text.includes(':')) return;
+      const href = $(a).attr('href') || '';
+      const tickerPart = text.split(':').slice(1).join(':');
+      const tickers = tickerPart.split(',').map(t => t.trim().toUpperCase()).filter(t => /^[A-Z][A-Z0-9.-]{0,5}$/.test(t));
+      if (!tickers.length) return;
+      const dateMatch = href.match(/\/calendar\/(\d{8})/);
+      const pubDate = dateMatch
+        ? new Date(dateMatch[1].slice(0,4) + '-' + dateMatch[1].slice(4,6) + '-' + dateMatch[1].slice(6,8))
+        : new Date();
+      const headline = 'Earnings calendar: ' + tickers.join(', ');
+      const relatedStocks = [...new Set([...tickers, ...extractRelatedStocks(text)])];
+      const cleanId = String(href + text).replace(/[^a-z0-9]/gi, '').slice(-32);
+      articles.push({
+        id: 'ew-cal-' + cleanId,
+        headline: headline.substring(0, 200),
+        source: 'Earnings Whispers',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: 'neutral',
+        excerpt: text.substring(0, 300),
+        url: 'https://www.earningswhispers.com' + href,
+        imageUrl: null,
+      });
+    });
+
+    // Recent beat/miss headlines: "Oscar Health Beat Expectations, Raises Guidance" -> /epsdetails/OSCR
+    $('a[href^="/epsdetails/"]').each((_, a) => {
+      if (articles.length >= 90) return;
+      const text = $(a).text().replace(/\s+/g, ' ').trim();
+      const href = $(a).attr('href') || '';
+      const ticker = (href.split('/').pop() || '').toUpperCase();
+      if (!text || !/^[A-Z][A-Z0-9.-]{0,5}$/.test(ticker)) return;
+      const headline = ticker + ': ' + text;
+      const relatedStocks = [...new Set([ticker, ...extractRelatedStocks(text)])];
+      const cleanId = String(href + text).replace(/[^a-z0-9]/gi, '').slice(-32);
+      articles.push({
+        id: 'ew-eps-' + cleanId,
+        headline: headline.substring(0, 200),
+        source: 'Earnings Whispers',
+        timestamp: getTimeAgo(new Date()),
+        publishedAt: new Date().toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(text),
+        excerpt: text.substring(0, 300),
+        url: 'https://www.earningswhispers.com' + href,
+        imageUrl: null,
+      });
+    });
+
+    console.log(`✅ Fetched ${articles.length} earnings catalysts from Earnings Whispers`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from Earnings Whispers:', e.message);
+    return [];
+  }
+}
+
+// ─── Wrapper that aborts slow calls (rate-limiters can queue for minutes) ───
 async function withTimeout(promise, ms = 8000) {
   return Promise.race([
     promise,
@@ -2021,7 +2361,7 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, googleNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, kenyanMarketsNews, stockTitanNews, yahooTickerNews, nasdaqNews, fdaNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, googleNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, kenyanMarketsNews, stockTitanNews, yahooTickerNews, nasdaqNews, fdaNews, secEdgarNews, secForm4News, clinicalTrialsNews, forexFactoryNews, earningsWhispersNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       withTimeout(fetchFromKWS(), 12000),
       withTimeout(fetchFromGlobalRSS(), 20000),
@@ -2035,6 +2375,11 @@ async function getAllNews(limit = 50, categoryFilter) {
       withTimeout(fetchFromYahooTickerFeeds(), 20000),
       withTimeout(fetchFromNasdaq(), 15000),
       withTimeout(fetchFromFDA(), 12000),
+      withTimeout(fetchFromSECEdgar(), 15000),
+      withTimeout(fetchFromSECForm4(), 15000),
+      withTimeout(fetchFromClinicalTrials(), 15000),
+      withTimeout(fetchFromForexFactory(), 15000),
+      withTimeout(fetchFromEarningsWhispers(), 15000),
     ]);
 
     const extract = r => r.status === 'fulfilled' ? r.value : [];
@@ -2049,6 +2394,11 @@ async function getAllNews(limit = 50, categoryFilter) {
       ...extract(globalRssNews),
       ...extract(nasdaqNews),
       ...extract(fdaNews),
+      ...extract(secEdgarNews),
+      ...extract(secForm4News),
+      ...extract(clinicalTrialsNews),
+      ...extract(forexFactoryNews),
+      ...extract(earningsWhispersNews),
       ...extract(alphaVantageNews),
       ...extract(newsApiNews),
       ...extract(finnhubNews),
