@@ -154,6 +154,7 @@ function Fact({ label, value, assess }: { label: string; value: ReactNode; asses
 export function MarketIntelligenceCard({ signal }: { signal: any }) {
   const s = signal || {};
   const a = s.analysis || {};
+  const company = s.companyProfile || a.company || {};
   const cur = currencyPrefix(s.currency);
   const money = (v: any) => {
     const n = pos(v);
@@ -327,6 +328,52 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
       </div>
 
       {/* ── 2. position score, market price, holding period ── */}
+      {/* what the company actually does — shown before the trading levels */}
+      {(company.description || company.industry || company.website || company.employees || company.ceo) && (
+        <Block title="Company Snapshot" bandTxt={company.industry || s.sector || undefined}>
+          {company.description && (
+            <p className="text-[12.5px] leading-relaxed text-foreground">{company.description}</p>
+          )}
+          <div className="mt-2 grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+            {company.industry && <Fact label="Industry" value={company.industry} assess="" />}
+            {company.country && <Fact label="Country" value={company.country} assess="" />}
+            {company.employees ? <Fact label="Employees" value={Number(company.employees).toLocaleString()} assess="" /> : null}
+            {company.ceo && <Fact label="CEO" value={company.ceo} assess="" />}
+            {company.website && (
+              <Fact
+                label="Website"
+                value={
+                  <a href={company.website} target="_blank" rel="noreferrer" className="text-[#0D7490] hover:underline">
+                    {String(company.website).replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </a>
+                }
+                assess=""
+              />
+            )}
+          </div>
+        </Block>
+      )}
+
+      {/* position levels are deliberately near the top: they are what most readers act on */}
+      <Block title="Position Levels">
+        <div className="space-y-0.5 text-[12px]">
+          <Fact label="Analysis Price" value={money(entry)} assess="" />
+          <Fact label="Downside Level" value={money(stop)} assess="" />
+          <Fact label="Minimum Target" value={money(t1)} assess="" />
+          <Fact label="Average Target" value={money(t2)} assess="" />
+          <Fact label="Extended Target" value={money(t3)} assess="" />
+        </div>
+        {drift != null && Math.abs(drift) >= 3 && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50/70 p-2 text-[11.5px] leading-relaxed text-amber-900">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" />
+            <span>
+              Current price is {Math.abs(drift).toFixed(1)}% {drift > 0 ? "above" : "below"} the price used when
+              the position was generated{genAt ? ` on ${new Date(genAt).toLocaleDateString()}` : ""}. Levels have not been recalculated.
+            </span>
+          </p>
+        )}
+      </Block>
+
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Position Score</div>
@@ -674,27 +721,6 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
           Model output — not personalized investment advice.
         </p>
       </Block>
-
-      {/* ── levels ── */}
-      <Block title="Position Levels">
-        <div className="space-y-0.5 text-[12px]">
-          <Fact label="Analysis Price" value={money(entry)} assess="" />
-          <Fact label="Downside Level" value={money(stop)} assess="" />
-          <Fact label="Minimum Target" value={money(t1)} assess="" />
-          <Fact label="Average Target" value={money(t2)} assess="" />
-          <Fact label="Extended Target" value={money(t3)} assess="" />
-        </div>
-        {drift != null && Math.abs(drift) >= 3 && (
-          <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50/70 p-2 text-[11.5px] leading-relaxed text-amber-900">
-            <AlertTriangle className="mt-px size-3.5 shrink-0" />
-            <span>
-              Current price is {Math.abs(drift).toFixed(1)}% {drift > 0 ? "above" : "below"} the price used when
-              the position was generated{genAt ? ` on ${new Date(genAt).toLocaleDateString()}` : ""}. Levels have not been recalculated.
-            </span>
-          </p>
-        )}
-      </Block>
-
       {/* ── 4. what would invalidate it ── */}
       <Block title="What Could Change This Position?">
         <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">

@@ -620,6 +620,12 @@ function getMonitoredSignals() {
     const monitoredCurrency = currencyForSymbol(ticker);
     const monitoredHorizon = resolveHorizon(v.horizon, v.type, v.timeframe);
     const monitoredTf = monitoredTimeframe(ticker, v, cached);
+    const rawStored = latest?.analysis || v.analysis || null;
+    let storedAnalysis = rawStored;
+    if (typeof rawStored === 'string') {
+      try { storedAnalysis = JSON.parse(rawStored); } catch { storedAnalysis = null; }
+    }
+    const companyProfile = latest?.companyProfile || storedAnalysis?.company || null;
     out.push({
       ticker,
       signal: v.signal,
@@ -634,8 +640,9 @@ function getMonitoredSignals() {
       price,
       change,
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
-      name: latest?.name || (cached && cached.name ? cached.name : null),
+      name: latest?.name || (cached && cached.name ? cached.name : null) || resolveStockName(ticker) || ticker,
       sector: normalizeSector(latest?.sector || cached?.sector || v.sector, ticker),
+      companyProfile,
       timeframe: normalizeTimeframe(v.type, monitoredTf, monitoredHorizon),
       horizon: monitoredHorizon,
       specVersion: v.specVersion || null,
@@ -647,7 +654,7 @@ function getMonitoredSignals() {
       // Surface the latest full assessment so an old open position does not
       // render as "not scored" after a restart or legacy restore.
       reason: (latest?.reason || v.reason || '').replace(/\.{2,}/g, '.') || null,
-      analysis: liveTechnicalAnalysis(ticker, price, qc && qc.volume, latest?.analysis || v.analysis),
+      analysis: liveTechnicalAnalysis(ticker, price, qc && qc.volume, storedAnalysis),
       valuation: latest?.valuation || v.valuation || null,
       advancedFundamentals: latest?.advancedFundamentals || v.advancedFundamentals || null,
       intelligence: latest?.intelligence || v.intelligence || null,
@@ -1109,6 +1116,12 @@ async function fetchRealFinancialMetrics(symbol) {
     // Profile
     if (d.profile?.sector) metrics.sector = d.profile.sector;
     if (d.profile?.companyName && d.profile.companyName !== symbol) metrics.name = d.profile.companyName;
+    if (d.profile?.description) metrics.description = d.profile.description;
+    if (d.profile?.industry) metrics.industry = d.profile.industry;
+    if (d.profile?.website) metrics.website = d.profile.website;
+    if (d.profile?.employees) metrics.employees = d.profile.employees;
+    if (d.profile?.ceo) metrics.ceo = d.profile.ceo;
+    if (d.profile?.country) metrics.country = d.profile.country;
 
     // Key metrics (PB, ROE, yield, etc.)
     const km = d.keyMetricsHistory?.[0] || {};
@@ -5491,6 +5504,7 @@ async function getSignalForStock(symbol) {
         positionSize: open.positionSize != null ? open.positionSize + '%' : null,
         reason: latest?.reason || open.reason || '',
         analysis: latest?.analysis || open.analysis || null,
+        companyProfile: latest?.companyProfile || open.analysis?.company || null,
         valuation: latest?.valuation || null,
         advancedFundamentals: latest?.advancedFundamentals || null,
         intelligence: latest?.intelligence || null,
@@ -6552,8 +6566,20 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       }
     : null;
 
+  const companyProfile = {
+    description: stock.description || null,
+    industry: stock.industry || null,
+    website: stock.website || null,
+    employees: stock.employees || null,
+    ceo: stock.ceo || null,
+    country: getCountryForSymbol(symbol),
+    market,
+    currency,
+  };
+
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
+    companyProfile,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
     market, country: getCountryForSymbol(symbol), currency,
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
@@ -6641,6 +6667,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, meta: macro.meta, conditions: macro.conditions },
       insider: insider ? { score: insider.score, grade: getGrade(insider.score), hasActivity: insider.hasActivity, netShares: insider.netShares, buyCount: insider.buyCount, sellCount: insider.sellCount, latestDate: insider.latestDate, summary: insider.summary } : { score: null, grade: 'N/A', hasActivity: false, summary: 'No insider data (NSE stocks have no Yahoo insider coverage)' },
       mlFeatures,
+      company: companyProfile,
       overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)), dataSource: stock.dataSource || 'fallback' },
       forwardTest: getForwardTestSnapshot(),
       liveTest: getLiveTestSnapshot(),
@@ -6655,6 +6682,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     reason: obj.reason,
     name: obj.name,
     sector: obj.sector,
+    companyProfile,
     valuation,
     advancedFundamentals,
     intelligence: crossFactor,
