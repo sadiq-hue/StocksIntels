@@ -6451,6 +6451,30 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const confAfterIntelligence = confidence;
   const confFinal = confidence;
 
+  // The score threshold (55) is unchanged, but the conviction bar now adapts to
+  // the conditions that actually change hit rates: market regime/breadth,
+  // horizon, evidence sparsity and cross-factor variance.
+  const dynGateCfg = sc.dynamic_confidence_gate || {};
+  let dynamicBuyBar = thresholds.buy;
+  if (dynGateCfg.enabled !== false) {
+    dynamicBuyBar = num(dynGateCfg.base) ?? thresholds.buy;
+    const regAdj = dynGateCfg.regime_adjustments || {};
+    dynamicBuyBar += Number(regAdj[regime.regime] || 0);
+    const breadth = num(regime.score);
+    if (breadth != null) {
+      if (breadth >= (dynGateCfg.high_breadth_threshold ?? 70)) dynamicBuyBar += dynGateCfg.high_breadth_adjustment ?? -1;
+      else if (breadth <= (dynGateCfg.low_breadth_threshold ?? 30)) dynamicBuyBar += dynGateCfg.low_breadth_adjustment ?? 2;
+    }
+    if (weightProfile === 'long') dynamicBuyBar += dynGateCfg.long_horizon_adjustment ?? 1;
+    if (sparseFund || sparseTech || sparseFin) dynamicBuyBar += dynGateCfg.sparse_data_adjustment ?? 3;
+    if (dataQuality?.ok === false) dynamicBuyBar += dynGateCfg.poor_data_quality_adjustment ?? 5;
+    if (scoreVariance > (dynGateCfg.high_variance_threshold ?? 25)) dynamicBuyBar += dynGateCfg.high_variance_adjustment ?? 2;
+    dynamicBuyBar = Math.round(Math.max(
+      dynGateCfg.min_bar ?? 48,
+      Math.min(dynGateCfg.max_bar ?? 65, dynamicBuyBar)
+    ));
+  }
+
   // Catalyst fast path: a high-strength positive catalyst can still produce a
   // short-term Buy when confidence is just under the normal bar. It must pass a
   // minimum-target R:R, liquidity, data-quality and positive-expectancy check,
@@ -6494,7 +6518,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const _origSignalLabel = sig.signal;
   let _confidenceGateNote = null;
   if (sig.action === 'buy') {
-    const buyBar = catalystCandidate ? Math.min(thresholds.buy, catalystFastConfidence) : thresholds.buy;
+    const buyBar = catalystCandidate ? Math.min(dynamicBuyBar, catalystFastConfidence) : dynamicBuyBar;
     if (confidence < buyBar) {
       _confidenceGateNote = `${_origSignalLabel} (confidence ${confidence}% < buy bar ${buyBar}%)`;
       sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
@@ -6690,7 +6714,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
   reason += '.';
   if (sig.action === 'hold' && _origSignalLabel !== 'Hold') {
-    reason = reason.replace(/\.$/, '') + ` | Confidence ${confidence}% below ${_origSignalLabel} bar (${thresholds.buy}%) -- downgraded to Hold.`;
+    reason = reason.replace(/\.$/, '') + ` | Confidence ${confidence}% below ${_origSignalLabel} bar (${dynamicBuyBar}%) -- downgraded to Hold.`;
   }
   // Expected holding period derived from the engine's own volatility measurement:
   // how many trading sessions price needs to travel from entry to target1 at the
@@ -6739,6 +6763,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       afterIntelligence: confAfterIntelligence,
       afterDrawdown: confFinal,
       drawdownThrottled,
+      buyBar: dynamicBuyBar,
       gate: _confidenceGateNote,
     },
     thresholds: {
@@ -6810,6 +6835,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
+    confidenceGate: dynamicBuyBar,
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
     dataCompleteness,

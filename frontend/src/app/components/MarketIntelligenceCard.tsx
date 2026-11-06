@@ -322,6 +322,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
             {s.signal || "—"}
           </span>
           <span className="text-muted-foreground">· <span className="font-semibold text-foreground">{s.confidence ?? "—"}% Confidence</span></span>
+          {s.confidenceGate != null && (
+            <span className="text-[10px] text-muted-foreground">gate {s.confidenceGate}%</span>
+          )}
           {s.type && <><span className="text-muted-foreground">·</span><span>{s.type}</span></>}
           {s.sector && <><span className="text-muted-foreground">·</span><span>{s.sector}</span></>}
         </div>

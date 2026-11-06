@@ -194,6 +194,26 @@ const DEFAULTS = {
         fundamental_max_score: 40,
         cap_score: 54,
       },
+      // Adaptive Buy-confidence bar. Fixed 55% made the gate blind to regime,
+      // breadth, horizon and data quality. The score threshold stays 55; this
+      // only decides how much calibrated conviction is required in the current
+      // market and evidence conditions.
+      dynamic_confidence_gate: {
+        enabled: true,
+        base: 53,
+        regime_adjustments: { bull: -2, sideways: 0, bear: 3, crash: 8 },
+        high_breadth_threshold: 70,
+        low_breadth_threshold: 30,
+        high_breadth_adjustment: -1,
+        low_breadth_adjustment: 2,
+        long_horizon_adjustment: 1,
+        sparse_data_adjustment: 3,
+        poor_data_quality_adjustment: 5,
+        high_variance_threshold: 25,
+        high_variance_adjustment: 2,
+        min_bar: 48,
+        max_bar: 65,
+      },
       // Short-term, high-strength positive catalyst exception. It only bypasses
       // the normal confidence bar by a few points and keeps a positive
       // expectancy, minimum-target R:R >= 0.5, liquidity and live-data checks.
