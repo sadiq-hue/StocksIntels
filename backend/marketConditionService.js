@@ -46,7 +46,7 @@ function scoreBreadth(adv, dec, flat) {
 async function fetchVixDirect() {
   try {
     const res = await withTimeout(
-      axios.get('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=5d&interval=1d', {
+      axios.get('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=1d&interval=1m&includePrePost=false', {
         timeout: 10000,
         headers: { 'User-Agent': 'Mozilla/5.0' },
       }),
@@ -113,14 +113,51 @@ async function refresh() {
 
     if (now - lastBreadth >= BREADTH_TTL_MS) {
       try {
-        const quotes = await withTimeout(marketService.getQuotesBatch(BREADTH_SYMBOLS), 12000, null);
-        if (quotes) {
+        // Yahoo v7 carries the 50/200-day averages and 52-week extremes in the
+        // same batch response, so true trend breadth costs no extra requests.
+        const v7 = await withTimeout(yahooService.fetchV7Quotes(BREADTH_SYMBOLS), 15000, null);
+        let rows = [];
+        if (v7 && Object.keys(v7).length >= 20) {
+          rows = Object.entries(v7).map(([symbol, q]) => ({
+            symbol,
+            price: Number(q?.regularMarketPrice),
+            changePct: Number(q?.regularMarketChangePercent),
+            sma200: Number(q?.twoHundredDayAverage),
+            sma50: Number(q?.fiftyDayAverage),
+            high52: Number(q?.fiftyTwoWeekHigh),
+            low52: Number(q?.fiftyTwoWeekLow),
+          }));
+        }
+        if (!rows.length) {
+          const quotes = await withTimeout(marketService.getQuotesBatch(BREADTH_SYMBOLS), 12000, null);
+          if (quotes) {
+            rows = Object.values(quotes).map(q => ({
+              price: Number(q?.price),
+              changePct: Number(q?.changePercent),
+            }));
+          }
+        }
+        if (rows.length) {
           let adv = 0, dec = 0, flat = 0;
-          for (const q of Object.values(quotes)) {
-            const c = Number(q?.changePercent);
+          let above200 = 0, ma200N = 0, above50 = 0, ma50N = 0;
+          let newHighs = 0, newLows = 0;
+          for (const r of rows) {
+            const c = r.changePct;
             if (!Number.isFinite(c) || c === 0) flat++;
             else if (c > 0) adv++;
             else dec++;
+            if (Number.isFinite(r.price) && r.price > 0) {
+              if (Number.isFinite(r.sma200) && r.sma200 > 0) {
+                ma200N++;
+                if (r.price > r.sma200) above200++;
+              }
+              if (Number.isFinite(r.sma50) && r.sma50 > 0) {
+                ma50N++;
+                if (r.price > r.sma50) above50++;
+              }
+              if (Number.isFinite(r.high52) && r.high52 > 0 && r.price >= r.high52 * 0.99) newHighs++;
+              if (Number.isFinite(r.low52) && r.low52 > 0 && r.price <= r.low52 * 1.01) newLows++;
+            }
           }
           breadth = {
             advancers: adv,
@@ -128,6 +165,11 @@ async function refresh() {
             unchanged: flat,
             sampled: adv + dec + flat,
             score: scoreBreadth(adv, dec, flat),
+            pctAbove200: ma200N ? Math.round((above200 / ma200N) * 1000) / 10 : null,
+            pctAbove50: ma50N ? Math.round((above50 / ma50N) * 1000) / 10 : null,
+            newHighs,
+            newLows,
+            maSampled: ma200N,
           };
           lastBreadth = now;
         }

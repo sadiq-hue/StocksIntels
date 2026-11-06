@@ -40,7 +40,7 @@ type MarketConditions = {
   vix?: number | null;
   creditSpread?: number | null;
   riskTone?: string | null;
-  breadth?: { score?: number | null; advancers?: number; decliners?: number } | null;
+  breadth?: { score?: number | null; advancers?: number; decliners?: number; pctAbove200?: number | null; newHighs?: number; newLows?: number } | null;
   sectors?: { leader?: string; laggard?: string; riskOn?: boolean } | null;
 };
 
@@ -185,6 +185,16 @@ export function MarketUniversePanel() {
               ? ` (${conditions.breadth.advancers}/${conditions.breadth.decliners})`
               : ""}
           </span>
+          {conditions.breadth?.pctAbove200 != null && (
+            <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+              {conditions.breadth.pctAbove200}% &gt; 200DMA
+            </span>
+          )}
+          {conditions.breadth?.newHighs != null && conditions.breadth?.newLows != null && (
+            <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+              {conditions.breadth.newHighs} highs / {conditions.breadth.newLows} lows
+            </span>
+          )}
           <span className={`rounded px-2 py-0.5 border ${String(conditions.riskTone).toLowerCase() === "risk-off" ? "text-red-700 bg-red-50 border-red-200" : String(conditions.riskTone).toLowerCase() === "risk-on" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-muted-foreground bg-muted/50 border-border"}`}>
             {conditions.riskTone || "mixed"}
           </span>

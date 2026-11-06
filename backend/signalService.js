@@ -6415,6 +6415,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       if (mktBreadth >= 70) dynamicScoreBar += scoreGateCfg.high_breadth_adjustment ?? -1;
       else if (mktBreadth <= 30) dynamicScoreBar += scoreGateCfg.low_breadth_adjustment ?? 2;
     }
+    const trendBreadth = num(mkt.breadth?.pctAbove200);
+    if (trendBreadth != null) {
+      if (trendBreadth >= 65) dynamicScoreBar += scoreGateCfg.high_trend_breadth_adjustment ?? -1;
+      else if (trendBreadth <= 35) dynamicScoreBar += scoreGateCfg.low_trend_breadth_adjustment ?? 1;
+    }
     if (num(mkt.vix) != null && mkt.vix >= 30) {
       dynamicScoreBar += scoreGateCfg.vix_high_adjustment ?? 2;
     }
@@ -6492,6 +6497,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (breadth != null) {
       if (breadth >= (dynGateCfg.high_breadth_threshold ?? 70)) dynamicBuyBar += dynGateCfg.high_breadth_adjustment ?? -1;
       else if (breadth <= (dynGateCfg.low_breadth_threshold ?? 30)) dynamicBuyBar += dynGateCfg.low_breadth_adjustment ?? 2;
+    }
+    const trendBreadth = num(mkt.breadth?.pctAbove200);
+    if (trendBreadth != null) {
+      if (trendBreadth >= (dynGateCfg.high_trend_breadth_threshold ?? 65)) dynamicBuyBar += dynGateCfg.high_trend_breadth_adjustment ?? -1;
+      else if (trendBreadth <= (dynGateCfg.low_trend_breadth_threshold ?? 35)) dynamicBuyBar += dynGateCfg.low_trend_breadth_adjustment ?? 1;
     }
     if (mkt.riskTone === 'risk-off') dynamicBuyBar += dynGateCfg.risk_off_adjustment ?? 3;
     else if (mkt.riskTone === 'risk-on') dynamicBuyBar += dynGateCfg.risk_on_adjustment ?? -1;

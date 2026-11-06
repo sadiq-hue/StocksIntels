@@ -869,6 +869,10 @@ async function fetchV7Quotes(symbols) {
         regularMarketDayHigh: q.regularMarketDayHigh ?? null,
         regularMarketDayLow: q.regularMarketDayLow ?? null,
         regularMarketVolume: q.regularMarketVolume ?? null,
+        twoHundredDayAverage: q.twoHundredDayAverage ?? null,
+        fiftyDayAverage: q.fiftyDayAverage ?? null,
+        fiftyTwoWeekHigh: q.fiftyTwoWeekHigh ?? null,
+        fiftyTwoWeekLow: q.fiftyTwoWeekLow ?? null,
       };
     }
     yahooV7Cache.set(key, { data: results, ts: Date.now() });
