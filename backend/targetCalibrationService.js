@@ -43,10 +43,16 @@ async function refresh() {
     for (const [horizon, b] of buckets.entries()) {
       out[horizon] = {
         samples: b.samples,
+        minimumHits: b.minimumHits,
+        averageHits: b.averageHits,
+        extendedHits: b.extendedHits,
         minimumHitRate: b.samples ? b.minimumHits / b.samples : null,
         averageHitRate: b.samples ? b.averageHits / b.samples : null,
         extendedHitRate: b.samples ? b.extendedHits / b.samples : null,
-        calibrated: b.samples >= 30,
+        // Do not calibrate from minimum hits alone: old outcomes predate
+        // target2/target3 hit tracking, and a min-only distribution would
+        // flatten every scenario target to the first level.
+        calibrated: b.samples >= 30 && b.averageHits >= 5,
       };
     }
     cache = out;
