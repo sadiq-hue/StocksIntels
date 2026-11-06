@@ -11,9 +11,11 @@ const yahooService = require('./yahooService');
 const { US_SYMBOLS } = require('./stockData');
 
 const SECTOR_ETFS = ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC'];
-const BREADTH_SYMBOLS = US_SYMBOLS.filter((_, i) => i % 10 === 0).slice(0, 120);
+const BREADTH_SYMBOLS = US_SYMBOLS.slice();
+const BREADTH_FALLBACK = US_SYMBOLS.filter((_, i) => i % 10 === 0);
 const FAST_TTL_MS = 60 * 1000;
-const BREADTH_TTL_MS = 5 * 60 * 1000;
+const BREADTH_TTL_MS = 10 * 60 * 1000;
+const BREADTH_CHUNK = 100;
 
 let conditions = {
   asOf: null,
@@ -43,6 +45,13 @@ function scoreBreadth(adv, dec, flat) {
   return Math.max(0, Math.min(100, Math.round(50 + ratio * 50)));
 }
 
+function deriveTone(vix, breadth) {
+  if (vix == null && !breadth) return 'unknown';
+  if ((vix != null && vix >= 30) || (breadth?.score != null && breadth.score < 30)) return 'risk-off';
+  if ((vix != null && vix <= 17) && (breadth?.score == null || breadth.score >= 55)) return 'risk-on';
+  return 'mixed';
+}
+
 async function fetchVixDirect() {
   try {
     const res = await withTimeout(
@@ -63,6 +72,19 @@ async function fetchVixDirect() {
   }
 }
 
+async function fetchBreadthQuotes(symbols) {
+  const out = {};
+  for (let i = 0; i < symbols.length; i += BREADTH_CHUNK) {
+    const chunk = symbols.slice(i, i + BREADTH_CHUNK);
+    const part = await withTimeout(yahooService.fetchV7Quotes(chunk), 12000, null);
+    if (part) Object.assign(out, part);
+    if (i + BREADTH_CHUNK < symbols.length) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
+  return out;
+}
+
 async function refresh() {
   if (inflight) return inflight;
   if (Date.now() - lastFast < FAST_TTL_MS) return conditions;
@@ -76,12 +98,12 @@ async function refresh() {
 
     try {
       const [directVix, sectorQuotes] = await Promise.all([
-        withTimeout(yahooService.fetchQuote('^VIX'), 20000, null),
+        fetchVixDirect(),
         withTimeout(marketService.getQuotesBatch(SECTOR_ETFS), 12000, null),
       ]);
       const vixQuote = directVix
-        || await withTimeout(marketService.getStockQuote('^VIX'), 8000, null)
-        || await fetchVixDirect();
+        || await withTimeout(yahooService.fetchQuote('^VIX'), 12000, null)
+        || await withTimeout(marketService.getStockQuote('^VIX'), 8000, null);
       if (vixQuote) {
         vix = Number(vixQuote.price) || vix;
         vixChangePct = Number(vixQuote.changePercent) || vixChangePct;
@@ -111,11 +133,22 @@ async function refresh() {
       }
     } catch { /* optional fast conditions */ }
 
+    // Publish VIX/sector state immediately; breadth batches can take longer on a
+    // cold start and should not leave the conditions plane blank meanwhile.
+    conditions = {
+      ...conditions,
+      asOf: new Date().toISOString(),
+      vix,
+      vixChangePct,
+      sectors,
+      riskTone: deriveTone(vix, breadth),
+    };
+
     if (now - lastBreadth >= BREADTH_TTL_MS) {
       try {
         // Yahoo v7 carries the 50/200-day averages and 52-week extremes in the
         // same batch response, so true trend breadth costs no extra requests.
-        const v7 = await withTimeout(yahooService.fetchV7Quotes(BREADTH_SYMBOLS), 15000, null);
+        const v7 = await withTimeout(fetchBreadthQuotes(BREADTH_SYMBOLS), 60000, null);
         let rows = [];
         if (v7 && Object.keys(v7).length >= 20) {
           rows = Object.entries(v7).map(([symbol, q]) => ({
@@ -129,7 +162,7 @@ async function refresh() {
           }));
         }
         if (!rows.length) {
-          const quotes = await withTimeout(marketService.getQuotesBatch(BREADTH_SYMBOLS), 12000, null);
+          const quotes = await withTimeout(marketService.getQuotesBatch(BREADTH_FALLBACK), 12000, null);
           if (quotes) {
             rows = Object.values(quotes).map(q => ({
               price: Number(q?.price),
@@ -195,12 +228,7 @@ async function refresh() {
       } catch { /* keep previous */ }
     }
 
-    const tone = (() => {
-      if (vix == null && !breadth) return 'unknown';
-      if ((vix != null && vix >= 30) || (breadth?.score != null && breadth.score < 30)) return 'risk-off';
-      if ((vix != null && vix <= 17) && (breadth?.score == null || breadth.score >= 55)) return 'risk-on';
-      return 'mixed';
-    })();
+    const tone = deriveTone(vix, breadth);
 
     conditions = {
       ...conditions,
