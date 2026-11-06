@@ -3963,6 +3963,16 @@ app.get('/api/market/intelligence/coverage', async (req, res) => {
   }
 });
 
+app.get('/api/market/refresh/status', async (req, res) => {
+  try {
+    const queue = require('./signalService').getAnalysisRefreshStatus();
+    const snapshots = await signalSnapshotsService.getRefreshStats();
+    res.json({ ...snapshots, refreshQueue: queue });
+  } catch (error) {
+    res.status(500).json({ error: 'Refresh status unavailable' });
+  }
+});
+
 // --- File Upload ---
 app.post('/api/upload', authenticateToken, (req, res) => {
   upload.single('file')(req, res, (err) => {

@@ -292,6 +292,49 @@ let _signalsCacheReady = null;
 // this, an old open position can render with empty fundamentals/financials after
 // a restart even though the engine is assessing it every cycle.
 const _latestAnalyses = new Map();
+// Bounded in-process refresh queue for stale detail snapshots. It keeps the
+// detail API fast (returns the stored snapshot immediately) while re-running
+// the expensive single-symbol analysis at most two at a time.
+const _analysisRefreshQueue = new Set();
+const _analysisRefreshActive = new Set();
+const ANALYSIS_REFRESH_CONCURRENCY = 2;
+let _analysisRefreshDone = 0;
+let _analysisRefreshFailed = 0;
+
+function _pumpAnalysisRefresh() {
+  while (_analysisRefreshActive.size < ANALYSIS_REFRESH_CONCURRENCY && _analysisRefreshQueue.size > 0) {
+    const symbol = _analysisRefreshQueue.values().next().value;
+    _analysisRefreshQueue.delete(symbol);
+    if (_analysisRefreshActive.has(symbol)) continue;
+    _analysisRefreshActive.add(symbol);
+    Promise.resolve()
+      .then(() => generateSingleSignal(symbol))
+      .then(() => { _analysisRefreshDone++; })
+      .catch(() => { _analysisRefreshFailed++; })
+      .finally(() => {
+        _analysisRefreshActive.delete(symbol);
+        _pumpAnalysisRefresh();
+      });
+  }
+}
+
+function queueAnalysisRefresh(symbol) {
+  const key = String(symbol || '').toUpperCase();
+  if (!key || _analysisRefreshQueue.has(key) || _analysisRefreshActive.has(key)) return false;
+  _analysisRefreshQueue.add(key);
+  _pumpAnalysisRefresh();
+  return true;
+}
+
+function getAnalysisRefreshStatus() {
+  return {
+    queued: _analysisRefreshQueue.size,
+    active: _analysisRefreshActive.size,
+    completed: _analysisRefreshDone,
+    failed: _analysisRefreshFailed,
+  };
+}
+
 // Signals are considered stale after 15 min, so during market hours a fresh
 // cycle is kicked off around every 15 min (the _signalsInProgress guard means
 // cycles never overlap, so a slow cycle simply delays the next one).
@@ -1242,7 +1285,7 @@ async function prefetchFinancialReports(symbols) {
   // Hard budget: a cold cache (e.g. after a restart/outage) can otherwise spend
   // an hour fetching hundreds of reports and block the whole signal cycle, so
   // monitored positions never get resolved. Proceed with whatever is cached.
-  const deadline = Date.now() + 180000;
+  const deadline = Date.now() + (Number(process.env.PREFETCH_FINANCIAL_BUDGET_MS) || 180000);
   let deferred = 0;
   for (let i = 0; i < symbols.length; i += batchSize) {
     if (Date.now() > deadline) {
@@ -1273,7 +1316,7 @@ async function prefetchQuotes(symbols) {
   const batchSize = 100;
   // Never let a slow quote feed block the scoring/pre-gate benchmark loop for
   // the whole cycle. Missing symbols fall back to the per-symbol quote path.
-  const deadline = Date.now() + 120000;
+  const deadline = Date.now() + (Number(process.env.PREFETCH_QUOTE_BUDGET_MS) || 120000);
   for (let i = 0; i < toFetch.length; i += batchSize) {
     if (Date.now() > deadline) {
       console.warn(`[SignalService] quote prefetch budget reached - ${toFetch.length - i} symbols deferred`);
@@ -5597,7 +5640,11 @@ async function getSignalForStock(symbol) {
       if (typeof payload === 'string') {
         try { payload = JSON.parse(payload); } catch { payload = null; }
       }
-      if (payload && typeof payload === 'object') return attachFreshNews(payload, upper);
+      if (payload && typeof payload === 'object') {
+        const due = !snap.next_refresh_at || new Date(snap.next_refresh_at).getTime() <= Date.now();
+        if (due) queueAnalysisRefresh(upper);
+        return attachFreshNews(payload, upper);
+      }
     } catch { /* snapshot fallback unavailable */ }
     if (isDynamic) return generateSingleSignal(upper);
     return null;
@@ -7163,6 +7210,7 @@ module.exports = {
   NSE_SYMBOLS,
   US_SYMBOLS,
   getEngineHealth,
+  getAnalysisRefreshStatus,
   refreshPerformanceStats,
   restoreStateFromDb,
   backfillOutcomesFromHistory,
