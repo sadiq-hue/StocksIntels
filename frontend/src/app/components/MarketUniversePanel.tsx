@@ -36,6 +36,14 @@ type Coverage = {
   byTier?: Record<string, number>;
 };
 
+type MarketConditions = {
+  vix?: number | null;
+  creditSpread?: number | null;
+  riskTone?: string | null;
+  breadth?: { score?: number | null; advancers?: number; decliners?: number } | null;
+  sectors?: { leader?: string; laggard?: string; riskOn?: boolean } | null;
+};
+
 const currencyFor = (market?: string | null) => {
   const m = String(market || "").toUpperCase();
   return m === "NSE" ? "KES" : m === "NGX" ? "NGN" : m === "JSE" ? "ZAR" : "USD";
@@ -63,6 +71,7 @@ const signalTone = (s?: string | null) => {
 export function MarketUniversePanel() {
   const [rows, setRows] = useState<Snapshot[]>([]);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const [conditions, setConditions] = useState<MarketConditions | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -100,6 +109,19 @@ export function MarketUniversePanel() {
   }, [page, limit, market, action, minScore]);
 
   useEffect(() => { setPage(1); }, [market, action, minScore, limit]);
+
+  useEffect(() => {
+    let dead = false;
+    const load = () => {
+      fetch(`${API_BASE}/market/conditions`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (!dead && d) setConditions(d); })
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => { dead = true; clearInterval(id); };
+  }, []);
 
   const pages = Math.max(1, Math.ceil(total / limit));
   const range = useMemo(() => {
@@ -150,6 +172,34 @@ export function MarketUniversePanel() {
           </select>
         </div>
       </div>
+
+      {conditions && (
+        <div className="px-4 sm:px-5 py-2 border-b bg-background flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="font-medium text-muted-foreground">Market:</span>
+          <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+            VIX {conditions.vix != null ? conditions.vix.toFixed(1) : "—"}
+          </span>
+          <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+            Breadth {conditions.breadth?.score ?? "—"}
+            {conditions.breadth?.advancers != null && conditions.breadth?.decliners != null
+              ? ` (${conditions.breadth.advancers}/${conditions.breadth.decliners})`
+              : ""}
+          </span>
+          <span className={`rounded px-2 py-0.5 border ${String(conditions.riskTone).toLowerCase() === "risk-off" ? "text-red-700 bg-red-50 border-red-200" : String(conditions.riskTone).toLowerCase() === "risk-on" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-muted-foreground bg-muted/50 border-border"}`}>
+            {conditions.riskTone || "mixed"}
+          </span>
+          {conditions.sectors?.leader && (
+            <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+              Lead {conditions.sectors.leader}{conditions.sectors.laggard ? ` · Lag ${conditions.sectors.laggard}` : ""}
+            </span>
+          )}
+          {conditions.creditSpread != null && (
+            <span className="rounded border border-border bg-muted/40 px-2 py-0.5">
+              HY spread {conditions.creditSpread.toFixed(2)}%
+            </span>
+          )}
+        </div>
+      )}
 
       {error && <p className="px-4 py-3 text-xs text-red-600">{error}</p>}
 

@@ -30,6 +30,7 @@ const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService
 const universeService = require('./universeService');
 const signalSnapshotsService = require('./signalSnapshotsService');
 const targetCalibrationService = require('./targetCalibrationService');
+const marketConditionService = require('./marketConditionService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -4961,7 +4962,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   }
   if (!marketData && !quick) _signalsInProgress = true;
   // Refresh empirical target calibration at most every 10 minutes; never blocks.
-  targetCalibrationService.refresh().catch(() => {});
+targetCalibrationService.refresh().catch(() => {});
+marketConditionService.start();
   try {
 
   // Quick mode: skip all external fetches, use only cached data
@@ -6395,10 +6397,42 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
 
   let overallScore = Math.max(0, Math.min(100, Math.round(adjScore)));
+  const mkt = marketConditionService.getConditions();
 
-  // Use configurable thresholds + the evidence-gated sell classifier
+  // Dynamic score bar: the Buy label itself can move with regime/breadth and
+  // evidence quality, instead of remaining permanently at 55.
   const thresholds = engineConfig.getConfig().thresholds;
-  let sig = classifySignalBucket(overallScore, thresholds, {
+  const scoreGateCfg = sc.dynamic_score_gate || {};
+  let dynamicScoreBar = thresholds.buy;
+  if (scoreGateCfg.enabled !== false) {
+    dynamicScoreBar = Number(scoreGateCfg.base) || thresholds.buy;
+    const regAdj = scoreGateCfg.regime_adjustments || {};
+    dynamicScoreBar += Number(regAdj[regime.regime] || 0);
+    if (mkt.riskTone === 'risk-off') dynamicScoreBar += scoreGateCfg.risk_off_adjustment ?? 2;
+    else if (mkt.riskTone === 'risk-on') dynamicScoreBar += scoreGateCfg.risk_on_adjustment ?? -1;
+    const mktBreadth = num(mkt.breadth?.score);
+    if (mktBreadth != null) {
+      if (mktBreadth >= 70) dynamicScoreBar += scoreGateCfg.high_breadth_adjustment ?? -1;
+      else if (mktBreadth <= 30) dynamicScoreBar += scoreGateCfg.low_breadth_adjustment ?? 2;
+    }
+    if (num(mkt.vix) != null && mkt.vix >= 30) {
+      dynamicScoreBar += scoreGateCfg.vix_high_adjustment ?? 2;
+    }
+    if (sparseFund || sparseTech || sparseFin) dynamicScoreBar += scoreGateCfg.sparse_data_adjustment ?? 2;
+    dynamicScoreBar = Math.round(Math.max(scoreGateCfg.min_bar ?? 50, Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar)));
+  }
+  const effectiveThresholds = { ...thresholds, buy: dynamicScoreBar };
+  const scoreVariance = Math.max(
+    Math.abs(fundamental.score - overallScore),
+    Math.abs(technical.score - overallScore),
+    Math.abs(financial.score - overallScore),
+    Math.abs(macro.score - overallScore)
+  );
+  if (scoreGateCfg.enabled !== false && scoreVariance > (scoreGateCfg.high_variance_threshold ?? 25)) {
+    dynamicScoreBar = Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar + (scoreGateCfg.high_variance_adjustment ?? 2));
+    effectiveThresholds.buy = dynamicScoreBar;
+  }
+  let sig = classifySignalBucket(overallScore, effectiveThresholds, {
     subScores: {
       fundamental: fundamental.score,
       technical: technical.score,
@@ -6419,12 +6453,6 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     priorScore: getPriorScore(symbol),
   });
 
-  const scoreVariance = Math.max(
-    Math.abs(fundamental.score - overallScore),
-    Math.abs(technical.score - overallScore),
-    Math.abs(financial.score - overallScore),
-    Math.abs(macro.score - overallScore)
-  );
   const confRaw = Math.min(confMax, Math.max(confMin, Math.round(overallScore - scoreVariance * varMult)));
   let confidence = Math.round(confRaw * degFactor);
   const confAfterDegFactor = confidence;
@@ -6460,11 +6488,21 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     dynamicBuyBar = num(dynGateCfg.base) ?? thresholds.buy;
     const regAdj = dynGateCfg.regime_adjustments || {};
     dynamicBuyBar += Number(regAdj[regime.regime] || 0);
-    const breadth = num(regime.score);
+    const breadth = num(mkt.breadth?.score) ?? num(regime.score);
     if (breadth != null) {
       if (breadth >= (dynGateCfg.high_breadth_threshold ?? 70)) dynamicBuyBar += dynGateCfg.high_breadth_adjustment ?? -1;
       else if (breadth <= (dynGateCfg.low_breadth_threshold ?? 30)) dynamicBuyBar += dynGateCfg.low_breadth_adjustment ?? 2;
     }
+    if (mkt.riskTone === 'risk-off') dynamicBuyBar += dynGateCfg.risk_off_adjustment ?? 3;
+    else if (mkt.riskTone === 'risk-on') dynamicBuyBar += dynGateCfg.risk_on_adjustment ?? -1;
+    if (num(mkt.vix) != null) {
+      if (mkt.vix >= (dynGateCfg.vix_high_threshold ?? 30)) dynamicBuyBar += dynGateCfg.vix_high_adjustment ?? 4;
+      else if (mkt.vix >= (dynGateCfg.vix_elevated_threshold ?? 22)) dynamicBuyBar += dynGateCfg.vix_elevated_adjustment ?? 2;
+    }
+    if (num(mkt.creditSpread) != null && mkt.creditSpread >= (dynGateCfg.credit_spread_high_threshold ?? 5)) {
+      dynamicBuyBar += dynGateCfg.credit_spread_high_adjustment ?? 2;
+    }
+    if (mkt.sectors && mkt.sectors.riskOn === false) dynamicBuyBar += dynGateCfg.sector_risk_off_adjustment ?? 1;
     if (weightProfile === 'long') dynamicBuyBar += dynGateCfg.long_horizon_adjustment ?? 1;
     if (sparseFund || sparseTech || sparseFin) dynamicBuyBar += dynGateCfg.sparse_data_adjustment ?? 3;
     if (dataQuality?.ok === false) dynamicBuyBar += dynGateCfg.poor_data_quality_adjustment ?? 5;
@@ -6836,6 +6874,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
     confidenceGate: dynamicBuyBar,
+    scoreGate: dynamicScoreBar,
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
     dataCompleteness,
