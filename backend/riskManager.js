@@ -527,6 +527,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           // milestone-booked position upgrades its existing win row to this
           // final exit instead of booking a second win.
           previous.result = 'win'; previous.closeReason = 'ultimate target reached';
+          previous.target3HitAt = previous.target3HitAt || Date.now();
           previous.ultimateTarget = ultimateTarget;
           if (!previous.milestoneWinBooked) { performanceStats.wins++; performanceStats.total++; }
           portfolioState.consecutiveLosses = 0;

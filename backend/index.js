@@ -4689,6 +4689,15 @@ app.get('/api/signal/:symbol', async (req, res) => {
   }
 });
 
+app.get('/api/signals/calibration', async (req, res) => {
+  try {
+    const stats = await require('./targetCalibrationService').getStats();
+    res.json({ horizons: stats });
+  } catch (error) {
+    res.status(500).json({ error: 'Calibration unavailable' });
+  }
+});
+
 // Secondary-source enrichment (S&P Global/TipRanks via StockAnalysis):
 // analyst consensus/forecasts, ownership, short interest and valuation stats.
 app.get('/api/enrichment/:symbol', async (req, res) => {

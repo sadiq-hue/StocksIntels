@@ -29,6 +29,7 @@ const { buildScenarioTargets } = require('./scenarioTargets');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 const universeService = require('./universeService');
 const signalSnapshotsService = require('./signalSnapshotsService');
+const targetCalibrationService = require('./targetCalibrationService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -120,6 +121,9 @@ const schemaReadyPromise = (async () => {
     // inserted its own outcome row.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target1_hit_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target2_hit_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target3_hit_at TIMESTAMPTZ`);
     // Phase 1 horizon/spec tagging. Every new signal/outcome records which
     // risk profile generated it, so short-1R, the 2R shadow and legacy
     // medium/long rows can never be pooled in the audit.
@@ -281,6 +285,7 @@ var _lastRestoreFailed = false;
 nseHistory.bootstrapNseHistory().catch(() => {});
 // Bootstrap durable news-sentiment history (ensure table, prune, backfill past ~2 weeks) non-blocking
 initNewsHistory().catch(() => {});
+targetCalibrationService.refresh().catch(() => {});
 
 // In-memory cache for generateSignals to prevent redundant calls
 let _signalsCache = null;
@@ -4115,7 +4120,31 @@ function getConfidenceMultiplier() {
 }
 
 // ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
-// Stores signal performance outcomes in the database so state survives restarts.
+// Persist the target-hit timestamps behind the outcome. These power future
+// scenario-probability calibration (minimum/average/extended hit rates) without
+// changing any live decision.
+async function persistTargetHits(symbol, position) {
+  if (!position?.timestamp) return;
+  const genAt = new Date(position.timestamp).toISOString();
+  const t1 = position.target1HitAt ? new Date(position.target1HitAt).toISOString() : null;
+  const t2 = position.target2HitAt ? new Date(position.target2HitAt).toISOString() : null;
+  const t3 = position.target3HitAt ? new Date(position.target3HitAt).toISOString() : null;
+  if (!t1 && !t2 && !t3) return;
+  try {
+    await pool.query(
+      `UPDATE signal_outcomes
+       SET target1_hit_at = COALESCE(target1_hit_at, $3),
+           target2_hit_at = COALESCE(target2_hit_at, $4),
+           target3_hit_at = COALESCE(target3_hit_at, $5)
+       WHERE source = 'live' AND ticker = $1
+         AND signal_generated_at BETWEEN $2::timestamptz - interval '30 seconds'
+                                   AND $2::timestamptz + interval '30 seconds'`,
+      [symbol, genAt, t1, t2, t3]
+    );
+  } catch { /* migration/row may not exist yet */ }
+}
+
+
 // isMilestoneUpgrade: when true, the resolved win upgrades an existing
 // T1-milestone row (close_reason='target1 milestone') instead of inserting a
 // phantom second win.  One win per trade — the milestone books the win at
@@ -4931,6 +4960,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     symbols.length = maxSymbols;
   }
   if (!marketData && !quick) _signalsInProgress = true;
+  // Refresh empirical target calibration at most every 10 minutes; never blocks.
+  targetCalibrationService.refresh().catch(() => {});
   try {
 
   // Quick mode: skip all external fetches, use only cached data
@@ -5359,6 +5390,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         if (!eligibility.ok) _signalOutcomes.delete(symbol);
       }
     }
+    if (prevOutcome?.timestamp) persistTargetHits(symbol, prevOutcome).catch(() => {});
     // Check progress milestones on the current active signal
     const currentActive = _signalOutcomes.get(symbol);
     if (currentActive && !currentActive.result && currentActive.action !== 'hold' && currentActive.entryPrice > 0 && currentActive.target1) {
@@ -6516,6 +6548,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       regime: regime.regime,
       weeklyTrend: weeklyTrend.trend,
     });
+    // Blend empirical target-hit rates once this horizon has enough outcomes;
+    // below the sample threshold the evidence-based probabilities stand.
+    scenarioTargets = targetCalibrationService.applyToTargets(scenarioTargets, horizon);
     if (scenarioTargets.available) {
       tradeLevels = {
         ...tradeLevels,
