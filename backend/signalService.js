@@ -4869,10 +4869,22 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   // starved ~200 otherwise-quotable names of signals. Symbols that fail quote or
   // fundamental fetch are skipped downstream by processSymbol, so a broader
   // universe cannot break a cycle. maxSymbols (Config page) remains the cap.
-  const symbols = [...rawSymbols];
+  let symbols = [...rawSymbols];
   const cfg = engineConfig.getConfig();
-  const maxSymbols = cfg.maxSymbols || 2000;
-  if (!marketData && symbols.length > maxSymbols) {
+  const maxSymbols = Number(process.env.MAX_CYCLE_SYMBOLS) || cfg.maxSymbols || 2000;
+
+  // Core-tier scheduling: only re-score symbols whose next refresh window has
+  // elapsed. Open monitored positions are always included. This turns a raw
+  // 1,000-symbol scan into a bounded set without starving held positions.
+  if (!marketData && !quick) {
+    try {
+      const due = await signalSnapshotsService.getDueSymbols(symbols);
+      const open = [..._signalOutcomes.keys()];
+      symbols = [...new Set([...open, ...due])];
+      console.log(`[SignalService] Core scheduling: ${symbols.length}/${rawSymbols.length} symbols due (${due.length} due, ${open.length} open positions)`);
+    } catch { /* if snapshots are unavailable, keep the full core set */ }
+    if (symbols.length > maxSymbols) symbols.length = maxSymbols;
+  } else if (!marketData && symbols.length > maxSymbols) {
     symbols.length = maxSymbols;
   }
   if (!marketData && !quick) _signalsInProgress = true;
@@ -4935,7 +4947,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           new Promise(resolve => setTimeout(resolve, 8000)),
         ]);
         const budget = Math.max(0, maxSymbols - symbols.length);
-        const dynamicSymbols = await universeService.getCycleSymbols(Math.min(60, budget));
+        const dynamicPerCycle = Math.min(120, Math.max(10, Number(process.env.DYNAMIC_SYMBOLS_PER_CYCLE) || 60));
+        const dynamicSymbols = await universeService.getCycleSymbols(Math.min(dynamicPerCycle, budget));
         const dueDynamic = await signalSnapshotsService.getDueSymbols(dynamicSymbols).catch(() => dynamicSymbols);
         const seen = new Set(symbols);
         for (const symbol of dueDynamic) {
@@ -5578,6 +5591,14 @@ async function getSignalForStock(symbol) {
       };
       return attachFreshNews(detail, upper);
     }
+    try {
+      const snap = await signalSnapshotsService.getSnapshot(upper);
+      let payload = snap?.payload || null;
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload); } catch { payload = null; }
+      }
+      if (payload && typeof payload === 'object') return attachFreshNews(payload, upper);
+    } catch { /* snapshot fallback unavailable */ }
     if (isDynamic) return generateSingleSignal(upper);
     return null;
   }
