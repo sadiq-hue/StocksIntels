@@ -327,6 +327,28 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
         </div>
       </div>
 
+      {(s.dataCompleteness || s.eventRisk) && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          {s.dataCompleteness?.score != null && (
+            <span className="rounded-md border border-border bg-muted/40 px-2 py-1 text-muted-foreground">
+              Data coverage <strong className="text-foreground">{s.dataCompleteness.score}%</strong>
+              {s.dataCompleteness.missing?.length ? ` · missing ${s.dataCompleteness.missing.join(", ")}` : ""}
+            </span>
+          )}
+          {s.eventRisk && (
+            <span className={`rounded-md border px-2 py-1 ${
+              s.eventRisk.gate === "blocked-binary-event"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}>
+              Event risk: {s.eventRisk.type || s.eventRisk.macroGate || "event"}
+              {s.eventRisk.days != null ? ` · ${s.eventRisk.days}d` : ""}
+              {s.eventRisk.gate ? ` · ${s.eventRisk.gate}` : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ── 2. position score, market price, holding period ── */}
       {/* what the company actually does — shown before the trading levels */}
       {(company.description || company.industry || company.website || company.employees || company.ceo) && (
@@ -715,6 +737,13 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
           <Fact label="Risk Level" value={<span className="font-sans">{riskLevel}</span>} assess="" />
           <Fact label="Model Allocation" value={<span className="font-sans">{s.positionSize || "—"}</span>} assess="" />
           <Fact label="Risk/Reward" value={rr != null ? `${rr.toFixed(1)} : 1` : "—"} assess="" />
+          {s.eventRisk && (
+            <Fact
+              label="Event Risk"
+              value={<span className="font-sans">{s.eventRisk.gate || s.eventRisk.type || "flagged"}{s.eventRisk.days != null ? ` · ${s.eventRisk.days}d` : ""}</span>}
+              assess=""
+            />
+          )}
         </div>
         <p className="mt-2 flex items-start gap-1.5 text-[11px] italic text-muted-foreground">
           <ShieldCheck className="mt-px size-3 shrink-0" />

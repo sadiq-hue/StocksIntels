@@ -176,6 +176,16 @@ const DEFAULTS = {
       news_negative: -5,
       catalyst_positive: 10,
       catalyst_negative: -10,
+      // Catalysts matter most for trade-horizon signals. Scale the overlay by
+      // horizon, catalyst strength and age instead of applying a flat +/-10.
+      catalyst_scoring: {
+        trade_multiplier: 1.25,
+        long_multiplier: 0.6,
+        strength_step: 0.5,
+        max_age_days: 10,
+        freshness_floor: 0.35,
+        max_overlay: 20,
+      },
       speculative_rally: {
         enabled: true,
         min_history: 20,

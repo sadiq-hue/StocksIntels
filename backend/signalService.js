@@ -5173,12 +5173,36 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       priceHistory, degFactor, dataQuality, liquidity
     });
     const eventRisk = eventRiskMap.get(symbol) || null;
-    if (eventRisk && sigObj) {
-      sigObj.eventRisk = eventRisk;
-      if (sigObj.action === 'buy' && sigObj.horizon === 'short') {
-        const ps = parseInt(sigObj.positionSize) || 0;
-        sigObj.positionSize = Math.max(1, Math.round(ps * 0.5)) + '%';
+    const macroRisk = eventRiskMap.get('__MACRO__') || null;
+    if (sigObj && (eventRisk || macroRisk)) {
+      const cat = sigObj.catalyst || null;
+      const catAgeDays = cat?.publishedAt ? (Date.now() - new Date(cat.publishedAt).getTime()) / 86400000 : Infinity;
+      const strongPositiveCatalyst = cat?.direction === 'positive'
+        && Number(cat.strength || 0) >= 2
+        && catAgeDays <= 3;
+      const risk = { ...(eventRisk || {}), macro: macroRisk || null };
+      let sizeFactor = 1;
+      if (eventRisk && sigObj.action === 'buy' && sigObj.horizon === 'short') {
+        if (!strongPositiveCatalyst) {
+          risk.gate = 'blocked-binary-event';
+          sigObj.signal = 'Hold';
+          sigObj.action = 'hold';
+          sigObj.strength = 'neutral';
+          sigObj.reason = `${sigObj.reason || ''} | Event-risk gate: earnings in ${eventRisk.days} day(s) - short-term entries blocked without a fresh strength-2 catalyst.`;
+        } else {
+          risk.gate = 'allowed-by-catalyst';
+          sizeFactor *= 0.5;
+        }
       }
+      if (macroRisk && sigObj.action === 'buy' && sigObj.horizon === 'short' && macroRisk.days <= 0) {
+        risk.macroGate = 'same-day-high-impact';
+        sizeFactor *= 0.75;
+      }
+      if (sizeFactor < 1) {
+        const ps = parseInt(sigObj.positionSize) || 0;
+        sigObj.positionSize = Math.max(1, Math.round(ps * sizeFactor)) + '%';
+      }
+      sigObj.eventRisk = risk;
     }
     const prevOutcome = _signalOutcomes.get(symbol);
     let emitSignal = true;
@@ -6279,9 +6303,25 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // as a flat overlay (that double-counted one label).
   // Deal/narrative catalyst overlay (M&A talk, capital injection, crisis...).
   // A positive catalyst lifts the composite so a fundamentals-Sell can be
-  // downgraded to a catalyst-aware reading; a negative one deepens it.
+  // downgraded to a catalyst-aware reading; a negative one deepens it. Scale by
+  // horizon, strength and freshness so a stale low-strength item does not move
+  // a long-term score as much as a fresh strength-2 catalyst moves a trade.
   const cat = catalyst || {};
-  const overlayCatalyst = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
+  const catScoring = sc.catalyst_scoring || {};
+  const catStrength = Math.max(1, Math.min(3, Number(cat.strength) || 1));
+  const strengthMult = 1 + (catStrength - 1) * (catScoring.strength_step ?? 0.5);
+  const catAgeDays = cat.publishedAt ? (Date.now() - new Date(cat.publishedAt).getTime()) / 86400000 : 0;
+  const maxCatAge = catScoring.max_age_days ?? 10;
+  const freshnessFloor = catScoring.freshness_floor ?? 0.35;
+  const freshness = !Number.isFinite(catAgeDays) || catAgeDays <= 0 ? 1
+    : Math.max(freshnessFloor, Math.min(1, 1 - (catAgeDays / Math.max(1, maxCatAge)) * 0.65));
+  const horizonCatMult = weightProfile === 'long'
+    ? (catScoring.long_multiplier ?? 0.6)
+    : (catScoring.trade_multiplier ?? 1.25);
+  const rawCatalystOverlay = (cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0)
+    * strengthMult * freshness * horizonCatMult;
+  const maxCatOverlay = catScoring.max_overlay ?? 20;
+  const overlayCatalyst = Math.max(-maxCatOverlay, Math.min(maxCatOverlay, rawCatalystOverlay));
   adjScore += overlayCatalyst;
 
   // Insider-activity overlay: deliberate, informed transactions shift the
@@ -6698,6 +6738,23 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       }
     : null;
 
+  const completenessDims = [
+    ['fundamental', fundamental?.score],
+    ['technical', technical?.score],
+    ['financial', financial?.score],
+    ['insider', insider?.score],
+    ['macro', macro?.score],
+  ];
+  const availableDims = completenessDims.filter(([, v]) => typeof v === 'number' && Number.isFinite(v)).map(([k]) => k);
+  const missingDims = completenessDims.filter(([, v]) => !(typeof v === 'number' && Number.isFinite(v))).map(([k]) => k);
+  const dataCompleteness = {
+    score: Math.round((availableDims.length / completenessDims.length) * 100),
+    available: availableDims,
+    missing: missingDims,
+    dataSource: stock.dataSource || 'fallback',
+    asOf: new Date().toISOString(),
+  };
+
   const companyProfile = {
     description: stock.description || null,
     industry: stock.industry || null,
@@ -6720,6 +6777,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
+    dataCompleteness,
     liquidity: liquidity || null,
     estCostBps,
     estCostPct: Math.round(estCostBps) / 100,
@@ -6989,6 +7047,7 @@ function estimateCostBps(symbol, horizon) {
 }
 
 async function loadEventRiskMap() {
+  const map = new Map();
   try {
     const { fetchFinnhubEarningsCalendar } = require('./earningsService');
     const now = new Date();
@@ -6998,7 +7057,6 @@ async function loadEventRiskMap() {
       fetchFinnhubEarningsCalendar(from, to),
       new Promise(resolve => setTimeout(() => resolve([]), 8000)),
     ]);
-    const map = new Map();
     for (const e of events || []) {
       const d = new Date(`${e.date}T12:00:00Z`);
       if (Number.isNaN(d.getTime())) continue;
@@ -7007,8 +7065,40 @@ async function loadEventRiskMap() {
         map.set(String(e.ticker || '').toUpperCase(), { type: 'earnings', date: e.date, days });
       }
     }
-    return map;
-  } catch { return new Map(); }
+  } catch { /* earnings calendar unavailable */ }
+
+  // Free fallback when Finnhub is not configured: build earnings and macro
+  // windows from the classified news pipeline (Earnings Whispers / Forex Factory).
+  try {
+    const news = await getAllNews(600);
+    const now = Date.now();
+    const macroEvents = [];
+    for (const a of news || []) {
+      const source = String(a.source || '');
+      const published = a.publishedAt ? new Date(a.publishedAt) : null;
+      if (!published || Number.isNaN(published.getTime())) continue;
+      const days = Math.round((published.getTime() - now) / (24 * 60 * 60 * 1000));
+      if (source === 'Earnings Whispers' && /^Earnings calendar:/i.test(String(a.headline || ''))) {
+        for (const ticker of a.relatedStocks || []) {
+          const t = String(ticker || '').toUpperCase();
+          if (t && !map.has(t) && days >= -1 && days <= 3) {
+            map.set(t, { type: 'earnings', date: published.toISOString().slice(0, 10), days, source: 'earnings-whispers' });
+          }
+        }
+      }
+      if (source === 'Forex Factory' && days >= 0 && days <= 2) {
+        macroEvents.push({
+          headline: String(a.headline || '').slice(0, 160),
+          date: published.toISOString().slice(0, 10),
+          days,
+        });
+      }
+    }
+    if (macroEvents.length) {
+      map.set('__MACRO__', { type: 'macro', days: Math.min(...macroEvents.map(e => e.days)), events: macroEvents.slice(0, 12) });
+    }
+  } catch { /* news event risk unavailable */ }
+  return map;
 }
 
 function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity, stock, regimeName } = {}) {

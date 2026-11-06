@@ -22,6 +22,8 @@ type Snapshot = {
   timeframe?: string | null;
   catalyst?: { type?: string; direction?: string } | null;
   news_summary?: { count?: number } | null;
+  data_source?: string | null;
+  next_refresh_at?: string | null;
   analyzed_at?: string | null;
 };
 
@@ -178,7 +180,10 @@ export function MarketUniversePanel() {
                   <div className="font-semibold text-foreground">{r.ticker}</div>
                   <div className="max-w-[240px] truncate text-[11px] text-muted-foreground">{r.name || r.sector || "—"}</div>
                 </td>
-                <td className="px-3 py-2 text-muted-foreground">{r.market || "—"}{r.sector ? ` · ${r.sector}` : ""}</td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  <div>{r.market || "—"}{r.sector ? ` · ${r.sector}` : ""}</div>
+                  <div className="text-[10px] text-muted-foreground/70">{r.data_source || "source pending"}</div>
+                </td>
                 <td className="px-3 py-2">
                   <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${signalTone(r.signal)}`}>
                     {r.signal || "—"}{r.confidence != null ? ` · ${r.confidence}%` : ""}
