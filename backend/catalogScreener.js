@@ -50,7 +50,7 @@ function screenScore(quote) {
   // Keep the candidate pool to listed venues. Pink/OTC shells and foreign
   // ordinary lines have poor execution quality and are not useful long ideas.
   const exchange = String(quote?.exchange || '');
-  if (/otc|pink|oqx|oid|grey|expert|pnk/i.test(exchange)) return null;
+  if (!/nasdaq|nyse|amex|american|arca|bats|nms|nyq|ncm|ngm|ase|pcx/i.test(exchange)) return null;
   const price = Number(quote?.regularMarketPrice);
   const sma50 = Number(quote?.fiftyDayAverage);
   const sma200 = Number(quote?.twoHundredDayAverage);
