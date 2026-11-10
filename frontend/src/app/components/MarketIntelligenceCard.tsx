@@ -325,6 +325,14 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
           {s.confidenceGate != null && (
             <span className="text-[10px] text-muted-foreground">gate {s.confidenceGate}%</span>
           )}
+          {s.marketConditions?.riskTone && s.marketConditions.riskTone !== "unknown" && (
+            <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
+              {String(s.marketConditions.riskTone).replace("-", " ")}
+              {s.marketConditions.vix != null ? ` · VIX ${Number(s.marketConditions.vix).toFixed(1)}` : ""}
+              {s.marketConditions.breadth != null ? ` · breadth ${s.marketConditions.breadth}` : ""}
+              {s.marketConditions.pctAbove200 != null ? ` · ${s.marketConditions.pctAbove200}% >200DMA` : ""}
+            </span>
+          )}
           {s.type && <><span className="text-muted-foreground">·</span><span>{s.type}</span></>}
           {s.sector && <><span className="text-muted-foreground">·</span><span>{s.sector}</span></>}
         </div>

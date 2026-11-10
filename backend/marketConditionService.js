@@ -1,9 +1,9 @@
 // Live market-condition overlay used by the adaptive score/confidence gates.
 //
 // This is deliberately a separate, cached plane: VIX and sector ETFs refresh
-// every minute; a broad tracked-universe quote sample refreshes every five
-// minutes. Signal cycles and detail requests read the cache and never wait for
-// these network calls.
+// every 30 seconds; breadth across the full tracked universe refreshes every
+// ten minutes. Signal cycles and detail requests read the cache and never wait
+// for these network calls.
 
 const axios = require('axios');
 const marketService = require('./marketService');
@@ -13,7 +13,7 @@ const { US_SYMBOLS } = require('./stockData');
 const SECTOR_ETFS = ['XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLI', 'XLB', 'XLU', 'XLRE', 'XLC'];
 const BREADTH_SYMBOLS = US_SYMBOLS.slice();
 const BREADTH_FALLBACK = US_SYMBOLS.filter((_, i) => i % 10 === 0);
-const FAST_TTL_MS = 60 * 1000;
+const FAST_TTL_MS = 30 * 1000;
 const BREADTH_TTL_MS = 10 * 60 * 1000;
 const BREADTH_CHUNK = 100;
 
@@ -250,7 +250,7 @@ function getConditions() {
   return conditions;
 }
 
-function start(intervalMs = 60 * 1000) {
+function start(intervalMs = 30 * 1000) {
   if (timer) return;
   refresh().catch(() => {});
   timer = setInterval(() => refresh().catch(() => {}), intervalMs);
