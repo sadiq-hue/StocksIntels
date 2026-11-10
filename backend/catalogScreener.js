@@ -16,10 +16,11 @@ const universeService = require('./universeService');
 const SCAN_INTERVAL_MS = Number(process.env.CATALOG_SCREEN_INTERVAL_MS) || 6 * 60 * 60 * 1000;
 const CHUNK = 100;
 const CHUNK_GAP_MS = Number(process.env.CATALOG_SCREEN_GAP_MS) || 250;
-const PER_BUCKET = Math.max(5, Number(process.env.CATALOG_SCREEN_PER_BUCKET) || 30);
+const PER_BUCKET = Math.max(5, Number(process.env.CATALOG_SCREEN_PER_BUCKET) || 50);
 const MIN_PRICE = 1;
 const MIN_MARKET_CAP = 50 * 1000 * 1000;
-const MIN_AVG_VOLUME = 50000;
+const MIN_AVG_VOLUME = 10000;
+const MIN_DOLLAR_VOLUME = Number(process.env.CATALOG_SCREEN_MIN_DOLLAR_VOLUME) || 1000000;
 
 const BUCKETS = [
   { key: 'large', min: 10 * 1000 * 1000 * 1000 },
@@ -46,6 +47,10 @@ function bucketFor(marketCap) {
 function screenScore(quote) {
   const quoteType = String(quote?.quoteType || '').toUpperCase();
   if (quoteType !== 'EQUITY') return null;
+  // Keep the candidate pool to listed venues. Pink/OTC shells and foreign
+  // ordinary lines have poor execution quality and are not useful long ideas.
+  const exchange = String(quote?.exchange || '');
+  if (/otc|pink|oqx|oid|grey|expert|pnk/i.test(exchange)) return null;
   const price = Number(quote?.regularMarketPrice);
   const sma50 = Number(quote?.fiftyDayAverage);
   const sma200 = Number(quote?.twoHundredDayAverage);
@@ -59,6 +64,7 @@ function screenScore(quote) {
   if (!Number.isFinite(price) || price < MIN_PRICE) return null;
   if (!Number.isFinite(marketCap) || marketCap < MIN_MARKET_CAP) return null;
   if (!Number.isFinite(avgVolume) || avgVolume < MIN_AVG_VOLUME) return null;
+  if (!Number.isFinite(price * avgVolume) || price * avgVolume < MIN_DOLLAR_VOLUME) return null;
 
   let score = 0;
   if (Number.isFinite(sma200) && sma200 > 0 && price > sma200) score += 25;
