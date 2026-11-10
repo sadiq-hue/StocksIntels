@@ -65,6 +65,7 @@ function refreshMinutes(row) {
   if (row.catalyst) return 15;
   if (row.tier === 'catalyst') return 15;
   if (row.tier === 'mover' || row.tier === 'on-demand') return 30;
+  if (row.tier === 'screen') return 360;
   if (row.tier === 'africa') return 360;
   if (row.tier === 'catalog') return 1440;
   if (row.tier === 'core') {

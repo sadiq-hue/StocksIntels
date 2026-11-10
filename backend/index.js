@@ -25,6 +25,7 @@ const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes, getPhase1Benchmark } = require('./signalService');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 const universeService = require('./universeService');
+const catalogScreener = require('./catalogScreener');
 const signalSnapshotsService = require('./signalSnapshotsService');
 const marketConditionService = require('./marketConditionService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
@@ -3935,6 +3936,14 @@ app.get('/api/universe/status', async (req, res) => {
     res.json(universeService.getStats());
   } catch (error) {
     res.status(500).json({ error: 'Universe status unavailable' });
+  }
+});
+
+app.get('/api/universe/screen', async (req, res) => {
+  try {
+    res.json(catalogScreener.getStatus());
+  } catch (error) {
+    res.status(500).json({ error: 'Catalog screen status unavailable' });
   }
 });
 

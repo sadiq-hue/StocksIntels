@@ -31,6 +31,7 @@ const universeService = require('./universeService');
 const signalSnapshotsService = require('./signalSnapshotsService');
 const targetCalibrationService = require('./targetCalibrationService');
 const marketConditionService = require('./marketConditionService');
+const catalogScreener = require('./catalogScreener');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -4964,6 +4965,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   // Refresh empirical target calibration at most every 10 minutes; never blocks.
 targetCalibrationService.refresh().catch(() => {});
 marketConditionService.start();
+catalogScreener.start();
   try {
 
   // Quick mode: skip all external fetches, use only cached data
@@ -5023,7 +5025,7 @@ marketConditionService.start();
           new Promise(resolve => setTimeout(resolve, 8000)),
         ]);
         const budget = Math.max(0, maxSymbols - symbols.length);
-        const dynamicPerCycle = Math.min(120, Math.max(10, Number(process.env.DYNAMIC_SYMBOLS_PER_CYCLE) || 60));
+        const dynamicPerCycle = Math.min(120, Math.max(10, Number(process.env.DYNAMIC_SYMBOLS_PER_CYCLE) || 120));
         const dynamicSymbols = await universeService.getCycleSymbols(Math.min(dynamicPerCycle, budget));
         const dueDynamic = await signalSnapshotsService.getDueSymbols(dynamicSymbols).catch(() => dynamicSymbols);
         const seen = new Set(symbols);

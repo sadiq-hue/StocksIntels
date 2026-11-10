@@ -18,7 +18,7 @@ const { ALL_SYMBOLS } = require('./stockData');
 
 const CORE = new Set(ALL_SYMBOLS.map(s => String(s).toUpperCase()));
 const dynamic = new Map();
-const TIER_RANK = { catalyst: 0, 'on-demand': 1, mover: 2, africa: 3, catalog: 4 };
+const TIER_RANK = { catalyst: 0, 'on-demand': 1, mover: 2, screen: 3, africa: 4, catalog: 5 };
 const MAX_DYNAMIC = 15000;
 const SEC_HEADERS = {
   'User-Agent': 'StocksIntels research contact@stocksintels.com',
@@ -31,6 +31,7 @@ const EXCHANGE_HEADERS = {
 
 let readyPromise = null;
 let cycleCursor = 0;
+let screenCursor = 0;
 let africaCursor = 0;
 let lastMoverRefresh = 0;
 let catalogRefreshedAt = 0;
@@ -148,6 +149,8 @@ async function persist(entries) {
           WHEN EXCLUDED.tier = 'on-demand' THEN 'on-demand'
           WHEN universe_symbols.tier = 'mover' THEN 'mover'
           WHEN EXCLUDED.tier = 'mover' THEN 'mover'
+          WHEN universe_symbols.tier = 'screen' THEN 'screen'
+          WHEN EXCLUDED.tier = 'screen' THEN 'screen'
           WHEN universe_symbols.tier = 'africa' THEN 'africa'
           WHEN EXCLUDED.tier = 'africa' THEN 'africa'
           ELSE 'catalog'
@@ -393,18 +396,47 @@ function sortPriority(a, b) {
     || (new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
 }
 
+async function getScreenUniverse() {
+  await ready();
+  return [...dynamic.values()]
+    .filter(m => !['africa', 'JSE', 'NGX'].includes(m.tier)
+      && m.market !== 'JSE' && m.market !== 'NGX'
+      && !String(m.symbol).includes(':'))
+    .map(m => ({ symbol: m.symbol, name: m.name, marketCap: m.marketCap }));
+}
+
+async function replaceTier(tier, symbols) {
+  await ready();
+  const keep = new Set((symbols || []).map(normalizeSymbol).filter(Boolean));
+  for (const meta of dynamic.values()) {
+    if (meta.tier === tier && !keep.has(meta.symbol)) meta.tier = 'catalog';
+  }
+  try {
+    await pool.query(
+      `UPDATE universe_symbols SET tier = 'catalog'
+       WHERE tier = $1 AND NOT (symbol = ANY($2::text[]))`,
+      [tier, [...keep]]
+    );
+  } catch (e) {
+    console.warn(`[Universe] replaceTier(${tier}) persistence failed: ${e.message}`);
+  }
+  return keep.size;
+}
+
 async function getCycleSymbols(limit = 60) {
   await ready();
   const rows = [...dynamic.values()];
   const out = [];
   const add = (symbol) => { if (out.length < limit && !out.includes(symbol)) out.push(symbol); };
 
-  // Catalysts and on-demand names lead; fixed shares go to movers and the
-  // rotating NGX/JSE catalog, with the rest advancing the US catalog.
+  // Catalysts and on-demand names lead; fixed shares go to movers, screened
+  // catalog candidates and the rotating NGX/JSE catalog, with the rest advancing
+  // the US catalog.
   const catalystBudget = Math.ceil(limit * 0.30);
-  const onDemandBudget = Math.ceil(limit * 0.15);
+  const onDemandBudget = Math.ceil(limit * 0.10);
   const moverBudget = Math.ceil(limit * 0.15);
-  const africaBudget = Math.ceil(limit * 0.15);
+  const screenBudget = Math.ceil(limit * 0.25);
+  const africaBudget = Math.ceil(limit * 0.10);
 
   rows.filter(r => r.tier === 'catalyst').sort(sortPriority)
     .slice(0, catalystBudget).forEach(r => add(r.symbol));
@@ -412,6 +444,14 @@ async function getCycleSymbols(limit = 60) {
     .slice(0, onDemandBudget).forEach(r => add(r.symbol));
   rows.filter(r => r.tier === 'mover').sort(sortPriority)
     .slice(0, moverBudget).forEach(r => add(r.symbol));
+  const screen = rows.filter(r => r.tier === 'screen');
+  if (screen.length && out.length < limit) {
+    const start = screenCursor % screen.length;
+    const rotated = [...screen.slice(start), ...screen.slice(0, start)];
+    const take = Math.min(screenBudget, limit - out.length, rotated.length);
+    rotated.slice(0, take).forEach(r => add(r.symbol));
+    screenCursor = (screenCursor + Math.max(take, 1)) % screen.length;
+  }
 
   const africa = rows.filter(r => r.tier === 'africa');
   if (africa.length && out.length < limit) {
@@ -472,6 +512,8 @@ module.exports = {
   refreshAfricanCatalog,
   refreshExchangeCatalog,
   getCycleSymbols,
+  getScreenUniverse,
+  replaceTier,
   getMeta,
   isDynamic,
   isCore,
