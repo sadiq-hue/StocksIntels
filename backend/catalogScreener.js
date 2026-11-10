@@ -45,7 +45,7 @@ function bucketFor(marketCap) {
 
 function screenScore(quote) {
   const quoteType = String(quote?.quoteType || '').toUpperCase();
-  if (quoteType && quoteType !== 'EQUITY') return null;
+  if (quoteType !== 'EQUITY') return null;
   const price = Number(quote?.regularMarketPrice);
   const sma50 = Number(quote?.fiftyDayAverage);
   const sma200 = Number(quote?.twoHundredDayAverage);

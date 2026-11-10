@@ -401,7 +401,8 @@ async function getScreenUniverse() {
   return [...dynamic.values()]
     .filter(m => !['africa', 'JSE', 'NGX'].includes(m.tier)
       && m.market !== 'JSE' && m.market !== 'NGX'
-      && !String(m.symbol).includes(':'))
+      && !String(m.symbol).includes(':')
+      && /^[A-Z][A-Z0-9.-]{0,9}$/.test(String(m.symbol)))
     .map(m => ({ symbol: m.symbol, name: m.name, marketCap: m.marketCap }));
 }
 
