@@ -41,6 +41,8 @@ const { EventEmitter } = require('events');
 const signalEventBus = new EventEmitter();
 signalEventBus.setMaxListeners(50);
 
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
 // Ensure DB schema columns exist before any operations. The promise is captured
