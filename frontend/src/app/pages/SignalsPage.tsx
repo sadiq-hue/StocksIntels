@@ -25,7 +25,7 @@ function StatCard({ label, value, tone }: {
   label: string; value: string | number; tone: string;
 }) {
   return (
-    <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
+    <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/20">
       <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
       <p className={`mt-2.5 text-[28px] leading-none font-semibold tracking-tight tabular-nums ${tone}`}>{value}</p>
     </div>
@@ -33,21 +33,21 @@ function StatCard({ label, value, tone }: {
 }
 
 const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; accent: string; icon: typeof TrendingUp }> = {
-  "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", accent: "bg-emerald-600", icon: TrendingUp },
-  "Buy":         { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", accent: "bg-emerald-400", icon: TrendingUp },
-  "Hold":        { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", accent: "bg-yellow-400", icon: Activity },
-  "Sell":        { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", accent: "bg-red-400", icon: TrendingDown },
-  "Strong Sell": { bg: "bg-red-600", text: "text-white", border: "border-red-600", accent: "bg-red-600", icon: TrendingDown },
+  "Strong Buy":  { bg: "bg-muted/40", text: "text-emerald-700", border: "border-border", accent: "bg-border", icon: TrendingUp },
+  "Buy":         { bg: "bg-muted/40", text: "text-emerald-700", border: "border-border", accent: "bg-border", icon: TrendingUp },
+  "Hold":        { bg: "bg-muted/40", text: "text-muted-foreground", border: "border-border", accent: "bg-border", icon: Activity },
+  "Sell":        { bg: "bg-muted/40", text: "text-red-600", border: "border-border", accent: "bg-border", icon: TrendingDown },
+  "Strong Sell": { bg: "bg-muted/40", text: "text-red-600", border: "border-border", accent: "bg-border", icon: TrendingDown },
 };
 
 const TYPE_STYLES: Record<string, string> = {
-  Intraday: "bg-orange-100 text-orange-700 border-orange-200",
-  "Swing Trade": "bg-blue-100 text-blue-700 border-blue-200",
-  "Long Term": "bg-purple-100 text-purple-700 border-purple-200",
-  "Aggressive Buy": "bg-emerald-600 text-white border-emerald-600",
-  "Momentum Trade": "bg-cyan-100 text-cyan-700 border-cyan-200",
-  "Long Term Value": "bg-violet-100 text-violet-700 border-violet-200",
-  Avoid: "bg-slate-100 text-slate-600 border-slate-200",
+  Intraday: "bg-muted/40 text-muted-foreground border border-border",
+  "Swing Trade": "bg-muted/40 text-muted-foreground border border-border",
+  "Long Term": "bg-muted/40 text-muted-foreground border border-border",
+  "Aggressive Buy": "bg-muted/40 text-muted-foreground border border-border",
+  "Momentum Trade": "bg-muted/40 text-muted-foreground border border-border",
+  "Long Term Value": "bg-muted/40 text-muted-foreground border border-border",
+  Avoid: "bg-muted/40 text-muted-foreground border border-border",
 };
 
 // ── Signal condition definitions ─────────────────────────────────────────────
@@ -490,16 +490,16 @@ export function SignalsPage() {
         <StatCard label="Total Signals" value={signals.length} tone="text-foreground" />
         <StatCard label="Strong Buy / Buy" value={strongBuy} tone="text-emerald-600" />
         <StatCard label="Sell / Strong Sell" value={strongSell} tone="text-red-600" />
-        <StatCard label="Peak Confidence" value={`${peakConf}%`} tone="text-[#0D7490]" />
+        <StatCard label="Peak Confidence" value={`${peakConf}%`} tone="text-foreground" />
         <StatCard label="Avg Confidence" value={`${avgConf}%`} tone="text-foreground" />
-        <StatCard label="Favorites" value={favorites.length} tone="text-amber-500" />
+        <StatCard label="Favorites" value={favorites.length} tone="text-foreground" />
       </div>
 
       {/* Horizon split: short-term traders vs medium/long-term investors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {([
-          { key: "short" as const, label: "Short-term buy ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-[#0D7490]", bg: "bg-[#0D7490]/5 border-[#0D7490]/20" },
-          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1�3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
+          { key: "short" as const, label: "Short-term buy ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-foreground", bg: "bg-card border-border" },
+          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1�3+ months)", count: longIdeas, tone: "text-foreground", bg: "bg-card border-border" },
         ]).map(({ key, label, sub, count, tone, bg }) => {
           const top = signals
             .filter(s => isBuyIdea(s) && (key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
@@ -507,7 +507,7 @@ export function SignalsPage() {
             .slice(0, 5);
           return (
             <button key={key} onClick={() => setFilterHorizon(key)}
-              className={`text-left rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] ${bg} ${filterHorizon === key ? "ring-2 ring-[#0D7490]/40" : ""}`}>
+              className={`text-left rounded-xl border p-4 transition-colors hover:bg-muted/20 ${bg} ${filterHorizon === key ? "ring-2 ring-[#0D7490]/40" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">{label}</p>
@@ -527,7 +527,7 @@ export function SignalsPage() {
 
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
-        <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] flex items-center justify-between flex-wrap gap-3">
+        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div>
               <p className="text-sm font-semibold tracking-tight text-foreground">Top signals by confidence</p>
@@ -536,7 +536,7 @@ export function SignalsPage() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {topConf.map(s => (
-                        <button key={s.ticker} onClick={() => openSignal(s)} className="px-3 py-1.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-xs font-medium text-foreground hover:bg-black/[0.08] dark:hover:bg-white/15 transition-colors">{s.ticker} <span className="text-emerald-600 font-semibold">{s.confidence}%</span></button>
+                        <button key={s.ticker} onClick={() => openSignal(s)} className="px-3 py-1.5 rounded-full bg-muted/40 text-xs font-medium text-foreground hover:bg-muted/70 transition-colors">{s.ticker} <span className="text-muted-foreground font-semibold">{s.confidence}%</span></button>
             ))}
           </div>
         </div>
@@ -576,7 +576,7 @@ export function SignalsPage() {
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
           <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
         </Select>
-        <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
+        <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-muted/40 text-foreground border border-border text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
         {hasActiveFilters && (
           <button onClick={clearFilters} className="h-9 px-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors">
             <FilterX className="w-3.5 h-3.5" />Clear filters
@@ -585,14 +585,12 @@ export function SignalsPage() {
       </div>
 
       {/* Signal cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {paged.map((s, idx) => {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-white dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.06] rounded-2xl overflow-hidden hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col" onClick={() => openSignal(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
-              {/* Signal accent bar */}
-              <div className={`h-1 w-full ${ss.accent}`} />
+            <Card key={s.id || s.ticker} className="bg-card border border-border rounded-xl overflow-hidden hover:border-[#0D7490]/30 transition-colors cursor-pointer group flex flex-col" onClick={() => openSignal(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
               {/* Top: ticker, signal badge */}
               <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -606,14 +604,14 @@ export function SignalsPage() {
                     </div>
                   </div>
                 </div>
-                <Badge className={`shrink-0 ${ss.bg} ${ss.text} border-0 text-[10px] font-semibold`}><Icon className="w-3 h-3 mr-1" />{s.signal}</Badge>
+                <Badge className={`shrink-0 ${ss.bg} ${ss.text} border border-border text-[10px] font-semibold`}><Icon className="w-3 h-3 mr-1" />{s.signal}</Badge>
               </div>
 
               {/* Type + sector */}
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
+                <Badge className={`${TYPE_STYLES[s.type]} text-[10px] font-medium`}>{s.type}</Badge>
                 {isBuyIdea(s) && (
-                  <Badge title={(s as any).horizonCriteria?.join(" � ")} className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                  <Badge title={(s as any).horizonCriteria?.join(" · ")} className="border border-border bg-muted/40 text-[10px] font-medium text-muted-foreground">
                     {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
                   </Badge>
                 )}
@@ -624,42 +622,42 @@ export function SignalsPage() {
                 {s.country && (
                   <>
                     <span className="text-muted-foreground">|</span>
-                    <span className="font-medium text-[#0D7490]">Market: {s.country}</span>
+                    <span className="font-medium text-foreground">Market: {s.country}</span>
                   </>
                 )}
               </div>
 
               {/* Price row */}
               <div className="px-4 pb-3 flex items-center gap-3">
-                <div className="flex-1 bg-muted rounded-lg p-2.5 border border-border">
+                <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border border-border">
                   <p className="text-[10px] text-muted-foreground font-medium">Price</p>
                   <p className="text-sm font-bold text-foreground">{fmtPrice(s, s.price)}</p>
                 </div>
-                <div className={`flex-1 rounded-lg p-2.5 border ${s.change >= 0 ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800/50" : "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-800/50"}`}>
+                <div className="flex-1 rounded-lg p-2.5 border border-border bg-muted/40">
                   <p className="text-[10px] text-muted-foreground font-medium">Change</p>
-                  <p className={`text-sm font-bold flex items-center gap-1 ${s.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  <p className={`text-sm font-bold flex items-center gap-1 ${s.change >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                     {s.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
                     {changeDisplay(s)}
                   </p>
                 </div>
-                <div className="flex-1 bg-muted rounded-lg p-2.5 border border-border">
+                <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border border-border">
                   <p className="text-[10px] text-muted-foreground font-medium">Confidence</p>
-                  <p className={`text-sm font-bold ${s.confidence >= 80 ? "text-emerald-600" : s.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{s.confidence}%</p>
+                  <p className="text-sm font-bold text-foreground">{s.confidence}%</p>
                 </div>
               </div>
 
               {/* Entry / Stop / Targets */}
               <div className="px-4 pb-3 grid grid-cols-2 gap-2 sm:grid-cols-5" data-tour={idx === 0 ? "signal-levels" : undefined}>
-                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-md p-2 text-center border border-blue-100 dark:border-blue-800/50"><p className="text-[9px] font-medium text-blue-600 dark:text-blue-400 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 dark:text-blue-200 font-mono">{fmtPrice(s, s.entry)}</p></div>
-                <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2 text-center border border-red-100 dark:border-red-800/50"><p className="text-[9px] font-medium text-red-600 dark:text-red-400 uppercase">Stop</p><p className="text-xs font-bold text-red-900 dark:text-red-200 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Minimum</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target1)}</p></div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Average</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target2)}</p></div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Extended</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>
+                <div className="bg-muted/40 rounded-md p-2 text-center border border-border"><p className="text-[9px] font-medium text-muted-foreground uppercase">Entry</p><p className="text-xs font-bold text-foreground font-mono">{fmtPrice(s, s.entry)}</p></div>
+                <div className="bg-muted/40 rounded-md p-2 text-center border border-border"><p className="text-[9px] font-medium text-muted-foreground uppercase">Stop</p><p className="text-xs font-bold text-foreground font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
+                <div className="bg-muted/40 rounded-md p-2 text-center border border-border"><p className="text-[9px] font-medium text-muted-foreground uppercase">Minimum</p><p className="text-xs font-bold text-foreground font-mono">{fmtPrice(s, s.target1)}</p></div>
+                <div className="bg-muted/40 rounded-md p-2 text-center border border-border"><p className="text-[9px] font-medium text-muted-foreground uppercase">Average</p><p className="text-xs font-bold text-foreground font-mono">{fmtPrice(s, s.target2)}</p></div>
+                <div className="bg-muted/40 rounded-md p-2 text-center border border-border"><p className="text-[9px] font-medium text-muted-foreground uppercase">Extended</p><p className="text-xs font-bold text-foreground font-mono">{fmtPrice(s, s.target3)}</p></div>
               </div>
 
               {/* Risk / ML badges */}
               <div className="px-4 pb-2 flex items-center gap-2 flex-wrap text-[10px]">
-                {s.positionSize && parseInt(s.positionSize) > 0 && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {s.positionSize}</span>}
+                {s.positionSize && parseInt(s.positionSize) > 0 && <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border font-medium">Size: {s.positionSize}</span>}
                 {(s as any).dataQuality && !(s as any).dataQuality.ok && (
                   <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold" title={((s as any).dataQuality.reasons || []).join(', ')}>DATA ISSUE</span>
                 )}
@@ -676,26 +674,26 @@ export function SignalsPage() {
                   <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border" title="Estimated round-trip cost">COST ~{(s as any).estCostBps}bps</span>
                 )}
                 {(s as any).sectorValuation?.metric && (
-                  <span className={`px-1.5 py-0.5 rounded border font-medium ${(s as any).sectorValuation.label === "cheap" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : (s as any).sectorValuation.label === "expensive" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-muted text-muted-foreground border-border"}`}
+                  <span className="px-1.5 py-0.5 rounded border border-border bg-muted/40 text-muted-foreground font-medium"
                     title={`${(s as any).sectorValuation.metric} ${(s as any).sectorValuation.value} vs sector ${(s as any).sectorValuation.benchmark} (${(s as any).sectorValuation.relative}x)`}>
-                    VAL {(s as any).sectorValuation.label} � {(s as any).sectorValuation.metric}
+                    VAL {(s as any).sectorValuation.label} - {(s as any).sectorValuation.metric}
                   </span>
                 )}
                 {(s as any).scenarios && (
-                  <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 border border-slate-200"
-                    title={`Bear ${(s as any).scenarios.bear?.returnPct}% � Base ${(s as any).scenarios.base?.returnPct}% � Bull ${(s as any).scenarios.bull?.returnPct}%`}>
+                  <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border"
+                    title={`Bear ${(s as any).scenarios.bear?.returnPct}% - Base ${(s as any).scenarios.base?.returnPct}% - Bull ${(s as any).scenarios.bull?.returnPct}%`}>
                     SCEN {((s as any).scenarios.expectedReturnPct ?? 0) >= 0 ? "+" : ""}{(s as any).scenarios.expectedReturnPct}%
                   </span>
                 )}
-                {s.var95 && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-100">VaR: {s.var95}</span>}
-                {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">ML: {s.mlWinProb}</span>}
-                {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
-                {s.weeklyTrend && <span className={`px-1.5 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
+                {s.var95 && <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border">VaR: {s.var95}</span>}
+                {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border">ML: {s.mlWinProb}</span>}
+                {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border">{s.regime}</span>}
+                {s.weeklyTrend && <span className="px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border font-medium">{s.weeklyTrend}</span>}
                 {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
-                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
+                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border border-border bg-muted/40 ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-600"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST -"}</span>}
                 {s.insider?.hasActivity && s.insider.score !== 50 && (
-                  <span className={`px-1.5 py-0.5 rounded font-semibold border ${insiderPositive(s.insider) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    INSIDER {insiderPositive(s.insider) ? "+" : "−"}
+                  <span className="px-1.5 py-0.5 rounded font-semibold border border-border bg-muted/40 text-muted-foreground">
+                    INSIDER {insiderPositive(s.insider) ? "+" : "-"}
                   </span>
                 )}
               </div>
@@ -719,7 +717,7 @@ export function SignalsPage() {
               {s.insider?.hasActivity && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "▲" : "▼"} {s.insider.summary}</span>
+                  <span className="font-medium text-foreground">{s.insider.summary}</span>
                     {s.insider.latestDate && <span className="text-muted-foreground"> · latest {s.insider.latestDate}</span>}
                     {s.insider.score != null && <span className="text-muted-foreground"> · insider score {s.insider.score}/100</span>}
                     {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> · short float {s.insider.shortFloatPct}%</span>}
@@ -730,7 +728,7 @@ export function SignalsPage() {
               {/* Confidence bar */}
               <div className="px-4 pb-3 flex items-center gap-3" data-tour={idx === 0 ? "signal-confidence" : undefined}>
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${s.confidence >= 80 ? "bg-emerald-500" : s.confidence >= 70 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${s.confidence}%` }} />
+                  <div className="h-full rounded-full bg-[#0D7490] transition-all" style={{ width: `${s.confidence}%` }} />
                 </div>
                 <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "—"}</span>
               </div>
@@ -758,9 +756,9 @@ export function SignalsPage() {
                         <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-semibold">SUPPRESSED</span>
                       ) : (
                         <>
-                          {buy > 0 && <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">{buy} BUY</span>}
-                          {sell > 0 && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">{sell} SELL</span>}
-                          {watch > 0 && <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-semibold">{watch} WATCH</span>}
+                          {buy > 0 && <span className="px-1.5 py-0.5 rounded bg-muted/40 border border-border text-emerald-700 font-semibold">{buy} BUY</span>}
+                          {sell > 0 && <span className="px-1.5 py-0.5 rounded bg-muted/40 border border-border text-red-600 font-semibold">{sell} SELL</span>}
+                          {watch > 0 && <span className="px-1.5 py-0.5 rounded bg-muted/40 border border-border text-muted-foreground font-semibold">{watch} WATCH</span>}
                         </>
                       )}
                     </div>
