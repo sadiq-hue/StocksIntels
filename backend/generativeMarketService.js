@@ -224,7 +224,7 @@ async function refresh(conditions = {}) {
   if (conditions.vix == null && !conditions.breadth) return deterministicOverlay(conditions);
   if (cached.overlay) {
     const age = Date.now() - cached.at;
-    const cacheMs = cached.overlay.source === 'deterministic' ? 5 * 60 * 1000 : CACHE_MS;
+    const cacheMs = cached.overlay.source === 'deterministic' ? 60 * 1000 : CACHE_MS;
     if (age < cacheMs) return cached.overlay;
   }
   if (inflight) return inflight;
