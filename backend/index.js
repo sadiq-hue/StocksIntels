@@ -28,6 +28,7 @@ const universeService = require('./universeService');
 const catalogScreener = require('./catalogScreener');
 const signalSnapshotsService = require('./signalSnapshotsService');
 const marketConditionService = require('./marketConditionService');
+const generativeMarketService = require('./generativeMarketService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const marketHours = require('./marketHours');
 const { refitParameters } = require('./paramRefit');
@@ -3979,6 +3980,16 @@ app.get('/api/market/conditions', async (req, res) => {
     res.json(marketConditionService.getConditions());
   } catch (error) {
     res.status(500).json({ error: 'Market conditions unavailable' });
+  }
+});
+
+app.get('/api/market/ai-brief', async (req, res) => {
+  try {
+    const conditions = marketConditionService.getConditions();
+    generativeMarketService.refresh(conditions).catch(() => {});
+    res.json(generativeMarketService.peek() || { source: 'pending' });
+  } catch (error) {
+    res.status(500).json({ error: 'AI market brief unavailable' });
   }
 });
 

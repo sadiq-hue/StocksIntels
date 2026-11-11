@@ -32,6 +32,7 @@ const signalSnapshotsService = require('./signalSnapshotsService');
 const targetCalibrationService = require('./targetCalibrationService');
 const marketConditionService = require('./marketConditionService');
 const catalogScreener = require('./catalogScreener');
+const generativeMarketService = require('./generativeMarketService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -4968,6 +4969,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
 targetCalibrationService.refresh().catch(() => {});
 marketConditionService.start();
 catalogScreener.start();
+generativeMarketService.refresh(marketConditionService.getConditions()).catch(() => {});
   try {
 
   // Quick mode: skip all external fetches, use only cached data
@@ -6449,6 +6451,18 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     dynamicScoreBar = Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar + (scoreGateCfg.high_variance_adjustment ?? 2));
     effectiveThresholds.buy = dynamicScoreBar;
   }
+  // Bounded generative overlay: the LLM may nudge the bars by at most +/-2,
+  // and only the deterministic component decides whether the market is open,
+  // liquid, or eligible.
+  const genOverlay = generativeMarketService.peek();
+  const genBias = num(genOverlay?.gateBias) ?? 0;
+  if (genBias && scoreGateCfg.enabled !== false) {
+    dynamicScoreBar = Math.round(Math.max(
+      scoreGateCfg.min_bar ?? 50,
+      Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar + genBias)
+    ));
+    effectiveThresholds.buy = dynamicScoreBar;
+  }
   let sig = classifySignalBucket(overallScore, effectiveThresholds, {
     subScores: {
       fundamental: fundamental.score,
@@ -6537,6 +6551,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (sparseFund || sparseTech || sparseFin) dynamicBuyBar += dynGateCfg.sparse_data_adjustment ?? 3;
     if (dataQuality?.ok === false) dynamicBuyBar += dynGateCfg.poor_data_quality_adjustment ?? 5;
     if (scoreVariance > (dynGateCfg.high_variance_threshold ?? 25)) dynamicBuyBar += dynGateCfg.high_variance_adjustment ?? 2;
+    if (genBias) dynamicBuyBar += genBias;
     dynamicBuyBar = Math.round(Math.max(
       dynGateCfg.min_bar ?? 48,
       Math.min(dynGateCfg.max_bar ?? 65, dynamicBuyBar)
@@ -6919,6 +6934,16 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       scoreBar: dynamicScoreBar,
       confidenceBar: dynamicBuyBar,
     },
+    generativeContext: genOverlay ? {
+      source: genOverlay.source,
+      riskPosture: genOverlay.riskPosture,
+      gateBias: genOverlay.gateBias,
+      confidence: genOverlay.confidence,
+      narrative: genOverlay.narrative,
+      keyRisks: genOverlay.keyRisks,
+      keySupports: genOverlay.keySupports,
+      asOf: genOverlay.asOf,
+    } : null,
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
     dataCompleteness,
