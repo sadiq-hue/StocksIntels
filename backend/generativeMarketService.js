@@ -36,10 +36,10 @@ function clampBias(value) {
 }
 
 function deterministicOverlay(conditions = {}) {
-  const vix = Number(conditions.vix);
+  const vix = Number(conditions.vix) > 0 ? Number(conditions.vix) : null;
   const breadth = Number(conditions.breadth?.score);
   const trend = Number(conditions.breadth?.pctAbove200);
-  const credit = Number(conditions.creditSpread);
+  const credit = Number(conditions.creditSpread) > 0 ? Number(conditions.creditSpread) : null;
   const riskOn = conditions.sectors?.riskOn === true;
   const riskTone = conditions.riskTone || 'unknown';
 
@@ -219,7 +219,14 @@ async function refresh(conditions = {}) {
     cached = { at: Date.now(), overlay };
     return overlay;
   }
-  if (cached.overlay && Date.now() - cached.at < CACHE_MS) return cached.overlay;
+  // Do not pin the overlay to a cold-start snapshot; wait for the conditions
+  // plane to have VIX or breadth before asking a provider.
+  if (conditions.vix == null && !conditions.breadth) return deterministicOverlay(conditions);
+  if (cached.overlay) {
+    const age = Date.now() - cached.at;
+    const cacheMs = cached.overlay.source === 'deterministic' ? 5 * 60 * 1000 : CACHE_MS;
+    if (age < cacheMs) return cached.overlay;
+  }
   if (inflight) return inflight;
 
   inflight = (async () => {
