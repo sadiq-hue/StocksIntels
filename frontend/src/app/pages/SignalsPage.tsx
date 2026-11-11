@@ -374,8 +374,9 @@ export function SignalsPage() {
   useEffect(() => {
     const ticker = searchParams.get("ticker");
     if (ticker && signals.length > 0) {
+      setView("signals");
       const match = signals.find(s => s.ticker === ticker);
-      if (match) openSignal(match);
+      openSignal(match || ({ ticker } as StockSignal));
     }
   }, [searchParams, signals]);
 

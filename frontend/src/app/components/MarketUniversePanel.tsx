@@ -260,7 +260,7 @@ export function MarketUniversePanel() {
                 </td>
                 <td className="px-3 py-2 text-right text-[11px] text-muted-foreground">{ago(r.analyzed_at)}</td>
                 <td className="px-3 py-2 text-right">
-                  <Link to={`/signals?ticker=${encodeURIComponent(r.ticker)}`} className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0D7490] hover:underline">
+                      <Link to={`/app/signals?view=signals&ticker=${encodeURIComponent(r.ticker)}`} className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0D7490] hover:underline">
                     Open <ExternalLink className="size-3" />
                   </Link>
                 </td>
