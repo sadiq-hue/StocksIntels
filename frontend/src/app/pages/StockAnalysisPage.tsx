@@ -777,7 +777,10 @@ export function StockAnalysisPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
         {/* ═══ Sidebar ═══ */}
-        <div className="lg:col-span-1 order-2 lg:order-1 flex flex-col gap-6">
+        <div className="hidden lg:col-span-1 order-2 lg:order-1 flex flex-col gap-6">
+          {/* Temporarily disabled while the Stocks Analysis page is rebuilt. */}
+          {false && (
+            <>
           <Card className="border border-border shadow-sm flex-[3] min-h-0 lg:max-h-[2000px] max-lg:max-h-[45vh] flex flex-col overflow-hidden">
             <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
             <div className="p-4 border-b border-border">
@@ -984,10 +987,12 @@ export function StockAnalysisPage() {
               </div>
             </div>
           </Card>
+            </>
+          )}
         </div>
 
         {/* ═══ Main Content ═══ */}
-        <div className="lg:col-span-3 order-1 lg:order-2 space-y-6">
+        <div className="lg:col-span-4 order-1 lg:order-2 space-y-6">
 
           {/* ── Stock Hero ── */}
           <Card className="relative overflow-hidden bg-white/30 dark:bg-white/[0.06] backdrop-blur-xl border border-white/30 dark:border-white/[0.06] rounded-[24px] shadow-sm">
