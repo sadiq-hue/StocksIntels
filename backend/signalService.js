@@ -6427,6 +6427,14 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (num(mkt.vix) != null && mkt.vix >= 30) {
       dynamicScoreBar += scoreGateCfg.vix_high_adjustment ?? 2;
     }
+    const vixMomentum = num(mkt.vixChangePct);
+    if (vixMomentum != null) {
+      if (vixMomentum >= (scoreGateCfg.vix_spike_threshold ?? 10)) dynamicScoreBar += scoreGateCfg.vix_spike_adjustment ?? 2;
+      else if (vixMomentum <= (scoreGateCfg.vix_calm_threshold ?? -10)) dynamicScoreBar += scoreGateCfg.vix_calm_adjustment ?? -1;
+    }
+    const sectorCtx = sectorCondition(stock.sector, mkt.sectors);
+    if (sectorCtx.delta > 0) dynamicScoreBar += scoreGateCfg.sector_laggard_adjustment ?? 1;
+    else if (sectorCtx.delta < 0) dynamicScoreBar += scoreGateCfg.sector_leader_adjustment ?? -1;
     if (sparseFund || sparseTech || sparseFin) dynamicScoreBar += scoreGateCfg.sparse_data_adjustment ?? 2;
     dynamicScoreBar = Math.round(Math.max(scoreGateCfg.min_bar ?? 50, Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar)));
   }
@@ -6516,6 +6524,14 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (num(mkt.creditSpread) != null && mkt.creditSpread >= (dynGateCfg.credit_spread_high_threshold ?? 5)) {
       dynamicBuyBar += dynGateCfg.credit_spread_high_adjustment ?? 2;
     }
+    const vixMomentumGate = num(mkt.vixChangePct);
+    if (vixMomentumGate != null) {
+      if (vixMomentumGate >= (dynGateCfg.vix_spike_threshold ?? 10)) dynamicBuyBar += dynGateCfg.vix_spike_adjustment ?? 2;
+      else if (vixMomentumGate <= (dynGateCfg.vix_calm_threshold ?? -10)) dynamicBuyBar += dynGateCfg.vix_calm_adjustment ?? -1;
+    }
+    const sectorGateCtx = sectorCondition(stock.sector, mkt.sectors);
+    if (sectorGateCtx.delta > 0) dynamicBuyBar += dynGateCfg.sector_laggard_adjustment ?? 1;
+    else if (sectorGateCtx.delta < 0) dynamicBuyBar += dynGateCfg.sector_leader_adjustment ?? -1;
     if (mkt.sectors && mkt.sectors.riskOn === false) dynamicBuyBar += dynGateCfg.sector_risk_off_adjustment ?? 1;
     if (weightProfile === 'long') dynamicBuyBar += dynGateCfg.long_horizon_adjustment ?? 1;
     if (sparseFund || sparseTech || sparseFin) dynamicBuyBar += dynGateCfg.sparse_data_adjustment ?? 3;
@@ -6891,10 +6907,17 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     scoreGate: dynamicScoreBar,
     marketConditions: {
       vix: num(mkt.vix),
+      vixChangePct: num(mkt.vixChangePct),
       breadth: num(mkt.breadth?.score),
       pctAbove200: num(mkt.breadth?.pctAbove200),
       creditSpread: num(mkt.creditSpread),
       riskTone: mkt.riskTone || 'unknown',
+      sector: stock.sector || null,
+      sectorEtf: sectorCondition(stock.sector, mkt.sectors).etf,
+    },
+    gateBreakdown: {
+      scoreBar: dynamicScoreBar,
+      confidenceBar: dynamicBuyBar,
     },
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
@@ -7041,7 +7064,37 @@ function computeFairValueTarget(sectorValuation, currentPrice) {
 
 function assessThesisRisk(stock, fundamental, financial) {
   const flags = [];
-  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+const SECTOR_ETF_MAP = {
+  technology: 'XLK',
+  financial: 'XLF',
+  financials: 'XLF',
+  'financial services': 'XLF',
+  energy: 'XLE',
+  healthcare: 'XLV',
+  'consumer cyclical': 'XLY',
+  'consumer discretionary': 'XLY',
+  'consumer defensive': 'XLP',
+  'consumer staples': 'XLP',
+  industrials: 'XLI',
+  'basic materials': 'XLB',
+  materials: 'XLB',
+  utilities: 'XLU',
+  'real estate': 'XLRE',
+  'communication services': 'XLC',
+};
+
+function sectorCondition(sector, sectors) {
+  const etf = SECTOR_ETF_MAP[String(sector || '').toLowerCase()];
+  if (!etf || !Array.isArray(sectors?.rows)) return { etf: etf || null, changePct: null, delta: 0 };
+  const row = sectors.rows.find(r => r.symbol === etf);
+  const changePct = num(row?.changePct);
+  if (changePct == null) return { etf, changePct: null, delta: 0 };
+  if (changePct <= -1.5) return { etf, changePct, delta: 1 };
+  if (changePct >= 1.5) return { etf, changePct, delta: -1 };
+  return { etf, changePct, delta: 0 };
+}
   const dataSource = String(stock?.dataSource || '').toLowerCase();
   const sparse = fundamental?.metrics?.dataQuality === 'Very sparse data';
   const reliable = dataSource !== 'fallback' && !sparse;
