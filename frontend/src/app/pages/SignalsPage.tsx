@@ -18,10 +18,7 @@ import type { Signal as StockSignal } from "../types/signals";
 import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
 import { MarketIntelligenceCard } from "../components/MarketIntelligenceCard";
 import { MarketUniversePanel } from "../components/MarketUniversePanel";
-import { authFetch } from "../auth/tokenStore";
 import { currencyPrefix } from "../utils/currency";
-
-const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 // Apple-style stat tile: soft shadow, no border, tight typography.
 function StatCard({ label, value, tone }: {
@@ -331,7 +328,7 @@ export function SignalsPage() {
   const fullSignalCache = useRef<Map<string, StockSignal>>(new Map());
   const perPage = 15;
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
 
   const fetchSignals = async () => {
     try {
@@ -339,7 +336,7 @@ export function SignalsPage() {
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
       // List mode is compact on purpose: the full technical/news/ML blocks are
       // fetched only when a card is opened. This cuts the mobile payload sharply.
-      const res = await authFetch(`${API_URL}/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`);
+      const res = await apiFetch(`/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`);
       const data = await res.json();
       if (data.success) { setSignals(data.signals); setLastUpdated(new Date().toLocaleString()); }
     } catch (e) { console.error("Signals fetch error:", e); } finally { setLoading(false); }
@@ -352,7 +349,7 @@ export function SignalsPage() {
     if (cached) setSelected(cached);
     setDetailLoading(true);
     try {
-      const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}?fresh=${Date.now()}`, { cache: "no-store" });
+      const res = await apiFetch(`/signal/${encodeURIComponent(signal.ticker)}?fresh=${Date.now()}`, { cache: "no-store" });
       const payload = await res.json();
       // The API returns a flat signal object: { signal: "Buy", analysis: {...} }.
       // Only unwrap an envelope when `signal` is itself an object.
