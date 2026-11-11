@@ -465,15 +465,14 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
     const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
     // Require a real move past the level but reject impossible single-cycle moves
-    // (garbage quotes) that would record absurd outcomes. The +50% default cap guards
-    // the entry stage — a RIDE to the ultimate target is routinely +100%+ from entry
-    // once the position has already banked a milestone, so a staged long
-    // (stageIdx > 0) is exempt: it has proven its path gradually by passing
-    // intermediate levels, and its price can legitimately sit far above entry.
-    // A caller may pass a tighter cap (e.g. 0.25 for NSE, whose day limit is ~10%)
-    // so a corrupt 24.88 quote against a 35.20 SCOM entry (~30% "move") can't trip
-    // the stop/target resolution in a single cycle.
-    const moved = pctMove > 0.0005 && (pctMove < maxSingleMovePct || (isPrevBuy && stageIdx > 0));
+    // (garbage quotes) that would record absurd outcomes. A stop breach must still
+    // resolve even when it is larger than the normal target-move cap: a genuine
+    // collapse (e.g. CHSN 2.73 -> 0.74) is exactly the scenario the stop exists
+    // for. Only an implausible near-total loss is treated as a bad quote.
+    const stopBreached = isPrevBuy ? currentPrice <= previous.stopLoss : currentPrice >= previous.stopLoss;
+    const implausibleCollapse = stopBreached && pctMove >= 0.95;
+    const movedWithinCap = pctMove > 0.0005 && (pctMove < maxSingleMovePct || (isPrevBuy && stageIdx > 0));
+    const moved = (stopBreached && !implausibleCollapse) || movedWithinCap;
     const isShort = previous.horizon === 'short' || String(previous.specVersion || '').startsWith('short-');
     const shortTimeStop = isShort && isPrevBuy && signalAge >= SHORT_HORIZON_MS;
     const effectiveMoved = moved || shortTimeStop;
