@@ -5625,18 +5625,20 @@ generativeMarketService.refresh(marketConditionService.getConditions()).catch(()
 // rotating batch feed still shows its catalyst/news block.
 function ensureCompanyProfile(sig, symbol) {
   if (!sig) return sig;
-  const cp = sig.companyProfile || {};
-  if (cp.description || cp.industry) return sig;
   const derived = companyProfileService.getDerivedProfile(symbol);
   if (!derived?.isAfrican) return sig;
+  const cp = sig.companyProfile || {};
+  const foreignFundDescription = /etf|exchange-traded|fund|trust|sub-adviser|portfolio/i.test(String(cp.description || ''));
+  const foreignFundName = /etf|fund|trust|state street|doubleline/i.test(String(sig.name || ''));
   return {
     ...sig,
+    name: foreignFundName || !sig.name ? derived.name : sig.name,
     companyProfile: {
       ...cp,
-      description: cp.description || derived.description,
-      industry: cp.industry || derived.industry,
-      sector: cp.sector || derived.sector,
-      country: cp.country || derived.country,
+      description: (!cp.description || foreignFundDescription) ? derived.description : cp.description,
+      industry: derived.industry || cp.industry,
+      sector: derived.sector || cp.sector,
+      country: derived.country,
       market: cp.market || marketForSymbol(symbol),
       currency: cp.currency || currencyForSymbol(symbol),
     },
@@ -5754,7 +5756,7 @@ async function getSignalForStock(symbol) {
         thesis: latest?.thesis || null,
         status: 'monitoring',
       };
-      return attachFreshNews(detail, upper);
+      return attachFreshNews(ensureCompanyProfile(detail, upper), upper);
     }
     try {
       const snap = await signalSnapshotsService.getSnapshot(upper);
@@ -5765,7 +5767,7 @@ async function getSignalForStock(symbol) {
       if (payload && typeof payload === 'object') {
         const due = !snap.next_refresh_at || new Date(snap.next_refresh_at).getTime() <= Date.now();
         if (due) queueAnalysisRefresh(upper);
-        return attachFreshNews(payload, upper);
+        return attachFreshNews(ensureCompanyProfile(payload, upper), upper);
       }
     } catch { /* snapshot fallback unavailable */ }
     if (isDynamic) return generateSingleSignal(upper);
