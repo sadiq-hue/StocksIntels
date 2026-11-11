@@ -7788,11 +7788,29 @@ app.get('/api/stock/:symbol', async (req, res) => {
   }
 });
 
+app.get('/api/stock/:symbol/profile', async (req, res) => {
+  try {
+    const upper = String(req.params.symbol || '').toUpperCase();
+    const market = String(req.query.market || '').toLowerCase();
+    const prefix = market === 'nse' ? 'NSE:' : market === 'ngx' ? 'NGX:' : market === 'jse' ? 'JSE:' : '';
+    const lookup = prefix ? `${prefix}${upper}` : upper;
+    const derived = require('./companyProfileService').getDerivedProfile(lookup);
+    if (derived?.isAfrican) {
+      return res.json({ symbol: lookup, profile: derived });
+    }
+    const profile = await require('./yahooFinanceFinancialsScraper').getCompanyProfile(upper).catch(() => null);
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    res.json({ symbol: lookup, profile });
+  } catch (error) {
+    console.error(`Error fetching profile for ${req.params.symbol}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
 app.get('/api/stock/:symbol/history', async (req, res) => {
   try {
     const { symbol } = req.params;
-    const { range, interval } = req.query;
-    const upper = symbol.toUpperCase();
+    const { range, interval } = req.query;    const upper = symbol.toUpperCase();
 
     const isNse = upper.startsWith('NSE:') || upper.endsWith('.NSE') || upper.endsWith('.KE');
     const isNgx = upper.startsWith('NGX:') || upper.endsWith('.NG');

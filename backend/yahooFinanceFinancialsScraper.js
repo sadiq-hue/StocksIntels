@@ -416,7 +416,7 @@ async function fetchAnnualIncomeHistory(symbol) {
 }
 
 async function getCompanyProfile(symbol) {
-  const cacheKey = `yh_profile_v3_${symbol}`;
+  const cacheKey = `yh_profile_v4_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached && cached.ceo && cached.ceo !== 'N/A' && (cached.employees || 0) > 0) return cached;
 
@@ -457,10 +457,21 @@ async function getCompanyProfile(symbol) {
     sector: sp.sector || ap?.sector || edgarProfile?.sector || '',
     country: sp.country || ap?.country || edgarProfile?.country || '',
     website: sp.website || ap?.website || edgarProfile?.website || '',
-    description: (sp.longBusinessSummary || ap?.longBusinessSummary || edgarProfile?.description || '').slice(0, 500),
+    description: (sp.longBusinessSummary || ap?.longBusinessSummary || edgarProfile?.description || '').slice(0, 2000),
     ceo: ceo !== 'N/A' ? ceo : (edgarProfile?.ceo || 'N/A'),
     ceoRole,
     employees: sp.fullTimeEmployees || ap?.fullTimeEmployees || edgarProfile?.employees || 0,
+    officers: (officers || []).slice(0, 10).map(o => ({
+      name: o.name || null,
+      title: o.title || null,
+      age: o.age ?? null,
+      yearBorn: o.yearBorn ?? null,
+      fiscalYear: o.fiscalYear ?? null,
+      totalPay: o.totalPay ?? null,
+      exercisedValue: o.exercisedValue ?? null,
+    })),
+    address: [ap?.address1, ap?.address2, ap?.city, ap?.state, ap?.zip, ap?.country].filter(Boolean).join(', ') || '',
+    phone: ap?.phone || '',
     marketCap: fd.marketCap || dk.marketCap || pr.marketCap ||
       ((pr.regularMarketPrice || 0) > 0 && (dk.sharesOutstanding || 0) > 0 ? pr.regularMarketPrice * dk.sharesOutstanding : 0),
     price: pr.regularMarketPrice || fd.currentPrice || 0,

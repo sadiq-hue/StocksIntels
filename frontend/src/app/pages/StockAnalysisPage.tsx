@@ -149,6 +149,8 @@ export function StockAnalysisPage() {
   const [favorites, setFavorites] = useState<string[]>(["SCOM", "EQTY", "KCB", "AAPL", "MSFT"]);
   const [nseInsights, setNseInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [stockProfile, setStockProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [page, setPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -288,6 +290,20 @@ export function StockAnalysisPage() {
   const finSymbol = activeSelection.market === 'jse' ? `JSE:${activeSelection.ticker}`
     : activeSelection.market === 'ngx' ? `NGX:${activeSelection.ticker}`
     : activeSelection.ticker;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setStockProfile(null);
+    setProfileLoading(true);
+    fetch(`${API_URL}/stock/${encodeURIComponent(finSymbol)}/profile?market=${encodeURIComponent(activeSelection.market)}`, {
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.profile) setStockProfile(data.profile); })
+      .catch(() => {})
+      .finally(() => setProfileLoading(false));
+    return () => controller.abort();
+  }, [finSymbol, activeSelection.market]);
 
   const sectors = useMemo(
     () => ["All", ...Array.from(new Set(stockUniverse.map((s) => s.sector)))],
@@ -1683,177 +1699,80 @@ export function StockAnalysisPage() {
                 </div>
               </Card>
 
-              {/* Key Indicators */}
+              {/* Stock Profile */}
               <Card className="relative overflow-hidden border border-border shadow-sm flex-1 min-h-0">
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
                 <div className="flex h-full flex-col p-5">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
-                    <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"><LineChart className="size-3.5" /></span>
-                    Technical Analysis
+                    <span className="flex size-7 items-center justify-center rounded-lg bg-[#0D7490]/10 text-[#0D7490]"><Building2 className="size-3.5" /></span>
+                    Stock Profile
                   </h3>
-                  <div className="flex flex-1 flex-col">
-                    <div className="flex-1 space-y-4">
-
-                    {/* RSI */}
-                    <div>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs font-medium text-muted-foreground">RSI (14)</span>
-                        <span className={`text-xs font-semibold ${
-                          rsi > 70 ? "text-red-500" : rsi < 30 ? "text-emerald-600" : "text-amber-600"
-                        }`}>{rsi.toFixed(1)}</span>
-                      </div>
-                      <div className="relative h-3 bg-muted rounded-full overflow-hidden">
-                        <div className="absolute inset-0 rounded-full" style={{
-                          background: 'linear-gradient(to right, #059669, #059669 30%, #d97706 30%, #d97706 70%, #dc2626 70%, #dc2626 100%)',
-                          opacity: 0.15,
-                        }} />
-                        <div
-                          className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, rsi))}%`,
-                            background: rsi > 70 ? '#dc2626' : rsi < 30 ? '#059669' : '#d97706',
-                            opacity: 0.8,
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                        <span>0</span>
-                        <span className="text-emerald-600 font-medium">30</span>
-                        <span className="text-red-500 font-medium">70</span>
-                        <span>100</span>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        {rsi > 70 ? 'Overbought — price may be due for a pullback' : rsi < 30 ? 'Oversold — potential bounce opportunity' : 'Neutral — no extreme momentum detected'}
-                      </div>
-                    </div>
-
-                    {/* MACD */}
-                    <div className="border-t border-border pt-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-medium text-muted-foreground">MACD</span>
-                        <Badge className={`text-[11px] rounded-full font-medium ${
-                          macdSignal === "Bullish" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                        }`}>{macdSignal}</Badge>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="bg-muted/40 rounded-xl p-2 border border-border/50">
-                          <div className="text-[10px] text-muted-foreground mb-0.5">MACD Line</div>
-                          <div className="font-semibold text-foreground">{macdLine.toFixed(4)}</div>
+                  {profileLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" /> Loading profile...</div>
+                  ) : stockProfile ? (
+                    <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{stockProfile.companyName || activeSelection.name}</p>
+                        {stockProfile.address && <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{stockProfile.address}</p>}
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                          {stockProfile.phone && <span>{stockProfile.phone}</span>}
+                          {stockProfile.website && (
+                            <a href={stockProfile.website} target="_blank" rel="noopener noreferrer" className="text-[#0D7490] hover:underline inline-flex items-center gap-1">
+                              {stockProfile.website.replace(/^https?:\/\//, '').replace(/\/$/, '')} <ExternalLink className="size-3" />
+                            </a>
+                          )}
                         </div>
-                        <div className="bg-muted/40 rounded-xl p-2 border border-border/50">
-                          <div className="text-[10px] text-muted-foreground mb-0.5">Signal</div>
-                          <div className="font-semibold text-foreground">{macdSignalLine.toFixed(4)}</div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Sector</p>
+                          <p className="mt-0.5 font-medium text-foreground">{stockProfile.sector || activeSelection.sector || '-'}</p>
                         </div>
-                        <div className="bg-muted/40 rounded-xl p-2 border border-border/50">
-                          <div className="text-[10px] text-muted-foreground mb-0.5">Histogram</div>
-                          <div className={`font-semibold ${macdHistogram >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {macdHistogram >= 0 ? '+' : ''}{macdHistogram.toFixed(4)}
+                        <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Industry</p>
+                          <p className="mt-0.5 font-medium text-foreground">{stockProfile.industry || '-'}</p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Employees</p>
+                          <p className="mt-0.5 font-medium text-foreground">{stockProfile.employees ? Number(stockProfile.employees).toLocaleString() : '-'}</p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Country</p>
+                          <p className="mt-0.5 font-medium text-foreground">{stockProfile.country || '-'}</p>
+                        </div>
+                      </div>
+
+                      {Array.isArray(stockProfile.officers) && stockProfile.officers.length > 0 && (
+                        <div className="border-t border-border pt-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Key Executives</p>
+                          <div className="mt-2 space-y-1.5">
+                            {stockProfile.officers.map((o: any, i: number) => (
+                              <div key={String(o.name) + '-' + i} className="flex items-start justify-between gap-3 border-b border-border/60 pb-1.5 last:border-0 last:pb-0">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-foreground truncate">{o.name || '-'}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">{o.title || '-'}{o.yearBorn ? ' · born ' + o.yearBorn : ''}</p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <p className="text-[10px] text-muted-foreground">Pay</p>
+                                  <p className="text-[11px] font-medium text-foreground">{o.totalPay != null ? currencyLabel + ' ' + Number(o.totalPay).toLocaleString() : '—'}</p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground mt-1">
-                        {macdHistogram >= 0 ? '↑ Momentum gaining' : '↓ Momentum fading'}
-                      </div>
-                    </div>
+                      )}
 
-                    {/* Moving Averages */}
-                    <div className="border-t border-border pt-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-medium text-muted-foreground">Moving Averages</span>
-                        <span className={`text-xs font-semibold ${sma20 > sma50 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {sma20 > sma50 ? 'Golden Cross' : 'Death Cross'}
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs bg-muted/40 rounded-xl p-2 border border-border/50">
-                          <span className="flex items-center gap-1.5">
-                            <span className="size-2.5 rounded-full bg-[#f59e0b]" />
-                            <span className="text-muted-foreground">SMA 20</span>
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">{formatPrice(sma20)}</span>
-                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
-                              currentPrice >= sma20 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {currentPrice >= sma20 ? 'above' : 'below'}
-                            </span>
-                          </div>
+                      {stockProfile.description && (
+                        <div className="border-t border-border pt-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Description</p>
+                          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{stockProfile.description}</p>
                         </div>
-                        <div className="flex items-center justify-between text-xs bg-muted/40 rounded-xl p-2 border border-border/50">
-                          <span className="flex items-center gap-1.5">
-                            <span className="size-2.5 rounded-full bg-[#ef4444]" />
-                            <span className="text-muted-foreground">SMA 50</span>
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">{formatPrice(sma50)}</span>
-                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
-                              currentPrice >= sma50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {currentPrice >= sma50 ? 'above' : 'below'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between text-xs text-muted-foreground px-1">
-                          <span>Gap</span>
-                          <span className="font-medium text-foreground">
-                            {formatPrice(Math.abs(sma20 - sma50))} ({(Math.abs(sma20 - sma50) / (displayPrice || 1) * 100).toFixed(1)}%)
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </div>
-
-                    {/* Bollinger Bands */}
-                    <div className="border-t border-border pt-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-medium text-muted-foreground">Bollinger Bands (20,2)</span>
-                        <span className={`text-[11px] font-medium ${bbPosition > 80 ? 'text-red-500' : bbPosition < 20 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {bbPosition > 80 ? 'Near Upper' : bbPosition < 20 ? 'Near Lower' : 'Middle Zone'}
-                        </span>
-                      </div>
-                      <div className="relative h-3 bg-muted rounded-full overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/30 via-amber-400/30 to-red-400/30" />
-                        <div className="absolute left-0 right-0 top-0 h-full flex items-center justify-center">
-                          <div className="w-px h-full bg-foreground/20" />
-                        </div>
-                        <div
-                          className="size-3.5 rounded-full border-2 border-white shadow-md transition-all absolute top-1/2 -translate-y-1/2"
-                          style={{
-                            left: `${Math.min(95, Math.max(5, bbPosition))}%`,
-                            backgroundColor: bbPosition > 80 ? '#dc2626' : bbPosition < 20 ? '#059669' : '#d97706',
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                        <span>{formatPrice(bbLower)}</span>
-                        <span className="font-medium text-foreground">{formatPrice((bbUpper + bbLower) / 2)}</span>
-                        <span>{formatPrice(bbUpper)}</span>
-                      </div>
-                    </div>
-
-                    {/* ATR */}
-                    <div className="border-t border-border pt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-muted-foreground">Volatility (ATR)</span>
-                        <div className="text-left sm:text-right">
-                          <span className="text-xs font-semibold text-foreground">{formatPrice(atr)}</span>
-                          <span className="text-[11px] text-muted-foreground ml-1">({atrPct}%)</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${atrPct > 3 ? 'bg-red-500' : atrPct > 1.5 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${Math.min(100, atrPct * 20)}%` }}
-                          />
-                        </div>
-                        <span className={`text-[11px] font-medium ${atrPct > 3 ? 'text-red-500' : atrPct > 1.5 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {atrPct > 3 ? 'High' : atrPct > 1.5 ? 'Normal' : 'Low'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Company profile is not available for this listing yet.</p>
+                  )}
                 </div>
-              </div>
               </Card>
             </div>
 
