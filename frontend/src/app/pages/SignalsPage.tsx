@@ -240,7 +240,7 @@ function plainSummary(s: StockSignal): string {
     : s.signal;
   const conf = s.confidence;
   let tail: string;
-  if (conf >= 60) tail = "This is a relatively strong signal — but always check the levels below.";
+  if (conf >= 60) tail = "This is a relatively strong setup — but always check the levels below.";
   else if (conf >= 40) tail = "Treat this as a starting point, not a certainty — the model is fairly balanced.";
   else tail = "Be cautious — the model is not very confident about this one.";
   return `The model rates this ${verb} with ${conf}% confidence (${confidencePlain(conf)}). ${tail}`;
@@ -279,7 +279,7 @@ function overallVerdict(s: StockSignal): string {
     ? `the stock scores an overall ${overall.grade} (${score}) and ${rated}`
     : `the model ${rated}`;
   let tail: string;
-  if (conf >= 60) tail = `${conf}% confidence — a relatively strong signal.`;
+  if (conf >= 60) tail = `${conf}% confidence — a relatively strong view.`;
   else if (conf >= 40) tail = `${conf}% confidence — balanced, so treat it as a starting point, not a certainty.`;
   else tail = `${conf}% confidence — a cautious call.`;
   return `After weighing everything, ${lead} with ${tail}`;
@@ -445,7 +445,7 @@ export function SignalsPage() {
           </div>
           <div>
             <h1 className="text-[28px] leading-tight font-semibold tracking-tight text-foreground">Market Intelligence</h1>
-            <p className="text-[13px] text-muted-foreground">Data-driven signals verified by fundamental and technical metrics.</p>
+            <p className="text-[13px] text-muted-foreground">Data-driven insights verified by fundamental and technical factors.</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -471,13 +471,13 @@ export function SignalsPage() {
           onClick={() => setView("signals")}
           className={`rounded-full px-3.5 py-1.5 transition-colors ${view === "signals" ? "bg-white dark:bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
         >
-          Actionable signals
+          Actionable Ideas
         </button>
         <button
           onClick={() => setView("universe")}
           className={`rounded-full px-3.5 py-1.5 transition-colors ${view === "universe" ? "bg-white dark:bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
         >
-          Universe screener
+          Screened Universe
         </button>
       </div>
 
@@ -487,19 +487,19 @@ export function SignalsPage() {
         <>
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="signals-stats">
-        <StatCard label="Total Signals" value={signals.length} tone="text-foreground" />
+        <StatCard label="Screened Universe" value={signals.length} tone="text-foreground" />
         <StatCard label="Strong Buy / Buy" value={strongBuy} tone="text-emerald-600" />
         <StatCard label="Sell / Strong Sell" value={strongSell} tone="text-red-600" />
-        <StatCard label="Peak Confidence" value={`${peakConf}%`} tone="text-foreground" />
-        <StatCard label="Avg Confidence" value={`${avgConf}%`} tone="text-foreground" />
+        <StatCard label="Peak Conviction" value={`${peakConf}%`} tone="text-foreground" />
+        <StatCard label="Avg Conviction" value={`${avgConf}%`} tone="text-foreground" />
         <StatCard label="Favorites" value={favorites.length} tone="text-foreground" />
       </div>
 
       {/* Horizon split: short-term traders vs medium/long-term investors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {([
-          { key: "short" as const, label: "Short-term buy ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-foreground", bg: "bg-card border-border" },
-          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1�3+ months)", count: longIdeas, tone: "text-foreground", bg: "bg-card border-border" },
+          { key: "short" as const, label: "Tactical Buy Ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-foreground", bg: "bg-card border-border" },
+          { key: "long" as const, label: "Core Buy Ideas", sub: "Medium to long term (1-3+ months)", count: longIdeas, tone: "text-foreground", bg: "bg-card border-border" },
         ]).map(({ key, label, sub, count, tone, bg }) => {
           const top = signals
             .filter(s => isBuyIdea(s) && (key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
@@ -516,7 +516,7 @@ export function SignalsPage() {
                 <span className={`text-2xl font-black tabular-nums ${tone}`}>{count}</span>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {top.length === 0 ? <span className="text-[11px] text-muted-foreground">No signals in this horizon yet</span> : top.map(s => (
+                {top.length === 0 ? <span className="text-[11px] text-muted-foreground">No ideas in this horizon yet</span> : top.map(s => (
                   <span key={s.ticker} className="rounded-full bg-white/80 dark:bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{s.ticker}</span>
                 ))}
               </div>
@@ -530,8 +530,8 @@ export function SignalsPage() {
         <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div>
-              <p className="text-sm font-semibold tracking-tight text-foreground">Top signals by confidence</p>
-              <p className="text-xs text-muted-foreground">Highest-conviction setups in the feed right now</p>
+              <p className="text-sm font-semibold tracking-tight text-foreground">Top Conviction Setups</p>
+              <p className="text-xs text-muted-foreground">Highest-conviction opportunities in the feed right now</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -553,8 +553,8 @@ export function SignalsPage() {
           <SelectContent><SelectItem value="all">All Types</SelectItem><SelectItem value="Intraday">Intraday</SelectItem><SelectItem value="Swing Trade">Swing Trade</SelectItem><SelectItem value="Long Term">Long Term</SelectItem><SelectItem value="Aggressive Buy">Aggressive Buy</SelectItem><SelectItem value="Momentum Trade">Momentum Trade</SelectItem><SelectItem value="Long Term Value">Long Term Value</SelectItem><SelectItem value="Avoid">Avoid</SelectItem></SelectContent>
         </Select>
         <Select value={filterSignal} onValueChange={setFilterSignal}>
-          <SelectTrigger className="w-[130px] h-9 text-sm border-border"><SelectValue placeholder="Signal" /></SelectTrigger>
-          <SelectContent><SelectItem value="All">All Signals</SelectItem><SelectItem value="Strong Buy">Strong Buy</SelectItem><SelectItem value="Buy">Buy</SelectItem><SelectItem value="Hold">Hold</SelectItem><SelectItem value="Sell">Sell</SelectItem><SelectItem value="Strong Sell">Strong Sell</SelectItem></SelectContent>
+          <SelectTrigger className="w-[130px] h-9 text-sm border-border"><SelectValue placeholder="Rating" /></SelectTrigger>
+          <SelectContent><SelectItem value="All">All Ratings</SelectItem><SelectItem value="Strong Buy">Strong Buy</SelectItem><SelectItem value="Buy">Buy</SelectItem><SelectItem value="Hold">Hold</SelectItem><SelectItem value="Sell">Sell</SelectItem><SelectItem value="Strong Sell">Strong Sell</SelectItem></SelectContent>
         </Select>
         <Select value={filterSector} onValueChange={setFilterSector}>
           <SelectTrigger className="w-[140px] h-9 text-sm border-border"><SelectValue placeholder="Sector" /></SelectTrigger>
@@ -574,9 +574,9 @@ export function SignalsPage() {
         </Select>
         <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
-          <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="confidence">Conviction ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
         </Select>
-        <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-muted/40 text-foreground border border-border text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
+        <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-muted/40 text-foreground border border-border text-xs">{filtered.length} idea{filtered.length !== 1 ? "s" : ""}</Badge>
         {hasActiveFilters && (
           <button onClick={clearFilters} className="h-9 px-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors">
             <FilterX className="w-3.5 h-3.5" />Clear filters
@@ -641,7 +641,7 @@ export function SignalsPage() {
                   </p>
                 </div>
                 <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border border-border">
-                  <p className="text-[10px] text-muted-foreground font-medium">Confidence</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Conviction</p>
                   <p className="text-sm font-bold text-foreground">{s.confidence}%</p>
                 </div>
               </div>
@@ -778,8 +778,8 @@ export function SignalsPage() {
         signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Gauge className="w-8 h-8 mb-3 opacity-30" />
-            <p className="text-sm font-medium text-muted-foreground">No signals available right now</p>
-            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes — markets may be closed or the engine is still warming up.</p>
+            <p className="text-sm font-medium text-muted-foreground">No ideas available right now</p>
+            <p className="text-xs mt-1 text-muted-foreground">Ideas refresh every few minutes — markets may be closed or the engine is still warming up.</p>
             <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
               <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
             </Button>
@@ -787,7 +787,7 @@ export function SignalsPage() {
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Search className="w-8 h-8 mb-3 opacity-30" />
-            <p className="text-sm font-medium text-muted-foreground">No signals match your filters</p>
+            <p className="text-sm font-medium text-muted-foreground">No ideas match your filters</p>
             <p className="text-xs mt-1 text-muted-foreground">Try adjusting your search or filter criteria</p>
           </div>
         )
@@ -795,7 +795,7 @@ export function SignalsPage() {
 
       {/* Pagination */}
       <div className="flex items-center justify-between border-t border-border pt-4">
-        <span className="text-xs text-muted-foreground">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</span>
+        <span className="text-xs text-muted-foreground">{filtered.length} idea{filtered.length !== 1 ? "s" : ""}</span>
         <div className="flex items-center gap-1">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage <= 1} className="flex items-center justify-center w-8 h-8 rounded-md border border-border bg-card hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"><ChevronLeft className="w-4 h-4 text-muted-foreground" /></button>
           <span className="text-xs font-medium text-muted-foreground px-3 min-w-[4rem] text-center">{safePage} / {totalPages}</span>
