@@ -860,7 +860,8 @@ const NSE_QUOTE_MAX_DEVIATION = 0.25;
 // trustworthiness — see meetsSignalConditions() below.
 const MIN_SIGNAL_HISTORY = 20; // enough bars for ATR/RSI/SMA to be meaningful
 const MIN_RISK_REWARD = 1.2;   // buy setups must offer a sane reward vs the stop
-const SHORT_MIN_REWARD_RISK = 0.5; // 2-week–3-month scenario minimum target floor
+const SHORT_MIN_REWARD_RISK = 0.5;
+const LONG_MIN_TARGET_UPSIDE_PCT = 20; // 2-week–3-month scenario minimum target floor
 const INSIDER_MAX_DELTA = 8;   // max composite swing from insider-activity conviction (0 = no data)
 
 // Stop/target resolution is only valid while the exchange's live session is open;
@@ -6724,6 +6725,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
         targetExpected: scenarioTargets.expected,
         targetFeasible: scenarioTargets.feasible,
         targetDays: scenarioTargets.targetDays,
+        targetFloorApplied: scenarioTargets.targetFloorApplied,
+        targetFloorR: scenarioTargets.shortTargetFloorR,
+        targetHoldingLimitDays: scenarioTargets.holdingLimitDays,
       };
     } else {
       // Do not manufacture a target when the evidence is inadequate. The
@@ -7033,6 +7037,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     targetExpected: tradeLevels.targetExpected || null,
     targetFeasible: tradeLevels.targetFeasible ?? null,
     targetDays: tradeLevels.targetDays ?? null,
+    targetFloorApplied: tradeLevels.targetFloorApplied ?? null,
+    targetFloorR: tradeLevels.targetFloorR || null,
+    targetHoldingLimitDays: tradeLevels.targetHoldingLimitDays ?? null,
     thesis: thesis || null,
     horizonProfile: weightProfile,
     horizonCriteria: horizon === 'long'
@@ -7444,12 +7451,28 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
       reasons.push(`non-monotonic buy levels (stop=${s} >= entry=${e} >= target=${t1})`);
     }
     const shortScenario = sigObj.horizon === 'short' && sigObj.targets && sigObj.targets.available !== false;
-    const validationRr = shortScenario
-      ? Number(sigObj.targets.rewardRiskMinimum)
-      : Number(sigObj.riskReward);
-    const validationFloor = shortScenario ? SHORT_MIN_REWARD_RISK : MIN_RISK_REWARD;
-    if (Number.isFinite(validationRr) && validationRr < validationFloor) {
-      reasons.push(`${shortScenario ? 'short-term minimum-target' : 'average-target'} reward/risk ${validationRr} <${validationFloor}`);
+    const longScenario = sigObj.horizon === 'long' && sigObj.targets && sigObj.targets.available !== false;
+    if (shortScenario) {
+      const validationRr = Number(sigObj.targets.rewardRiskMinimum);
+      if (Number.isFinite(validationRr) && validationRr < SHORT_MIN_REWARD_RISK) {
+        reasons.push(`short-term minimum-target reward/risk ${validationRr} <${SHORT_MIN_REWARD_RISK}`);
+      }
+    } else if (longScenario) {
+      // A 30% long-term stop should not disqualify a multi-year compounder just
+      // because its near-term R is low. Judge long theses on expected upside.
+      const expectedTarget = Number(sigObj.targetExpected ?? sigObj.targets?.expected);
+      const upsidePct = expectedTarget > 0 && e > 0 ? ((expectedTarget - e) / e) * 100 : null;
+      if (upsidePct == null || upsidePct < LONG_MIN_TARGET_UPSIDE_PCT) {
+        reasons.push(`long-term expected upside ${upsidePct == null ? 'missing' : `${Math.round(upsidePct * 10) / 10}%`} <${LONG_MIN_TARGET_UPSIDE_PCT}%`);
+      }
+    } else {
+      const validationRr = Number(sigObj.riskReward);
+      if (Number.isFinite(validationRr) && validationRr < MIN_RISK_REWARD) {
+        reasons.push(`average-target reward/risk ${validationRr} <${MIN_RISK_REWARD}`);
+      }
+    }
+    if (sigObj.targetFeasible === false) {
+      reasons.push('target exceeds holding window');
     }
     if (sigObj.targets && sigObj.targets.available === false) {
       reasons.push(`target: insufficient evidence (${(sigObj.targetEvidence || []).join(', ') || 'no structure'})`);

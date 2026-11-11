@@ -32,6 +32,7 @@ function buildScenarioTargets({
     return { available: false, reason: 'invalid entry/stop for target construction' };
   }
   const price = e;
+  const risk = e - s;
   const atrValue = atr != null && atr > 0 ? e * atr : e * 0.02;
   const shortHorizon = horizon === 'short';
   const indicators = technical?.indicators || {};
@@ -91,6 +92,25 @@ function buildScenarioTargets({
     evidence.push('bull-case evidence');
   }
 
+  // Short-term trades must pay for the stop they are given. The stop floor is
+  // 20% for short/medium positions, so structure-only targets frequently imply
+  // 0.2-0.4R. Enforce an R floor against the ACTUAL stop distance for short-term
+  // positions only; long-term theses are judged on valuation and multi-year
+  // upside, not a tight R multiple.
+  let targetFloorApplied = false;
+  let shortTargetFloorR = null;
+  if (shortHorizon) {
+    const floorMinimum = e + risk * 0.5;
+    const floorAverage = e + risk * 1.0;
+    const floorExtended = e + risk * 1.5;
+    if (minimum < floorMinimum) { minimum = floorMinimum; targetFloorApplied = true; }
+    if (average < floorAverage) { average = floorAverage; targetFloorApplied = true; }
+    if (extended != null && extended < floorExtended) { extended = floorExtended; targetFloorApplied = true; }
+    if (average <= minimum) average = minimum + risk * 0.5;
+    if (extended != null && extended <= average) extended = average + risk * 0.5;
+    if (targetFloorApplied) evidence.push('stop-relative R floor');
+    shortTargetFloorR = { minimum: 0.5, average: 1.0, extended: extended != null ? 1.5 : null };
+  }
   // Probability weights: technical evidence, volatility, volume, regime and
   // catalysts tilt the distribution; they are normalised, never forced equal.
   let baseWeight = shortHorizon ? 0.50 : 0.45;
@@ -117,14 +137,16 @@ function buildScenarioTargets({
   const expected = extended != null
     ? minimum * probabilities.minimum + average * probabilities.average + extended * probabilities.extended
     : minimum * probabilities.minimum + average * probabilities.average;
-  const risk = e - s;
   const reward = average - e;
   const rewardRisk = risk > 0 ? reward / risk : null;
   const rewardRiskMinimum = risk > 0 ? (minimum - e) / risk : null;
   const rewardRiskExtended = risk > 0 && extended != null ? (extended - e) / risk : null;
   const averageDistance = Math.max(0, average - e);
   const targetDays = atrValue > 0 ? Math.ceil(averageDistance / (atrValue * pathEfficiency)) : null;
-  const feasible = targetDays == null || (shortHorizon ? targetDays <= 90 : targetDays <= 365);
+  // Long-term positions are allowed to work for years; short-term targets must
+  // remain reachable inside the short window.
+  const holdingLimitDays = shortHorizon ? 90 : horizon === 'long' ? 1095 : 365;
+  const feasible = targetDays == null || targetDays <= holdingLimitDays;
   if (!feasible) evidence.push('target exceeds holding window');
 
   if (!(minimum > e) || !(average > minimum)) {
@@ -143,6 +165,9 @@ function buildScenarioTargets({
     rewardRiskAverage: round(rewardRisk),
     rewardRiskExtended: round(rewardRiskExtended),
     targetDays,
+    targetFloorApplied,
+    shortTargetFloorR,
+    holdingLimitDays,
     feasible,
     evidence,
     assumptions: {
