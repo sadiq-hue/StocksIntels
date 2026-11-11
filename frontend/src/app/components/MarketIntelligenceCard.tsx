@@ -346,6 +346,17 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
               {s.dataCompleteness.missing?.length ? ` · missing ${s.dataCompleteness.missing.join(", ")}` : ""}
             </span>
           )}
+          {s.dataTrust?.score != null && (
+            <span className={`rounded-md border px-2 py-1 ${
+              s.dataTrust.stale?.financial || s.dataTrust.stale?.quote
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}>
+              Data trust <strong className="text-foreground">{s.dataTrust.score}%</strong>
+              {s.dataTrust.stale?.financial ? " · stale financials" : ""}
+              {s.dataTrust.quoteAgeMin != null ? ` · quote ${s.dataTrust.quoteAgeMin}m` : ""}
+            </span>
+          )}
           {s.eventRisk && (
             <span className={`rounded-md border px-2 py-1 ${
               s.eventRisk.gate === "blocked-binary-event"

@@ -477,6 +477,7 @@ const PRICE_HISTORY_FAIL_TTL = 60 * 1000;       // retry a failed fetch after 60
 
 // Financial report cache for fundamental analysis (daily refresh, persisted to DB on restart)
 const _financialReportCache = new PersistentCache('sigfin', 30 * 24 * 60 * 60 * 1000);
+const _financialReportFetchedAt = new Map();
 
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
@@ -1282,10 +1283,12 @@ async function fetchRealFinancialMetrics(symbol) {
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
     _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);
+    _financialReportFetchedAt.set(symbol, Date.now());
     return hasUsableMetrics ? metrics : null;
   } catch (e) {
     console.warn(`[SignalService] Failed to fetch real financials for ${symbol}: ${e.message}`);
     _financialReportCache.set(symbol, null);
+    _financialReportFetchedAt.set(symbol, Date.now());
     return null;
   }
 }
@@ -5191,6 +5194,8 @@ generativeMarketService.refresh(marketConditionService.getConditions()).catch(()
     }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
     const quoteAgeMs = (marketData && marketData[symbol]) ? 0 : Math.max(0, Date.now() - (_quoteCache.get(symbol)?.ts || Date.now()));
+    const financialFetchedAt = _financialReportFetchedAt.get(symbol) || null;
+    const financialAgeMs = financialFetchedAt ? Math.max(0, Date.now() - financialFetchedAt) : null;
     const dataQuality = assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical });
     const liquidity = assessLiquidity({ symbol, currentPrice, volume, priceHistory });
     const financial = analyzeFinancials(stock, fundamental);
@@ -5209,7 +5214,7 @@ generativeMarketService.refresh(marketConditionService.getConditions()).catch(()
       catalyst: catalysts[symbol] || null,
       insiderNews: insiderNews[symbol] || null,
       news: newsBySymbol[String(symbol).toUpperCase()] || [],
-      priceHistory, degFactor, dataQuality, liquidity
+      priceHistory, degFactor, dataQuality, liquidity, quoteAgeMs, financialAgeMs
     });
     const eventRisk = eventRiskMap.get(symbol) || null;
     const macroRisk = eventRiskMap.get('__MACRO__') || null;
@@ -5772,6 +5777,8 @@ async function generateSingleSignal(symbol) {
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
     const marketOpen = isExchangeOpen(symbol);
     const quoteAgeMs = Math.max(0, Date.now() - (_quoteCache.get(symbol)?.ts || Date.now()));
+    const financialFetchedAt = _financialReportFetchedAt.get(symbol) || null;
+    const financialAgeMs = financialFetchedAt ? Math.max(0, Date.now() - financialFetchedAt) : null;
     const dataQuality = assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical });
     const liquidity = assessLiquidity({ symbol, currentPrice, volume, priceHistory });
     const financial = analyzeFinancials(stock, fundamental);
@@ -5788,7 +5795,7 @@ async function generateSingleSignal(symbol) {
     const sigObj = await _buildSignal({
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
-      newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor, dataQuality, liquidity
+      newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor, dataQuality, liquidity, quoteAgeMs, financialAgeMs
     });
     if (sigObj) {
       signalSnapshotsService.upsertMany([sigObj]).catch(() => {});
@@ -6252,7 +6259,7 @@ function formatHoldingPeriod(days, tradeType) {
   if (days <= 260) return '6-12 months';
   return '1-3+ years';
 }
-async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor, dataQuality, liquidity }) {
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor, dataQuality, liquidity, quoteAgeMs = null, financialAgeMs = null }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
   const confMin = sc.min ?? 10;
@@ -6372,6 +6379,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // US symbols score from Yahoo ownership transactions; NSE symbols (no Yahoo
   // insider coverage) score from director/insider dealings reported in news.
   const insider = scoreInsiderActivity(stock.ownership) || scoreNewsInsider(insiderNews || null);
+  const dataTrust = buildDataTrust({
+    symbol, quoteAgeMs, financialAgeMs, priceHistory, stock,
+    fundamental, technical, financial, macro, insider, catalyst, news, dataQuality, liquidity,
+  });
   const insiderMaxDelta = sc.insider_activity?.max_delta ?? INSIDER_MAX_DELTA;
   const overlayInsider = insider ? ((insider.score - 50) / 50) * insiderMaxDelta : 0;
   adjScore += overlayInsider;
@@ -6438,6 +6449,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (sectorCtx.delta > 0) dynamicScoreBar += scoreGateCfg.sector_laggard_adjustment ?? 1;
     else if (sectorCtx.delta < 0) dynamicScoreBar += scoreGateCfg.sector_leader_adjustment ?? -1;
     if (sparseFund || sparseTech || sparseFin) dynamicScoreBar += scoreGateCfg.sparse_data_adjustment ?? 2;
+    const trustCfg = sc.data_trust || {};
+    if (dataTrust.score < (trustCfg.very_low_threshold ?? 45)) dynamicScoreBar += trustCfg.very_low_adjustment ?? 2;
+    else if (dataTrust.score < (trustCfg.low_threshold ?? 65)) dynamicScoreBar += trustCfg.low_adjustment ?? 1;
+    if (dataTrust.financialAgeDays != null && dataTrust.financialAgeDays > (trustCfg.stale_financial_days ?? 365)) {
+      dynamicScoreBar += trustCfg.stale_financial_adjustment ?? 1;
+    }
     dynamicScoreBar = Math.round(Math.max(scoreGateCfg.min_bar ?? 50, Math.min(scoreGateCfg.max_bar ?? 62, dynamicScoreBar)));
   }
   const effectiveThresholds = { ...thresholds, buy: dynamicScoreBar };
@@ -6551,6 +6568,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     if (sparseFund || sparseTech || sparseFin) dynamicBuyBar += dynGateCfg.sparse_data_adjustment ?? 3;
     if (dataQuality?.ok === false) dynamicBuyBar += dynGateCfg.poor_data_quality_adjustment ?? 5;
     if (scoreVariance > (dynGateCfg.high_variance_threshold ?? 25)) dynamicBuyBar += dynGateCfg.high_variance_adjustment ?? 2;
+    const trustGateCfg = sc.data_trust || {};
+    if (dataTrust.score < (trustGateCfg.very_low_threshold ?? 45)) dynamicBuyBar += trustGateCfg.very_low_adjustment ?? 2;
+    else if (dataTrust.score < (trustGateCfg.low_threshold ?? 65)) dynamicBuyBar += trustGateCfg.low_adjustment ?? 1;
+    if (dataTrust.financialAgeDays != null && dataTrust.financialAgeDays > (trustGateCfg.stale_financial_days ?? 365)) {
+      dynamicBuyBar += trustGateCfg.stale_financial_adjustment ?? 1;
+    }
     if (genBias) dynamicBuyBar += genBias;
     dynamicBuyBar = Math.round(Math.max(
       dynGateCfg.min_bar ?? 48,
@@ -6947,6 +6970,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     horizon: horizon || 'legacy', specVersion: specVersion || null,
     dataQuality: dataQuality || null,
     dataCompleteness,
+    dataTrust,
     liquidity: liquidity || null,
     estCostBps,
     estCostPct: Math.round(estCostBps) / 100,
@@ -7196,6 +7220,84 @@ function computeSectorValuation(stock, fundamental, symbol) {
     sector, metric, value: Math.round(value * 100) / 100, benchmark: Math.round(benchmark * 100) / 100,
     relative: Math.round(relative * 100) / 100, score, overlay,
     label: score >= 65 ? 'cheap' : score <= 35 ? 'expensive' : 'fair',
+  };
+}
+
+function buildDataTrust({ symbol, quoteAgeMs, financialAgeMs, priceHistory, stock, fundamental, technical, financial, macro, insider, catalyst, news, dataQuality, liquidity }) {
+  const scoreOf = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const dims = [fundamental?.score, technical?.score, financial?.score, insider?.score, macro?.score];
+  const coverage = Math.round((dims.filter(v => scoreOf(v) != null).length / dims.length) * 100);
+
+  const quoteAgeMin = Number.isFinite(Number(quoteAgeMs)) ? Math.round(Number(quoteAgeMs) / 60000) : null;
+  const quoteAgeForScore = quoteAgeMin == null ? null
+    : dataQuality?.stale === true ? quoteAgeMin : Math.min(quoteAgeMin, 15);
+  const quoteFreshness = quoteAgeForScore == null ? null
+    : quoteAgeForScore <= 5 ? 100
+      : quoteAgeForScore <= 15 ? 85
+        : quoteAgeForScore <= 60 ? 55
+          : quoteAgeForScore <= 240 ? 30 : 10;
+
+  const historyBars = Array.isArray(priceHistory) ? priceHistory.length : 0;
+  const historyTs = _priceHistoryCache.get(symbol)?.ts || null;
+  const historyAgeHours = historyTs ? Math.round((Date.now() - historyTs) / 3600000) : null;
+  const historyFreshness = historyAgeHours == null ? null
+    : historyAgeHours <= 24 ? 100
+      : historyAgeHours <= 72 ? 80
+        : historyAgeHours <= 24 * 7 ? 55 : 25;
+
+  const financialFields = [stock?.peRatio, stock?.roe, stock?.revenueGrowth, stock?.debtToEquity, stock?.currentRatio, stock?.epsGrowth, stock?.fcfYield]
+    .filter(v => Number.isFinite(Number(v))).length;
+  const financialCoverage = Math.round((financialFields / 7) * 100);
+  const financialAgeDays = Number.isFinite(Number(financialAgeMs)) ? Math.round(Number(financialAgeMs) / 86400000) : null;
+  const financialFreshness = financialAgeDays == null ? null
+    : financialAgeDays <= 90 ? 100
+      : financialAgeDays <= 180 ? 85
+        : financialAgeDays <= 365 ? 70
+          : financialAgeDays <= 730 ? 45 : 20;
+
+  const catalystAgeDays = catalyst?.publishedAt ? (Date.now() - new Date(catalyst.publishedAt).getTime()) / 86400000 : null;
+  const newsFreshness = catalystAgeDays == null
+    ? (Array.isArray(news) && news.length ? 70 : null)
+    : catalystAgeDays <= 3 ? 100
+      : catalystAgeDays <= 10 ? 80
+        : catalystAgeDays <= 30 ? 60 : 35;
+
+  const components = [
+    { key: 'coverage', score: coverage, weight: 0.35 },
+    { key: 'quote', score: quoteFreshness, weight: 0.20 },
+    { key: 'history', score: historyFreshness, weight: 0.15 },
+    { key: 'financial_depth', score: financialCoverage, weight: 0.20 },
+    { key: 'news', score: newsFreshness, weight: 0.10 },
+  ].filter(c => c.score != null);
+  const weight = components.reduce((sum, c) => sum + c.weight, 0) || 1;
+  const score = Math.round(components.reduce((sum, c) => sum + c.score * c.weight, 0) / weight);
+
+  const stale = {
+    quote: quoteAgeMin != null && dataQuality?.stale === true,
+    history: historyBars > 0 && historyBars < MIN_SIGNAL_HISTORY,
+    financial: financialAgeDays != null && financialAgeDays > 365,
+    liquidity: liquidity?.ok === false,
+  };
+
+  return {
+    score,
+    coverage,
+    quoteAgeMin,
+    historyBars,
+    historyAgeHours,
+    financialFields,
+    financialCoverage,
+    financialAgeDays,
+    catalystAgeDays: catalystAgeDays == null ? null : Math.round(catalystAgeDays * 10) / 10,
+    components: Object.fromEntries(components.map(c => [c.key, c.score])),
+    stale,
+    provenance: {
+      quote: stock?.dataSource || dataQuality?.source || 'unknown',
+      financial: financialAgeDays == null ? 'unknown' : 'live',
+      technical: historyBars ? 'price-history' : 'missing',
+      news: catalyst?.source || (Array.isArray(news) && news.length ? 'news-feed' : 'none'),
+    },
+    asOf: new Date().toISOString(),
   };
 }
 

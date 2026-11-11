@@ -194,6 +194,14 @@ const DEFAULTS = {
         fundamental_max_score: 40,
         cap_score: 54,
       },
+      data_trust: {
+        low_threshold: 65,
+        very_low_threshold: 45,
+        low_adjustment: 1,
+        very_low_adjustment: 2,
+        stale_financial_days: 365,
+        stale_financial_adjustment: 1,
+      },
       // Adaptive Buy-confidence bar. Fixed 55% made the gate blind to regime,
       // breadth, horizon and data quality. The score threshold stays 55; this
       // only decides how much calibrated conviction is required in the current
