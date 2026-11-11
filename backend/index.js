@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK_SYMBOLS } = require('./newsService');
 const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent, generateTopMoversContent } = require('./contentGenerator');
+const contentBriefService = require('./contentBriefService');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const specialFunds = require('./specialFundsService');
@@ -9350,6 +9351,32 @@ app.get('/api/market/daily-brief', async (req, res) => {
       return res.json({ ...dailyBriefCache.data, cached: true, stale: true, generatedAt: dailyBriefCache.at });
     }
     res.status(503).json({ error: 'Daily brief unavailable' });
+  }
+});
+
+// Read-only content feed for an editorial/marketing assistant. Requires a
+// dedicated scoped key; it is never the user JWT or a database credential.
+function requireContentKey(req, res, next) {
+  const expected = process.env.CONTENT_API_KEY;
+  if (!expected) return res.status(503).json({ error: 'Content feed is not configured' });
+  const header = String(req.get('x-content-key') || '');
+  const bearer = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const provided = header || bearer;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ error: 'Invalid content key' });
+  }
+  return next();
+}
+
+app.get('/api/content/daily-brief', requireContentKey, async (req, res) => {
+  try {
+    const brief = await contentBriefService.getDailyBrief({ limit: req.query.limit });
+    res.json(brief);
+  } catch (error) {
+    console.error('[content-brief] failed:', error.message);
+    res.status(500).json({ error: 'Content brief unavailable' });
   }
 });
 
