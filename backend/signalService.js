@@ -14,6 +14,7 @@ const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialRepor
 const { calculateSMA, calculateATR } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
 const financialReportsService = require('./financialReportsService');
+const companyProfileService = require('./companyProfileService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
 const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, estimateHoldingDays, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
@@ -5199,6 +5200,7 @@ generativeMarketService.refresh(marketConditionService.getConditions()).catch(()
     // rejects feed artifacts (e.g. AAPL -38.7% revenue) vs the curated baseline.
     const reportMetrics = _financialReportCache.get(symbol);
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
+    stock = companyProfileService.enrichStock(stock, symbol);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
     const priceHistory = await getPriceHistory(symbol);
     // Accumulate the live NSE quote into today's daily bar AFTER price history is
@@ -5621,6 +5623,26 @@ generativeMarketService.refresh(marketConditionService.getConditions()).catch(()
 
 // Detail pages get a per-ticker Yahoo news pull so a mid-cap that missed the
 // rotating batch feed still shows its catalyst/news block.
+function ensureCompanyProfile(sig, symbol) {
+  if (!sig) return sig;
+  const cp = sig.companyProfile || {};
+  if (cp.description || cp.industry) return sig;
+  const derived = companyProfileService.getDerivedProfile(symbol);
+  if (!derived?.isAfrican) return sig;
+  return {
+    ...sig,
+    companyProfile: {
+      ...cp,
+      description: cp.description || derived.description,
+      industry: cp.industry || derived.industry,
+      sector: cp.sector || derived.sector,
+      country: cp.country || derived.country,
+      market: cp.market || marketForSymbol(symbol),
+      currency: cp.currency || currencyForSymbol(symbol),
+    },
+  };
+}
+
 async function attachFreshNews(sig, symbol) {
   if (!sig) return sig;
   try {
@@ -5655,7 +5677,7 @@ async function getSignalForStock(symbol) {
     // Do not run a full market cycle just to open an already-monitored position.
     const signals = hasOpen ? [] : (isCore ? await generateSignals() : (_signalsCache || []));
     const found = hasOpen ? null : signals.find(s => s.ticker === upper);
-    if (found) return attachFreshNews(found, upper);
+    if (found) return attachFreshNews(ensureCompanyProfile(found, upper), upper);
     if (hasOpen) {
       const latest = _latestAnalyses.get(upper);
       const rawStored = latest?.analysis || open.analysis || null;
@@ -5804,6 +5826,7 @@ async function generateSingleSignal(symbol) {
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const reportMetrics = _financialReportCache.get(symbol);
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
+    stock = companyProfileService.enrichStock(stock, symbol);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
     const marketOpen = isExchangeOpen(symbol);

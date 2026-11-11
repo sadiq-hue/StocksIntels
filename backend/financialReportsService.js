@@ -8,6 +8,7 @@ const { pool } = require('./db');
 const PersistentCache = require('./cacheService');
 const { NSE_SYMBOLS } = require('./stockData');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
+const companyProfileService = require('./companyProfileService');
 
 async function createYf() {
   const { default: YahooFinance } = await import('yahoo-finance2');
@@ -134,29 +135,31 @@ function validateDateString(dateStr) {
 }
 
 async function getCompanyProfile(symbol) {
-  const cacheKey = `${symbol}_profile`;
+  const cacheKey = `${symbol}_profile_v2`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
   const isNse = await isNseStock(symbol);
+  const derived = companyProfileService.getDerivedProfile(symbol);
+  const african = Boolean(derived?.isAfrican);
   const exchange = isNse ? 'NSE' : 'NASDAQ/NYSE';
-  const currency = isNse ? 'KES' : 'USD';
-  const country = isNse ? 'Kenya' : 'USA';
+  const currency = african ? derived.currency : (isNse ? 'KES' : 'USD');
+  const country = african ? derived.country : (isNse ? 'Kenya' : 'USA');
 
   const liveQuote = await marketService.getStockQuote(symbol);
   if (liveQuote) {
     return cacheSet(cacheKey, {
       symbol,
-      companyName: liveQuote.company_name || symbol,
-      industry: 'N/A',
-      sector: 'N/A',
+      companyName: liveQuote.company_name || derived?.companyName || symbol,
+      industry: african ? derived.industry : 'N/A',
+      sector: african ? derived.sector : 'N/A',
       country,
-      website: '',
-      description: '',
-      ceo: 'N/A',
-      employees: 0,
+      website: african ? null : '',
+      description: african ? derived.description : '',
+      ceo: african ? null : 'N/A',
+      employees: african ? null : 0,
       marketCap: liveQuote.marketCap || 0,
-      exchange: liveQuote.exchange || exchange,
+      exchange: african ? derived.exchange : (liveQuote.exchange || exchange),
       currency: liveQuote.currency || currency,
       isEtf: false,
       image: '',
@@ -166,16 +169,16 @@ async function getCompanyProfile(symbol) {
 
   return cacheSet(cacheKey, {
     symbol,
-    companyName: symbol,
-    industry: 'N/A',
-    sector: 'N/A',
+    companyName: derived?.companyName || symbol,
+    industry: african ? derived.industry : 'N/A',
+    sector: african ? derived.sector : 'N/A',
     country,
-    website: '',
-    description: '',
-    ceo: 'N/A',
-    employees: 0,
+    website: african ? null : '',
+    description: african ? derived.description : '',
+    ceo: african ? null : 'N/A',
+    employees: african ? null : 0,
     marketCap: 0,
-    exchange,
+    exchange: african ? derived.exchange : exchange,
     currency,
     isEtf: false,
     image: '',
