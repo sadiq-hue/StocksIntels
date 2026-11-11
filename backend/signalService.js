@@ -44,6 +44,36 @@ signalEventBus.setMaxListeners(50);
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+const SECTOR_ETF_MAP = {
+  technology: 'XLK',
+  financial: 'XLF',
+  financials: 'XLF',
+  'financial services': 'XLF',
+  energy: 'XLE',
+  healthcare: 'XLV',
+  'consumer cyclical': 'XLY',
+  'consumer discretionary': 'XLY',
+  'consumer defensive': 'XLP',
+  'consumer staples': 'XLP',
+  industrials: 'XLI',
+  'basic materials': 'XLB',
+  materials: 'XLB',
+  utilities: 'XLU',
+  'real estate': 'XLRE',
+  'communication services': 'XLC',
+};
+
+function sectorCondition(sector, sectors) {
+  const etf = SECTOR_ETF_MAP[String(sector || '').toLowerCase()];
+  if (!etf || !Array.isArray(sectors?.rows)) return { etf: etf || null, changePct: null, delta: 0 };
+  const row = sectors.rows.find(r => r.symbol === etf);
+  const changePct = num(row?.changePct);
+  if (changePct == null) return { etf, changePct: null, delta: 0 };
+  if (changePct <= -1.5) return { etf, changePct, delta: 1 };
+  if (changePct >= 1.5) return { etf, changePct, delta: -1 };
+  return { etf, changePct, delta: 0 };
+}
+
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
 // Ensure DB schema columns exist before any operations. The promise is captured
@@ -7113,37 +7143,6 @@ function computeFairValueTarget(sectorValuation, currentPrice) {
 
 function assessThesisRisk(stock, fundamental, financial) {
   const flags = [];
-const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-
-const SECTOR_ETF_MAP = {
-  technology: 'XLK',
-  financial: 'XLF',
-  financials: 'XLF',
-  'financial services': 'XLF',
-  energy: 'XLE',
-  healthcare: 'XLV',
-  'consumer cyclical': 'XLY',
-  'consumer discretionary': 'XLY',
-  'consumer defensive': 'XLP',
-  'consumer staples': 'XLP',
-  industrials: 'XLI',
-  'basic materials': 'XLB',
-  materials: 'XLB',
-  utilities: 'XLU',
-  'real estate': 'XLRE',
-  'communication services': 'XLC',
-};
-
-function sectorCondition(sector, sectors) {
-  const etf = SECTOR_ETF_MAP[String(sector || '').toLowerCase()];
-  if (!etf || !Array.isArray(sectors?.rows)) return { etf: etf || null, changePct: null, delta: 0 };
-  const row = sectors.rows.find(r => r.symbol === etf);
-  const changePct = num(row?.changePct);
-  if (changePct == null) return { etf, changePct: null, delta: 0 };
-  if (changePct <= -1.5) return { etf, changePct, delta: 1 };
-  if (changePct >= 1.5) return { etf, changePct, delta: -1 };
-  return { etf, changePct, delta: 0 };
-}
   const dataSource = String(stock?.dataSource || '').toLowerCase();
   const sparse = fundamental?.metrics?.dataQuality === 'Very sparse data';
   const reliable = dataSource !== 'fallback' && !sparse;
