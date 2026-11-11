@@ -17,6 +17,7 @@ import { useAuth } from "../auth/AuthContext";
 import type { Signal as StockSignal } from "../types/signals";
 import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
 import { MarketIntelligenceCard } from "../components/MarketIntelligenceCard";
+import { MarketUniversePanel } from "../components/MarketUniversePanel";
 import { authFetch } from "../auth/tokenStore";
 import { currencyPrefix } from "../utils/currency";
 
@@ -326,6 +327,7 @@ export function SignalsPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selected, setSelected] = useState<StockSignal | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [view, setView] = useState<"signals" | "universe">("signals");
   const fullSignalCache = useRef<Map<string, StockSignal>>(new Map());
   const perPage = 15;
   const [searchParams] = useSearchParams();
@@ -376,6 +378,10 @@ export function SignalsPage() {
       if (match) openSignal(match);
     }
   }, [searchParams, signals]);
+
+  useEffect(() => {
+    if (searchParams.get("view") === "universe") setView("universe");
+  }, [searchParams]);
 
   const filtered = useMemo(() => {
     const list = signals.filter(s =>
@@ -461,6 +467,26 @@ export function SignalsPage() {
         </div>
       </div>
 
+      {/* View switch: actionable signals vs the wider analysed universe. */}
+      <div className="inline-flex rounded-full bg-muted/50 p-1 text-xs font-medium">
+        <button
+          onClick={() => setView("signals")}
+          className={`rounded-full px-3.5 py-1.5 transition-colors ${view === "signals" ? "bg-white dark:bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          Actionable signals
+        </button>
+        <button
+          onClick={() => setView("universe")}
+          className={`rounded-full px-3.5 py-1.5 transition-colors ${view === "universe" ? "bg-white dark:bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          Universe screener
+        </button>
+      </div>
+
+      {view === "universe" ? (
+        <MarketUniversePanel />
+      ) : (
+        <>
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="signals-stats">
         <StatCard label="Total Signals" value={signals.length} tone="text-foreground" />
@@ -780,6 +806,8 @@ export function SignalsPage() {
           <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="flex items-center justify-center w-8 h-8 rounded-md border border-border bg-card hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"><ChevronRight className="w-4 h-4 text-muted-foreground" /></button>
         </div>
       </div>
+        </>
+      )}
 
       {/* Detail modal */}
       {selected && (
