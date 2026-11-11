@@ -6850,7 +6850,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
   reason += '.';
   if (sig.action === 'hold' && _origSignalLabel !== 'Hold') {
-    reason = reason.replace(/\.$/, '') + ` | Confidence ${confidence}% below ${_origSignalLabel} bar (${dynamicBuyBar}%) -- downgraded to Hold.`;
+    // Report the gate that actually demoted the call. Expectancy and catalyst
+    // fast-path rejections are not confidence-bar failures, so appending the
+    // confidence message here produced contradictory text such as
+    // "confidence 76% below ... bar (54%)".
+    const downgradeNote = _expectancyGateNote || _confidenceGateNote;
+    reason = reason.replace(/\.$/, '') + ` | ${downgradeNote || `${_origSignalLabel} demoted by a downstream risk/eligibility gate`} -- downgraded to Hold.`;
   }
   // Expected holding period derived from the engine's own volatility measurement:
   // how many trading sessions price needs to travel from entry to target1 at the
