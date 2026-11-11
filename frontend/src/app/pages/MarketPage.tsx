@@ -17,7 +17,6 @@ import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
-import { MarketUniverseSummary } from '../components/MarketUniverseSummary';
 
 interface MarketStatusInfo {
   open: boolean;
@@ -664,9 +663,6 @@ const MarketPage: React.FC = () => {
           </div>
         </Card>
       </div>
-
-      {/* Compact universe coverage; the full screener lives on Market Intelligence. */}
-      <MarketUniverseSummary />
 
       {/* Indices */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
