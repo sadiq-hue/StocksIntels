@@ -13,7 +13,7 @@ import {
 } from "../components/ui/select";
 import {
   AreaChart, Area, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  ResponsiveContainer, ComposedChart, Bar, Legend,
 } from "recharts";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router";
 import {
@@ -66,6 +66,18 @@ function formatPrice(value?: number | null) {
   if (abs < 0.01) return value.toFixed(4);
   if (abs < 1) return value.toFixed(3);
   return value.toFixed(2);
+}
+
+function formatCompact(value?: number | null): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)}K`;
+  return `${n}`;
 }
 
 interface LiveQuote {
@@ -691,8 +703,8 @@ export function StockAnalysisPage() {
 
   const statStrip = [
     { label: "Sector", value: activeSelection.sector, icon: Layers },
-    { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : "—", icon: BarChart3 },
-    { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : "—"; })(), icon: PieChart },
+    { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : "-", icon: BarChart3 },
+    { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : "-"; })(), icon: PieChart },
     { label: "P/E Ratio", value: (() => {
       const pe = financialReport?.data?.quote?.pe || financialReport?.data?.keyMetrics?.peRatio || 0;
       if (pe > 0) return pe.toFixed(1);
@@ -700,6 +712,46 @@ export function StockAnalysisPage() {
       return activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A";
     })(), icon: Percent },
   ];
+
+  const fr = financialReport?.data;
+  const fq = fr?.quote || null;
+  const fk = fr?.keyMetrics || null;
+  const fi = fr?.incomeStatement || null;
+  const fh = Array.isArray(fr?.incomeStatementHistory) ? fr!.incomeStatementHistory : [];
+  const latestDiv = Array.isArray(fr?.dividendHistory) ? fr!.dividendHistory[0] : null;
+  const curSym = liveQuote?.currency || activeSelection.currency || (isNse ? "KES" : "USD");
+  const money = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) !== 0 ? `${curSym} ${formatCompact(Number(v))}` : "—");
+  const priceOf = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? `${curSym} ${formatPrice(Number(v))}` : "—");
+  const pctOf = (v?: number | null) => (v != null && Number.isFinite(Number(v)) ? `${(Number(v) * (Math.abs(Number(v)) <= 1 ? 100 : 1)).toFixed(2)}%` : "—");
+  const companySnapshot = [
+    { label: "Market Cap", value: money(fq?.marketCap || fk?.marketCap || liveQuote?.marketCap) },
+    { label: "Revenue", value: money(fi?.revenue || fh[0]?.revenue) },
+    { label: "Net Income", value: money(fi?.netIncome || fh[0]?.netIncome) },
+    { label: "EPS", value: fq?.eps != null ? fq.eps.toFixed(2) : fi?.eps != null ? fi.eps.toFixed(2) : "—" },
+    { label: "Shares Out", value: fq?.sharesOutstanding ? formatCompact(fq.sharesOutstanding) : fk?.sharesOutstanding ? formatCompact(fk.sharesOutstanding) : "—" },
+    { label: "P/E Ratio", value: fq?.pe ? fq.pe.toFixed(1) : fk?.peRatio ? fk.peRatio.toFixed(1) : "—" },
+    { label: "P/B Ratio", value: fk?.pbRatio ? fk.pbRatio.toFixed(2) : "—" },
+    { label: "P/S Ratio", value: fk?.priceToSalesRatio ? fk.priceToSalesRatio.toFixed(2) : "—" },
+    { label: "Dividend Yield", value: pctOf(fk?.dividendYieldPercentage ?? fk?.dividendYield) },
+    { label: "Last Dividend", value: latestDiv ? `${curSym} ${formatPrice(latestDiv.dividend)}` : "—" },
+    { label: "Volume", value: formatCompact(fq?.volume || liveQuote?.volume) },
+    { label: "Avg Volume", value: formatCompact(fq?.avgVolume) },
+    { label: "Open", value: priceOf(fq?.open) },
+    { label: "Previous Close", value: priceOf(fq?.previousClose || liveQuote?.previousClose) },
+    { label: "Day Range", value: fq?.dayLow || fq?.dayHigh ? `${formatPrice(fq?.dayLow)} – ${formatPrice(fq?.dayHigh)}` : "—" },
+    { label: "52-Week Range", value: fq?.yearLow || fq?.yearHigh ? `${formatPrice(fq?.yearLow)} – ${formatPrice(fq?.yearHigh)}` : "—" },
+  ].filter((s) => s.value !== "—" && s.value !== "N/A");
+
+  const financialSeries = fh
+    .slice()
+    .reverse()
+    .map((row: any) => ({
+      year: String(row.date || row.period || "").slice(0, 4) || "—",
+      revenue: Number(row.revenue) || 0,
+      netIncome: Number(row.netIncome) || 0,
+    }))
+    .filter((r) => r.year !== "—")
+    .slice(-6);
 
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
@@ -1391,6 +1443,99 @@ export function StockAnalysisPage() {
             </div>
           </Card>
 
+          {/* Company Snapshot */}
+          <Card className="border border-border shadow-sm">
+            <div className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-[#0D7490]/10 text-[#0D7490]"><BarChart3 className="size-3.5" /></span>
+                  Company Snapshot
+                </h3>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Latest reported</span>
+              </div>
+              {companySnapshot.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-3">
+                  {companySnapshot.map((item) => (
+                    <div key={item.label} className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-foreground truncate">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No company statistics available yet.</p>
+              )}
+            </div>
+          </Card>
+
+          {/* About company */}
+          <Card className="border border-border shadow-sm">
+            <div className="p-5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+                <span className="flex size-7 items-center justify-center rounded-lg bg-[#0D7490]/10 text-[#0D7490]"><Building2 className="size-3.5" /></span>
+                About {displayName}
+              </h3>
+              {stockProfile?.description ? (
+                <p className="text-xs leading-relaxed text-muted-foreground">{stockProfile.description}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Company description is not available yet.</p>
+              )}
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-3 border-t border-border pt-4">
+                {[
+                  { label: "Industry", value: stockProfile?.industry },
+                  { label: "Sector", value: stockProfile?.sector || activeSelection.sector },
+                  { label: "Employees", value: stockProfile?.employees ? Number(stockProfile.employees).toLocaleString() : null },
+                  { label: "Country", value: stockProfile?.country },
+                  { label: "Stock Exchange", value: stockProfile?.exchange },
+                  { label: "Ticker", value: activeSelection.ticker },
+                ].filter((x) => x.value).map((item) => (
+                  <div key={item.label} className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                    <p className="mt-0.5 text-xs font-medium text-foreground truncate">{item.value}</p>
+                  </div>
+                ))}
+                {stockProfile?.website && (
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Website</p>
+                    <a href={stockProfile.website} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-[#0D7490] hover:underline truncate">
+                      {stockProfile.website.replace(/^https?:\/\//, "").replace(/\/$/, "")} <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Financial performance */}
+          {financialSeries.length > 0 && (
+            <Card className="border border-border shadow-sm">
+              <div className="p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-[#0D7490]/10 text-[#0D7490]"><LineChart className="size-3.5" /></span>
+                      Financial Performance
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-1">Annual revenue and net income</p>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full text-[10px]">Annual</Badge>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={financialSeries} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                    <YAxis yAxisId="left" tickFormatter={(v: number) => formatCompact(v)} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={55} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => formatCompact(v)} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={55} />
+                    <Tooltip formatter={(v: any, name: any) => [`${curSym} ${formatCompact(Number(v))}`, name]} contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#0D7490" radius={[3, 3, 0, 0]} />
+                    <Line yAxisId="right" dataKey="netIncome" name="Net Income" stroke="#059669" strokeWidth={2} dot={{ r: 2 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          )}
+
           {/* ── NSE Insights ── */}
           {activeSelection.market === "nse" && (
             <Card className="border border-border shadow-sm overflow-hidden">
@@ -1759,13 +1904,6 @@ export function StockAnalysisPage() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-
-                      {stockProfile.description && (
-                        <div className="border-t border-border pt-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Description</p>
-                          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{stockProfile.description}</p>
                         </div>
                       )}
                     </div>
