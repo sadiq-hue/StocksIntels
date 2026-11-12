@@ -87,7 +87,8 @@ export function MarketMoversPage() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchMovers = useCallback(async () => {
+  const fetchMovers = useCallback(async (attempt = 1): Promise<void> => {
+    const maxAttempts = 3;
     try {
       setLoading(true);
       const userId = user?.id ? `?userId=${user.id}` : "";
@@ -99,7 +100,7 @@ export function MarketMoversPage() {
       const moversData = moversRes.status === "fulfilled" && moversRes.value.ok ? await moversRes.value.json() : null;
       const sectorsData = sectorsRes.status === "fulfilled" && sectorsRes.value.ok ? await sectorsRes.value.json() : null;
 
-      if (!moversData) throw new Error("Failed to load movers");
+      if (!moversData) throw new Error("movers endpoint returned no data");
 
       const combined = moversData.combined || moversData;
       const gainers: MoverRow[] = Array.isArray(combined.gainers) ? combined.gainers.map((g: any) => ({
@@ -138,10 +139,17 @@ export function MarketMoversPage() {
 
       setData({ gainers, losers, active, sectors, premarket });
       setLastUpdated(new Date().toLocaleString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setError(null);
+      setLoading(false);
     } catch (e: any) {
+      if (attempt < maxAttempts) {
+        // Backend may be cold-building the movers cache (10-80s); retry after a short delay.
+        await new Promise((r) => setTimeout(r, 2500 * attempt));
+        return fetchMovers(attempt + 1);
+      }
       setError(e.message || "Failed to load market movers");
     } finally {
-      setLoading(false);
+      if (attempt === maxAttempts) setLoading(false);
     }
   }, [apiFetch, user?.id]);
 
@@ -227,7 +235,7 @@ export function MarketMoversPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={fetchMovers} size="sm" disabled={loading} className="flex items-center gap-1.5 text-xs">
+            <Button onClick={() => fetchMovers()} size="sm" disabled={loading} className="flex items-center gap-1.5 text-xs">
               {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCcw className="size-4" />}
               <span>Refresh</span>
             </Button>
