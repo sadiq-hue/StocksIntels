@@ -468,7 +468,7 @@ export function StockAnalysisPage() {
   const isRegular = isNse ? isNseMarketOpen() : marketState === 'REGULAR';
   const isPreMarket = !isNse && marketState === 'PRE';
   const isPostMarket = !isNse && marketState === 'POST';
-  const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? null;
+  const regularPrice = liveQuote?.price ?? liveQuote?.regularMarketPrice ?? yahooRegularPrice ?? liveQuote?.previousClose ?? null;
   const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice ?? null;
   const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice ?? null;
   // Show the extended-hours session from the latest available data — even when the
