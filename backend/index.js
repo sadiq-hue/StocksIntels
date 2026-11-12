@@ -9460,6 +9460,10 @@ app.get('/api/market/premarket', async (req, res) => {
           postMarketChangePercent: results[sym].postMarketChangePercent ?? v.postMarketChangePercent ?? null,
           postMarketTime: results[sym].postMarketTime ?? v.postMarketTime ?? null,
           marketState: results[sym].marketState || v.marketState || 'CLOSED',
+          regularMarketPrice: results[sym].regularMarketPrice ?? v.regularMarketPrice ?? null,
+          regularMarketTime: results[sym].regularMarketTime ?? v.regularMarketTime ?? null,
+          fiftyTwoWeekHigh: results[sym].fiftyTwoWeekHigh ?? v.fiftyTwoWeekHigh ?? null,
+          fiftyTwoWeekLow: results[sym].fiftyTwoWeekLow ?? v.fiftyTwoWeekLow ?? null,
         };
       }
     } catch {}

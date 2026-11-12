@@ -93,6 +93,10 @@ interface LiveQuote {
   provider?: string;
   regularMarketPrice?: number;
   regularMarketPreviousClose?: number;
+  regularMarketTime?: number | null;
+  timestamp?: number | null;
+  fiftyTwoWeekHigh?: number | null;
+  fiftyTwoWeekLow?: number | null;
   preMarketPrice?: number | null;
   preMarketChange?: number | null;
   preMarketChangePercent?: number | null;
@@ -530,8 +534,9 @@ export function StockAnalysisPage() {
   const exchangeOffset = yahooTradingPeriod?.regular?.gmtoffset ?? liveQuote?.currentTradingPeriod?.regular?.gmtoffset;
   const regularEnd = yahooTradingPeriod?.regular?.end ?? liveQuote?.currentTradingPeriod?.regular?.end;
   const regularStart = yahooTradingPeriod?.regular?.start ?? liveQuote?.currentTradingPeriod?.regular?.start;
-  const quoteTime = isRegular ? regularStart : regularEnd;
-  const quoteStatusLabel = isRegular ? 'Open' : isPreMarket ? 'Pre-Market' : isPostMarket ? 'After Hours' : 'Closed';
+  const lastTradeTime = yahooData?.regularMarketTime ?? liveQuote?.regularMarketTime ?? liveQuote?.timestamp ?? null;
+  const quoteTime = lastTradeTime ?? (isRegular ? regularStart : regularEnd);
+  const quoteStatusLabel = isRegular ? 'Open' : isPreMarket ? 'Pre-Market' : isPostMarket ? 'After Hours' : 'At close';
   const quoteStatusLine = quoteTime ? `${quoteStatusLabel}: ${formatQuoteTime(quoteTime, exchangeOffset)}` : quoteStatusLabel;
 
   const rawExchange = yahooData?.exchange || liveQuote?.exchange || null;
@@ -725,6 +730,8 @@ export function StockAnalysisPage() {
   const fi = fr?.incomeStatement || null;
   const fh = Array.isArray(fr?.incomeStatementHistory) ? fr!.incomeStatementHistory : [];
   const latestDiv = Array.isArray(fr?.dividendHistory) ? fr!.dividendHistory[0] : null;
+  const yearLow = fq?.yearLow ?? yahooData?.fiftyTwoWeekLow ?? null;
+  const yearHigh = fq?.yearHigh ?? yahooData?.fiftyTwoWeekHigh ?? null;
   const curSym = liveQuote?.currency || activeSelection.currency || (isNse ? "KES" : "USD");
   const money = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) !== 0 ? `${curSym} ${formatCompact(Number(v))}` : "—");
   const priceOf = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? `${curSym} ${formatPrice(Number(v))}` : "—");
@@ -782,9 +789,15 @@ export function StockAnalysisPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-          <div className="rounded-xl border border-[#0D7490]/10 bg-white/40 dark:bg-white/[0.03] px-3 py-2">
-            <div className="flex flex-wrap items-baseline gap-2">
+        <div className="mt-4 flex flex-col-reverse gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <div><span className="block text-[10px] uppercase tracking-wider">Volume</span><span className="font-semibold text-foreground">{formatCompact(fq?.volume || liveQuote?.volume)}</span></div>
+            <div><span className="block text-[10px] uppercase tracking-wider">Market Cap</span><span className="font-semibold text-foreground">{formatCompact(fq?.marketCap || fk?.marketCap || liveQuote?.marketCap)}</span></div>
+            <div><span className="block text-[10px] uppercase tracking-wider">Day Range</span><span className="font-semibold text-foreground">{fq?.dayLow || fq?.dayHigh ? `${formatPrice(fq?.dayLow)} - ${formatPrice(fq?.dayHigh)}` : "-"}</span></div>
+            <div><span className="block text-[10px] uppercase tracking-wider">52-Week Range</span><span className="font-semibold text-foreground">{yearLow || yearHigh ? `${formatPrice(yearLow)} - ${formatPrice(yearHigh)}` : "-"}</span></div>
+          </div>
+          <div className="rounded-xl border border-[#0D7490]/10 bg-white/40 dark:bg-white/[0.03] px-3 py-2 text-left sm:text-right">
+            <div className="flex flex-wrap items-baseline justify-start gap-2 sm:justify-end">
               <span className="text-[30px] leading-none font-bold tabular-nums text-foreground">{formatPrice(regularPrice)}</span>
               {liveQuote?.change != null && (
                 <span className={`text-sm font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
@@ -807,12 +820,6 @@ export function StockAnalysisPage() {
                 {formatAltTime(altTime)}
               </p>
             )}
-          </div>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-            <div><span className="block text-[10px] uppercase tracking-wider">Volume</span><span className="font-semibold text-foreground">{formatCompact(fq?.volume || liveQuote?.volume)}</span></div>
-            <div><span className="block text-[10px] uppercase tracking-wider">Market Cap</span><span className="font-semibold text-foreground">{formatCompact(fq?.marketCap || fk?.marketCap || liveQuote?.marketCap)}</span></div>
-            <div><span className="block text-[10px] uppercase tracking-wider">Day Range</span><span className="font-semibold text-foreground">{fq?.dayLow || fq?.dayHigh ? `${formatPrice(fq?.dayLow)} – ${formatPrice(fq?.dayHigh)}` : "—"}</span></div>
-            <div><span className="block text-[10px] uppercase tracking-wider">52-Week Range</span><span className="font-semibold text-foreground">{fq?.yearLow || fq?.yearHigh ? `${formatPrice(fq?.yearLow)} – ${formatPrice(fq?.yearHigh)}` : "—"}</span></div>
           </div>
         </div>
       </div>
