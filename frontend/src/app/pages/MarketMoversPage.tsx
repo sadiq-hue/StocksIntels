@@ -109,7 +109,19 @@ export function MarketMoversPage() {
       if (!moversData || typeof moversData !== "object") throw new Error("movers endpoint returned no data");
 
       const combined = moversData.combined || moversData;
-      const pick = (key: string) => Array.isArray(combined[key]) ? combined[key] : (Array.isArray(moversData[key]) ? moversData[key] : []);
+      const pick = (key: string) => {
+        const fromCombined = Array.isArray(combined[key]) ? combined[key] : null;
+        if (fromCombined && fromCombined.length > 0) return fromCombined;
+        const fromTop = Array.isArray(moversData[key]) ? moversData[key] : null;
+        if (fromTop && fromTop.length > 0) return fromTop;
+        // Fallback: merge all market-specific lists (nse/ngx/jse/global).
+        const merged: any[] = [];
+        for (const m of ["nse", "ngx", "jse", "global"]) {
+          const block = moversData[m];
+          if (block && Array.isArray(block[key])) merged.push(...block[key]);
+        }
+        return merged;
+      };
       const gainers: MoverRow[] = pick("gainers").map((g: any) => ({
         ...g,
         change: g.change ?? ((g.changePercent ?? 0) >= 0 ? "+" : "") + (g.changePercent ?? 0).toFixed(2) + "%",
@@ -142,6 +154,12 @@ export function MarketMoversPage() {
             premarket = await pmRes.json();
           }
         } catch { /* silent */ }
+      }
+
+      // Retry on empty movers (cold backend cache can return empty arrays without erroring).
+      if (gainers.length === 0 && losers.length === 0 && attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2500 * attempt));
+        return fetchMovers(attempt + 1);
       }
 
       setData({ gainers, losers, active, sectors, premarket });
