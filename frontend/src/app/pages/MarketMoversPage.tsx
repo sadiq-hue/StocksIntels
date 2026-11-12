@@ -157,7 +157,7 @@ export function MarketMoversPage() {
       }
 
       // Retry on empty movers (cold backend cache can return empty arrays without erroring).
-      if (gainers.length === 0 && losers.length === 0 && attempt < maxAttempts) {
+      if (gainers.length === 0 && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 2500 * attempt));
         return fetchMovers(attempt + 1);
       }
