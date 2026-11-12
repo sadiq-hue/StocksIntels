@@ -664,15 +664,49 @@ function fetchStockAnalysisQuote(symbol, timeoutMs) {
 }
 
 async function fetchGlobalQuote(symbol, timeoutMs = 8000, { stockAnalysis = true } = {}) {
-  const yahoo = withTimeout(yahooService.fetchQuote(symbol), timeoutMs, symbol)
+  const v7 = await withTimeout(yahooService.fetchV7Quotes([symbol]), timeoutMs, symbol)
+    .then(r => r[symbol.toUpperCase()] || null)
     .catch(() => null);
+  const yahooQuote = v7 ? {
+    symbol,
+    company_name: v7.company_name,
+    price: v7.regularMarketPrice ?? v7.preMarketPrice ?? null,
+    change: v7.regularMarketChange ?? 0,
+    changePercent: v7.regularMarketChangePercent ?? 0,
+    changesPercentage: v7.regularMarketChangePercent ?? 0,
+    previousClose: v7.regularMarketPrice != null && v7.regularMarketChange != null
+      ? v7.regularMarketPrice - v7.regularMarketChange : null,
+    dayHigh: v7.regularMarketDayHigh ?? null,
+    dayLow: v7.regularMarketDayLow ?? null,
+    volume: v7.regularMarketVolume ?? 0,
+    marketCap: v7.marketCap ?? 0,
+    timestamp: v7.regularMarketTime ?? null,
+    regularMarketTime: v7.regularMarketTime,
+    regularMarketPrice: v7.regularMarketPrice,
+    marketState: v7.marketState,
+    exchange: v7.exchange,
+    currency: v7.currency,
+    provider: 'yahoo',
+    ...(v7.preMarketPrice != null ? {
+      preMarketPrice: v7.preMarketPrice,
+      preMarketChange: v7.preMarketChange,
+      preMarketChangePercent: v7.preMarketChangePercent,
+      preMarketTime: v7.preMarketTime,
+    } : {}),
+    ...(v7.postMarketPrice != null ? {
+      postMarketPrice: v7.postMarketPrice,
+      postMarketChange: v7.postMarketChange,
+      postMarketChangePercent: v7.postMarketChangePercent,
+      postMarketTime: v7.postMarketTime,
+    } : {}),
+  } : null;
   const sa = stockAnalysis && stockAnalysisQuoteEligible(symbol)
     ? fetchStockAnalysisQuote(symbol, timeoutMs)
     : Promise.resolve(null);
-  const [yahooQuote, saQuote] = await Promise.all([yahoo, sa]);
+  const [yahooQuoteResolved, saQuote] = await Promise.all([Promise.resolve(yahooQuote), sa]);
   // StockAnalysis is the near-real-time price source when it has a tick; Yahoo
-  // remains the fallback and fills fields StockAnalysis does not return.
-  return mergeQuoteSources(saQuote, yahooQuote);
+  // v7 remains the fallback and fills fields StockAnalysis does not return.
+  return mergeQuoteSources(saQuote, yahooQuoteResolved);
 }
 
 async function getStockQuote(symbol, { refresh = false } = {}) {
