@@ -61,11 +61,7 @@ const formatCurrency = (stock: StockListItem, liveCurrency?: string) => {
 
 function formatPrice(value?: number | null) {
   if (value == null || !Number.isFinite(value) || value === 0) return "—";
-  const abs = Math.abs(value);
-  if (abs < 0.0001) return value.toFixed(6);
-  if (abs < 0.01) return value.toFixed(4);
-  if (abs < 1) return value.toFixed(3);
-  return value.toFixed(2);
+  return value.toFixed(4);
 }
 
 function formatCompact(value?: number | null): string {
@@ -285,6 +281,8 @@ export function StockAnalysisPage() {
 
   // Live data states
   const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null);
+  const prevPriceRef = useRef<number | null>(null);
+  const [priceBlinking, setPriceBlinking] = useState(false);
   const [stockSignal, setStockSignal] = useState<StockSignal | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [financialReport, setFinancialReport] = useState<FinancialReport | null>(null);
@@ -379,7 +377,7 @@ export function StockAnalysisPage() {
       } catch { /* silent */ }
     };
     pollLive();
-    const id = setInterval(pollLive, 30000);
+    const id = setInterval(pollLive, 10000);
     return () => { active = false; clearInterval(id); };
   }, [activeSelection.ticker]);
 
@@ -469,6 +467,36 @@ export function StockAnalysisPage() {
   const isPreMarket = !isNse && marketState === 'PRE';
   const isPostMarket = !isNse && marketState === 'POST';
   const regularPrice = liveQuote?.price ?? liveQuote?.regularMarketPrice ?? yahooRegularPrice ?? liveQuote?.previousClose ?? null;
+
+  // Flash the price whenever it changes (StockAnalysis-style live ticker)
+  useEffect(() => {
+    const prev = prevPriceRef.current;
+    if (prev != null && regularPrice != null && regularPrice !== prev) {
+      setPriceBlinking(true);
+      const t = setTimeout(() => setPriceBlinking(false), 900);
+      return () => clearTimeout(t);
+    }
+    prevPriceRef.current = regularPrice;
+  }, [regularPrice]);
+
+  // Inject the blink keyframes once (client only)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const id = 'stock-analysis-blink-css';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      @keyframes priceBlink {
+        0%, 100% { background: transparent; color: inherit; }
+        50% { background: rgba(14, 165, 233, 0.14); }
+      }
+      .price-blink { animation: priceBlink 0.9s ease-in-out; }
+    `;
+    document.head.appendChild(style);
+    return () => { try { document.getElementById(id)?.remove(); } catch { /* ignore */ } };
+  }, []);
+
   const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice ?? null;
   const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice ?? null;
   // Show the extended-hours session from the latest available data — even when the
@@ -798,7 +826,7 @@ export function StockAnalysisPage() {
           </div>
           <div className="rounded-xl border border-[#0D7490]/10 bg-white/40 dark:bg-white/[0.03] px-3 py-2 text-left sm:text-right">
             <div className="flex flex-wrap items-baseline justify-start gap-2 sm:justify-end">
-              <span className="text-[42px] sm:text-[48px] leading-none font-bold tracking-tight tabular-nums text-foreground">{formatPrice(regularPrice)}</span>
+              <span className={`text-[42px] sm:text-[48px] leading-none font-bold tracking-tight tabular-nums text-foreground ${priceBlinking ? 'price-blink' : ''}`}>{formatPrice(regularPrice)}</span>
               {liveQuote?.change != null && (
                 <span className={`text-sm font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
                   {liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}
