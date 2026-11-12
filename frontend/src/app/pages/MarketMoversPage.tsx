@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import {
   ArrowUpRight,
   BarChart3,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Cloud,
   DollarSign,
@@ -14,6 +16,7 @@ import {
   Loader2,
   Moon,
   RefreshCcw,
+  Search,
   TrendingDown,
   TrendingUp,
   Zap,
@@ -24,6 +27,7 @@ import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { Input } from "../components/ui/input";
 import { useAuth } from "../auth/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
@@ -75,38 +79,48 @@ const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType; descript
   { id: "heatmap", label: "Market Heatmap", icon: BarChart3, description: "Sector performance heatmap" },
 ];
 
+const TAB_TITLES: Record<TabId, string> = {
+  gainers: "Top Gainers",
+  losers: "Top Losers",
+  active: "Most Active",
+  premarket: "Pre-Market Movers",
+  afterhours: "After Hours Movers",
+  heatmap: "Market Heatmap",
+};
+
 export function MarketMoversPage() {
-  const { user, apiFetch } = useAuth();
+  const { apiFetch } = useAuth();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const initialTab = (searchParams.get("tab") as TabId) || "gainers";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const ROWS_PER_PAGE = 20;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchMovers = useCallback(async (attempt = 1): Promise<void> => {
     const maxAttempts = 3;
     try {
       setLoading(true);
-      const userId = user?.id ? `?userId=${user.id}` : "";
-      // Public endpoint — use raw fetch so a stale auth token never breaks it.
+      // Public endpoint — raw fetch so a stale auth token never breaks it.
       const fetchJson = async (url: string) => {
         const res = await fetch(`${API_BASE_URL}${url}`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       };
-      const [moversData, sectorsData] = await Promise.allSettled([
-        fetchJson(`/market/movers${userId}`),
+      const [moversRes, sectorsRes] = await Promise.allSettled([
+        fetchJson(`/market/movers`),
         fetchJson(`/market/sectors`),
       ]);
 
-      if (moversData.status !== "fulfilled" || !moversData.value || typeof moversData.value !== "object") {
+      if (moversRes.status !== "fulfilled" || !moversRes.value || typeof moversRes.value !== "object") {
         throw new Error("movers endpoint returned no data");
       }
-      const md = moversData.value;
+      const md: any = moversRes.value;
       const hasMoversData =
         Array.isArray(md.combined?.gainers) ||
         Array.isArray(md.combined?.losers) ||
@@ -121,7 +135,6 @@ export function MarketMoversPage() {
         if (fromCombined && fromCombined.length > 0) return fromCombined;
         const fromTop = Array.isArray(md[key]) ? md[key] : null;
         if (fromTop && fromTop.length > 0) return fromTop;
-        // Fallback: merge all market-specific lists (nse/ngx/jse/global).
         const merged: any[] = [];
         for (const m of ["nse", "ngx", "jse", "global"]) {
           const block = md[m];
@@ -143,13 +156,13 @@ export function MarketMoversPage() {
       }));
 
       const sectors: SectorRow[] = (() => {
-        if (sectorsData.status !== "fulfilled") return [];
-        const sd: any = sectorsData.value;
+        if (sectorsRes.status !== "fulfilled") return [];
+        const sd: any = sectorsRes.value;
         if (!Array.isArray(sd)) return [];
         return sd.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }));
       })();
 
-      // Gather tickers for premarket lookup
+      // Gather tickers for premarket/afterhours lookup
       const tickers = new Set<string>();
       [...gainers.slice(0, 10), ...losers.slice(0, 10), ...active.slice(0, 10)].forEach((r) => {
         const t = String(r.ticker || r.symbol || "").toUpperCase().replace(/^(NSE|NGX|JSE):/, "");
@@ -159,10 +172,8 @@ export function MarketMoversPage() {
       let premarket: Record<string, any> = {};
       if (tickers.size > 0) {
         try {
-          const pmRes = await apiFetch(`${API_BASE_URL}/market/premarket?symbols=${Array.from(tickers).join(",")}`, { cache: "no-store" });
-          if (pmRes.ok) {
-            premarket = await pmRes.json();
-          }
+          const pmRes = await fetch(`${API_BASE_URL}/market/premarket?symbols=${Array.from(tickers).join(",")}`, { credentials: 'include' });
+          if (pmRes.ok) premarket = await pmRes.json();
         } catch { /* silent */ }
       }
 
@@ -173,12 +184,11 @@ export function MarketMoversPage() {
       }
 
       setData({ gainers, losers, active, sectors, premarket });
-      setLastUpdated(new Date().toLocaleString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      setLastUpdated(new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" }));
       setError(null);
       setLoading(false);
     } catch (e: any) {
       if (attempt < maxAttempts) {
-        // Backend may be cold-building the movers cache (10-80s); retry after a short delay.
         await new Promise((r) => setTimeout(r, 2500 * attempt));
         return fetchMovers(attempt + 1);
       }
@@ -186,18 +196,13 @@ export function MarketMoversPage() {
     } finally {
       if (attempt === maxAttempts) setLoading(false);
     }
-  }, [apiFetch, user?.id]);
+  }, []);
 
   useEffect(() => {
     fetchMovers();
     pollRef.current = setInterval(fetchMovers, 30000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchMovers]);
-
-  useEffect(() => {
-    const t = searchParams.get("tab");
-    if (t && TABS_CONFIG.some((x) => x.id === t)) setActiveTab(t as TabId);
-  }, [searchParams]);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -243,10 +248,16 @@ export function MarketMoversPage() {
     }
   }, [data, activeTab]);
 
-  const heatmapSectors = useMemo(() => {
-    if (!data) return [];
-    return data.sectors;
-  }, [data]);
+  const filteredRows = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return rows.filter((r) => r.ticker.toLowerCase().includes(term) || r.name.toLowerCase().includes(term));
+  }, [rows, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = filteredRows.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
+
+  const heatmapSectors = useMemo(() => data ? data.sectors : [], [data]);
 
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const heatColor = (pct: number) => {
@@ -257,6 +268,7 @@ export function MarketMoversPage() {
   };
 
   const ActiveIcon = TABS_CONFIG.find((t) => t.id === activeTab)?.icon || TrendingUp;
+  const tabTitle = TAB_TITLES[activeTab];
 
   return (
     <div className="w-full max-w-none px-3 md:px-5 py-5 space-y-4">
@@ -264,9 +276,9 @@ export function MarketMoversPage() {
       <div className="rounded-2xl border border-[#0D7490]/15 bg-gradient-to-br from-[#0D7490]/[0.06] via-[#0EA5E9]/[0.03] to-transparent p-4 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Market Movers</h1>
+            <h1 className="text-[22px] font-bold tracking-tight text-foreground">{tabTitle}</h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Real-time top gainers, losers, most active, and sector heatmap across Global and African markets.
+              Real-time {activeTab} across Global and African markets.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -278,27 +290,26 @@ export function MarketMoversPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-0.5 overflow-x-auto border-b border-border text-xs font-medium mb-4">
-          {TABS_CONFIG.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${
-                  isActive
-                    ? "border-[#0D7490] text-[#0D7490] shadow-[0_1px_0px_0px_rgba(13,116,144,0.35)]"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-              >
-                <Icon className="size-3.5" />
-                {tab.label}
-              </TabsTrigger>
-            );
-          })}
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
+          <div className="flex items-center gap-2">
+            <Search className="size-4 text-muted-foreground" />
+            <Input
+              placeholder="Find…"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+              className="h-8 text-xs pl-6 min-w-[140px] md:min-w-[200px]"
+            />
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Indicators</span>
+            <Button variant="outline" size="sm" className="px-2">Screener</Button>
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <Button variant="outline" size="sm" className="px-2">Download</Button>
+            <Button variant="outline" size="sm" className="px-2">Add View</Button>
+            <Button variant="outline" size="sm" className="px-2">Edit View</Button>
+          </div>
         </div>
       </div>
 
@@ -316,7 +327,7 @@ export function MarketMoversPage() {
 
       {/* Loading state */}
       {loading && !data && (
-        <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+        <div className="h-[400px] flex flex-col items-center justify-center text-muted-foreground">
           <Loader2 className="size-6 animate-spin mb-2" />
           <p className="text-xs">Loading market movers…</p>
         </div>
@@ -350,54 +361,80 @@ export function MarketMoversPage() {
       )}
 
       {/* List tabs */}
-      {data && activeTab !== "heatmap" && rows.length > 0 && (
+      {data && activeTab !== "heatmap" && (
         <Card className="border border-border shadow-sm">
           <CardContent className="p-0">
             <div className="overflow-hidden border-b border-border">
-              <ScrollArea className="h-[500px]">
+              <ScrollArea className="h-[520px]">
                 <Table>
                   <TableHeader>
                     <TableRow className="text-[10px] uppercase tracking-wider text-muted-foreground bg-[#0D7490]/5">
-                      <TableHead className="w-6">#</TableHead>
+                      <TableHead className="w-5">#</TableHead>
                       <TableHead className="w-20">Ticker</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead className="text-right w-24">Price</TableHead>
-                      <TableHead className="text-right w-20">Change</TableHead>
+                      <TableHead className="min-w-[160px]">Company</TableHead>
                       <TableHead className="text-right w-20">Change %</TableHead>
+                      <TableHead className="text-right w-20">Price</TableHead>
                       <TableHead className="text-right w-24">Volume</TableHead>
                       <TableHead className="text-right w-24">Mkt Cap</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((row, i) => (
-                      <TableRow key={`${row.ticker}-${i}`} className="text-sm">
-                        <TableCell className="font-medium text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
-                        <TableCell className="max-w-[140px] truncate">{row.name}</TableCell>
-                        <TableCell className="font-bold tabular-nums text-right">{formatPrice(row.price)}</TableCell>
-                        <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
-                          {row.change ?? ((row.changePercent >= 0 ? "+" : "") + row.changePercent.toFixed(2) + "%")}
-                        </TableCell>
-                        <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
-                          {(row.changePercent >= 0 ? "+" : "")}{row.changePercent.toFixed(2)}%
-                        </TableCell>
-                        <TableCell className="tabular-nums text-right text-muted-foreground">{row.volume}</TableCell>
-                        <TableCell className="tabular-nums text-right text-muted-foreground">{formatCompact(row.marketCap)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {pageRows.map((row, i) => {
+                      const globalIndex = (currentPage - 1) * ROWS_PER_PAGE + i + 1;
+                      return (
+                        <TableRow key={`${row.ticker}-${i}`} className="text-sm">
+                          <TableCell className="font-medium text-muted-foreground">{globalIndex}</TableCell>
+                          <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
+                          <TableCell className="max-w-[160px] truncate">{row.name}</TableCell>
+                          <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
+                            {(row.changePercent >= 0 ? "+" : "")}{row.changePercent.toFixed(2)}%
+                          </TableCell>
+                          <TableCell className="font-bold tabular-nums text-right">{formatPrice(row.price)}</TableCell>
+                          <TableCell className="tabular-nums text-right text-muted-foreground">{row.volume}</TableCell>
+                          <TableCell className="tabular-nums text-right text-muted-foreground">{formatCompact(row.marketCap)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </ScrollArea>
+            </div>
+            {/* Pagination */}
+            <div className="px-4 py-3 border-t border-border flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                {filteredRows.length === 0 ? "No rows" : `Showing ${((currentPage - 1) * ROWS_PER_PAGE) + 1} to ${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length} rows`}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  disabled={currentPage === 1 || filteredRows.length === 0}
+                  onClick={() => setPage(currentPage - 1)}
+                  className="px-2"
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+                <span className="px-2 text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  disabled={currentPage === totalPages || filteredRows.length === 0}
+                  onClick={() => setPage(currentPage + 1)}
+                  className="px-2"
+                >
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* Empty state */}
-      {data && activeTab !== "heatmap" && rows.length === 0 && (
-        <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground border border-dashed rounded-2xl p-6">
+      {data && activeTab !== "heatmap" && pageRows.length === 0 && (
+        <div className="h-[400px] flex flex-col items-center justify-center text-muted-foreground border border-dashed rounded-2xl p-6">
           <BarChart3 className="size-8 mb-2 opacity-50" />
-          <p className="text-xs">No {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} data available.</p>
+          <p className="text-xs">No {tabTitle.toLowerCase()} data available.</p>
         </div>
       )}
     </div>
