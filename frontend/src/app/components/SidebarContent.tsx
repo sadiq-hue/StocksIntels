@@ -6,7 +6,7 @@ import {
   LineChart, Newspaper, FileText, MessageSquare, Users, GitCompare,
   Briefcase, Layers, User, LifeBuoy, Landmark,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
-  ChevronsLeft, ChevronsRight, Mail, Coins,
+  ChevronsLeft, ChevronsRight, Mail, Coins, Zap,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 import { useCompare } from "../contexts/CompareContext";
@@ -73,6 +73,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/markets", icon: TrendingUp, label: "Markets" },
         { path: "/app/signals", icon: Brain, label: "Market Intelligence" },
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
+        { path: "/app/market-movers", icon: Zap, label: "Market Movers" },
         { path: "/app/compare", icon: GitCompare, label: "Compare", badge: compareList.length },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/insider", icon: Users, label: "Insider Trading" },
