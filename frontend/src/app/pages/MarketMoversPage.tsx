@@ -97,10 +97,16 @@ export function MarketMoversPage() {
         apiFetch(`${API_BASE_URL}/market/sectors`),
       ]);
 
-      const moversData = moversRes.status === "fulfilled" && moversRes.value.ok ? await moversRes.value.json() : null;
-      const sectorsData = sectorsRes.status === "fulfilled" && sectorsRes.value.ok ? await sectorsRes.value.json() : null;
+      let moversData: any = null;
+      if (moversRes.status === "fulfilled") {
+        try { moversData = await moversRes.value.json(); } catch { /* keep null */ }
+      }
+      let sectorsData: any = null;
+      if (sectorsRes.status === "fulfilled") {
+        try { sectorsData = await sectorsRes.value.json(); } catch { /* keep null */ }
+      }
 
-      if (!moversData) throw new Error("movers endpoint returned no data");
+      if (!moversData || typeof moversData !== "object") throw new Error("movers endpoint returned no data");
 
       const combined = moversData.combined || moversData;
       const gainers: MoverRow[] = Array.isArray(combined.gainers) ? combined.gainers.map((g: any) => ({
