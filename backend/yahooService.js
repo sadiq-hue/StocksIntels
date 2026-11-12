@@ -837,8 +837,8 @@ async function fetchYahooSessionToken() {
 async function fetchV7Quotes(symbols) {
   if (!symbols || symbols.length === 0) return {};
   const key = [...symbols].sort().join(',');
-  const cached = yahooV7Cache.get(key);
-  if (cached && Date.now() - cached.ts < 30000) return cached.data;
+    const cached = yahooV7Cache.get(key);
+    if (cached && Date.now() - cached.ts < 5000) return cached.data;
   const token = await fetchYahooSessionToken();
   if (!token) return {};
   try {
