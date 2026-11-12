@@ -92,39 +92,39 @@ export function MarketMoversPage() {
     try {
       setLoading(true);
       const userId = user?.id ? `?userId=${user.id}` : "";
-      const [moversRes, sectorsRes] = await Promise.allSettled([
-        apiFetch(`${API_BASE_URL}/market/movers${userId}`),
-        apiFetch(`${API_BASE_URL}/market/sectors`),
+      // Public endpoint — use raw fetch so a stale auth token never breaks it.
+      const fetchJson = async (url: string) => {
+        const res = await fetch(`${API_BASE_URL}${url}`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      };
+      const [moversData, sectorsData] = await Promise.allSettled([
+        fetchJson(`/market/movers${userId}`),
+        fetchJson(`/market/sectors`),
       ]);
 
-      let moversData: any = null;
-      if (moversRes.status === "fulfilled") {
-        try { moversData = await moversRes.value.json(); } catch { /* keep null */ }
+      if (moversData.status !== "fulfilled" || !moversData.value || typeof moversData.value !== "object") {
+        throw new Error("movers endpoint returned no data");
       }
-      let sectorsData: any = null;
-      if (sectorsRes.status === "fulfilled") {
-        try { sectorsData = await sectorsRes.value.json(); } catch { /* keep null */ }
-      }
-
-      if (!moversData || typeof moversData !== "object") throw new Error("movers endpoint returned no data");
+      const md = moversData.value;
       const hasMoversData =
-        Array.isArray(moversData.combined?.gainers) ||
-        Array.isArray(moversData.combined?.losers) ||
-        Array.isArray(moversData.gainers) ||
-        Array.isArray(moversData.losers) ||
-        ["nse","ngx","jse","global"].some((m) => Array.isArray(moversData[m]?.gainers) || Array.isArray(moversData[m]?.losers));
+        Array.isArray(md.combined?.gainers) ||
+        Array.isArray(md.combined?.losers) ||
+        Array.isArray(md.gainers) ||
+        Array.isArray(md.losers) ||
+        ["nse","ngx","jse","global"].some((m) => Array.isArray(md[m]?.gainers) || Array.isArray(md[m]?.losers));
       if (!hasMoversData) throw new Error("movers endpoint returned no data");
 
-      const combined = moversData.combined || moversData;
+      const combined = md.combined || md;
       const pick = (key: string) => {
         const fromCombined = Array.isArray(combined[key]) ? combined[key] : null;
         if (fromCombined && fromCombined.length > 0) return fromCombined;
-        const fromTop = Array.isArray(moversData[key]) ? moversData[key] : null;
+        const fromTop = Array.isArray(md[key]) ? md[key] : null;
         if (fromTop && fromTop.length > 0) return fromTop;
         // Fallback: merge all market-specific lists (nse/ngx/jse/global).
         const merged: any[] = [];
         for (const m of ["nse", "ngx", "jse", "global"]) {
-          const block = moversData[m];
+          const block = md[m];
           if (block && Array.isArray(block[key])) merged.push(...block[key]);
         }
         return merged;
@@ -142,9 +142,12 @@ export function MarketMoversPage() {
         change: a.change ?? ((a.changePercent ?? 0) >= 0 ? "+" : "") + (a.changePercent ?? 0).toFixed(2) + "%",
       }));
 
-      const sectors: SectorRow[] = Array.isArray(sectorsData)
-        ? sectorsData.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }))
-        : (sectorsData?.sectors || []).map((s: any) => ({ name: s.name || s.symbol || "Sector", changePercent: s.changePercent ?? 0, isPositive: (s.changePercent ?? 0) >= 0 }));
+      const sectors: SectorRow[] = (() => {
+        if (sectorsData.status !== "fulfilled") return [];
+        const sd: any = sectorsData.value;
+        if (!Array.isArray(sd)) return [];
+        return sd.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }));
+      })();
 
       // Gather tickers for premarket lookup
       const tickers = new Set<string>();
