@@ -762,7 +762,7 @@ export function StockAnalysisPage() {
   return (
     <div className="mx-auto max-w-[1240px] px-4 py-5 space-y-4">
       {/* Company header */}
-      <div className="border-b border-border pb-4">
+      <div className="rounded-2xl border border-[#0D7490]/15 bg-gradient-to-br from-[#0D7490]/[0.08] via-[#0EA5E9]/[0.04] to-transparent p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold tracking-tight text-foreground">
@@ -783,7 +783,7 @@ export function StockAnalysisPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-          <div>
+          <div className="rounded-xl border border-[#0D7490]/10 bg-white/40 dark:bg-white/[0.03] px-3 py-2">
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-[30px] leading-none font-bold tabular-nums text-foreground">{formatPrice(regularPrice)}</span>
               {liveQuote?.change != null && (
@@ -843,8 +843,9 @@ export function StockAnalysisPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
           <div className="space-y-4 min-w-0">
             {/* Price chart */}
-            <Card id="price-chart" className="border border-border shadow-sm">
-              <div className="p-4">
+            <Card id="price-chart" className="relative overflow-hidden border border-border shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
+              <div className="p-4 bg-gradient-to-b from-[#0D7490]/[0.03] to-transparent">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <h2 className="text-sm font-semibold text-foreground">Price Chart</h2>
                   <div className="flex flex-wrap gap-0.5">
@@ -963,9 +964,57 @@ export function StockAnalysisPage() {
                 )}
               </div>
             </Card>
-          </div>
 
-          {/* Sidebar key stats */}
+            {/* NSE insights */}
+            {activeSelection.market === "nse" && nseInsights && (
+              <Card className="border border-border shadow-sm">
+                <div className="p-4">
+                  <h2 className="text-sm font-semibold text-foreground">NSE Insights</h2>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Financial Health</p>
+                      <p className={`mt-0.5 font-semibold ${nseInsights.financialHealth?.level === "good" ? "text-emerald-600" : nseInsights.financialHealth?.level === "watch" ? "text-amber-600" : "text-red-600"}`}>{nseInsights.financialHealth?.label || "—"}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Liquidity</p>
+                      <p className="mt-0.5 font-semibold text-foreground">{nseInsights.liquidity?.label || "—"}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Next Earnings</p>
+                      <p className="mt-0.5 font-semibold text-foreground">{nseInsights.earnings?.[0] ? `${nseInsights.earnings[0].daysUntil}d` : "—"}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/40 p-2.5">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">FX (USD/KES)</p>
+                      <p className="mt-0.5 font-semibold text-foreground">{nseInsights.fxRate || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Top holders */}
+            {holders.length > 0 && (
+              <Card className="border border-border shadow-sm">
+                <div className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">Top Holders</h2>
+                    <span className="text-[10px] text-muted-foreground">{holders.length} holders</span>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {holders.slice(0, 6).map((h, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5 text-[11px] last:border-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{h.holder}</p>
+                          <p className="text-[10px] text-muted-foreground">{h.pctHeld != null ? `${h.pctHeld.toFixed(1)}% held` : `${(h.shares || 0).toLocaleString()} shares`}</p>
+                        </div>
+                        <span className="shrink-0 font-semibold text-foreground">{h.value ? formatCompact(h.value) : "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
           <aside className="space-y-4">
             <Card className="border border-border shadow-sm">
               <div className="p-4">
@@ -1003,6 +1052,50 @@ export function StockAnalysisPage() {
                   )}
                 </div>
                 <button onClick={() => setActiveTab("profile")} className="mt-3 text-xs font-medium text-[#0D7490] hover:underline">Full Company Profile →</button>
+              </div>
+            </Card>
+
+            {/* StocksIntels analysis */}
+            <Card className="relative overflow-hidden border border-border shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
+              <div className="p-4">
+                <h2 className="text-sm font-semibold text-foreground">StocksIntels Analysis</h2>
+                {loadingData ? (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" /> Loading analysis…</div>
+                ) : stockSignal ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded-xl border border-[#0D7490]/15 bg-gradient-to-br from-[#0D7490]/[0.06] to-[#0EA5E9]/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-lg font-bold ${signalIsBullish ? "text-emerald-700" : signalIsBearish ? "text-red-600" : "text-amber-700"}`}>{displaySignal}</span>
+                        <span className="text-xs font-semibold text-foreground">{displayConfidence}% conviction</span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-[#0D7490]" style={{ width: `${displayConfidence}%` }} />
+                      </div>
+                      {stockSignal.reason && <p className="mt-2 text-[10px] leading-snug text-muted-foreground line-clamp-3">{stockSignal.reason}</p>}
+                    </div>
+                    {(stockSignal.entry != null || stockSignal.target1 != null) && (
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                        {[
+                          ["Entry", stockSignal.entry],
+                          ["Stop", stockSignal.stopLoss],
+                          ["Target 1", stockSignal.target1],
+                          ["Target 2", stockSignal.target2],
+                        ].filter(([, v]) => v != null).map(([label, v]) => (
+                          <div key={String(label)} className="rounded-lg border border-border bg-muted/40 p-2">
+                            <p className="uppercase tracking-wider text-muted-foreground">{label}</p>
+                            <p className="mt-0.5 font-semibold text-foreground">{curSym} {formatPrice(Number(v))}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <Link to={`/app/signals?ticker=${encodeURIComponent(activeSelection.ticker)}`} className="inline-flex text-xs font-medium text-[#0D7490] hover:underline">
+                      Open full analysis →
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">No StocksIntels analysis available for this listing yet.</p>
+                )}
               </div>
             </Card>
           </aside>
@@ -1066,6 +1159,10 @@ export function StockAnalysisPage() {
             </div>
           </div>
         </Card>
+      )}
+
+      {activeTab === "statistics" && (
+        <FinancialMetrics symbol={finSymbol} sector={activeSelection.sector} instrumentName={activeSelection.name} />
       )}
 
       {activeTab === "dividends" && (
