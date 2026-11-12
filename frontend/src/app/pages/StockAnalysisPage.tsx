@@ -798,7 +798,7 @@ export function StockAnalysisPage() {
           </div>
           <div className="rounded-xl border border-[#0D7490]/10 bg-white/40 dark:bg-white/[0.03] px-3 py-2 text-left sm:text-right">
             <div className="flex flex-wrap items-baseline justify-start gap-2 sm:justify-end">
-              <span className="text-[30px] leading-none font-bold tabular-nums text-foreground">{formatPrice(regularPrice)}</span>
+              <span className="text-[42px] sm:text-[48px] leading-none font-bold tracking-tight tabular-nums text-foreground">{formatPrice(regularPrice)}</span>
               {liveQuote?.change != null && (
                 <span className={`text-sm font-semibold ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
                   {liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}

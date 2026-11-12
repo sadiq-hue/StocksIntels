@@ -644,6 +644,10 @@ function mergeQuoteSources(primary, secondary) {
     if (s.company_name) merged.company_name = s.company_name;
   }
   merged.enrichedBy = 'stockanalysis';
+  // StockAnalysis reports a fetch-time timestamp, not the last trade time. Keep
+  // Yahoo's market timestamp so the UI can label "At close" with the real date.
+  if (secondary?.timestamp) merged.timestamp = secondary.timestamp;
+  if (secondary?.regularMarketTime) merged.regularMarketTime = secondary.regularMarketTime;
   return merged;
 }
 
@@ -666,7 +670,9 @@ async function fetchGlobalQuote(symbol, timeoutMs = 8000, { stockAnalysis = true
     ? fetchStockAnalysisQuote(symbol, timeoutMs)
     : Promise.resolve(null);
   const [yahooQuote, saQuote] = await Promise.all([yahoo, sa]);
-  return mergeQuoteSources(yahooQuote, saQuote);
+  // StockAnalysis is the near-real-time price source when it has a tick; Yahoo
+  // remains the fallback and fills fields StockAnalysis does not return.
+  return mergeQuoteSources(saQuote, yahooQuote);
 }
 
 async function getStockQuote(symbol, { refresh = false } = {}) {
@@ -675,20 +681,15 @@ async function getStockQuote(symbol, { refresh = false } = {}) {
   const cached = quoteCache.get(symbol);
   const cachedAgeMs = cached ? Date.now() - (cached.timestamp * 1000) : Infinity;
   if (cached && Number(cached.price) > 0 && cachedAgeMs < MAX_QUOTE_AGE_MS) {
-    // A single-quote request may explicitly refresh an already-warm cache. Bulk
-    // prefetch keeps its cheap Yahoo path; the UI quote card gets the parallel
-    // StockAnalysis pass without forcing every batch symbol through it.
-    const canRefresh = refresh && stockAnalysisQuoteEligible(symbol)
+    // A single-quote request explicitly refreshes with BOTH providers so the
+    // StockAnalysis realtime tick and Yahoo's market timestamp/fallback fields
+    // are updated together. Bulk prefetch keeps its cheap Yahoo path.
+    const canRefresh = refresh
+      && !symbol.startsWith('NSE:') && !symbol.startsWith('NGX:') && !symbol.startsWith('JSE:')
       && (cached.provider !== 'stockanalysis' || cachedAgeMs >= 60 * 1000);
     if (canRefresh) {
-      const saQuote = await fetchStockAnalysisQuote(symbol, 2500);
-      if (saQuote) {
-        const useSaPrice = cachedAgeMs >= 60 * 1000;
-        const merged = useSaPrice
-          ? mergeQuoteSources(saQuote, cached)
-          : mergeQuoteSources(cached, saQuote);
-        if (merged) return cacheQuote(symbol, merged);
-      }
+      const fresh = await fetchGlobalQuote(symbol, 8000);
+      if (fresh) return cacheQuote(symbol, fresh);
     }
     return cached;
   }

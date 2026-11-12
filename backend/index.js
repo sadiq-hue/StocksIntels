@@ -7759,7 +7759,7 @@ app.get('/api/stock/:symbol', async (req, res) => {
     const upper = symbol.toUpperCase();
     const prefix = market === 'nse' ? 'NSE:' : market === 'ngx' ? 'NGX:' : market === 'jse' ? 'JSE:' : '';
     const lookup = prefix ? `${prefix}${upper}` : upper;
-    const quote = await getStockQuote(lookup);
+    const quote = await getStockQuote(lookup, { refresh: true });
     if (!quote) return res.status(404).json({ error: 'Stock not found' });
     const mk = lookup.startsWith('NSE:') ? 'nse' : lookup.startsWith('NGX:') ? 'ngx' : lookup.startsWith('JSE:') ? 'jse' : 'global';
     const marketOpen = mk === 'nse' ? marketHours.nseOpen() : mk === 'ngx' ? marketHours.ngxOpen() : mk === 'jse' ? marketHours.jseOpen() : isMarketOpen('Global').open;
