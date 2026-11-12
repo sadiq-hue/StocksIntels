@@ -109,18 +109,19 @@ export function MarketMoversPage() {
       if (!moversData || typeof moversData !== "object") throw new Error("movers endpoint returned no data");
 
       const combined = moversData.combined || moversData;
-      const gainers: MoverRow[] = Array.isArray(combined.gainers) ? combined.gainers.map((g: any) => ({
+      const pick = (key: string) => Array.isArray(combined[key]) ? combined[key] : (Array.isArray(moversData[key]) ? moversData[key] : []);
+      const gainers: MoverRow[] = pick("gainers").map((g: any) => ({
         ...g,
         change: g.change ?? ((g.changePercent ?? 0) >= 0 ? "+" : "") + (g.changePercent ?? 0).toFixed(2) + "%",
-      })) : [];
-      const losers: MoverRow[] = Array.isArray(combined.losers) ? combined.losers.map((l: any) => ({
+      }));
+      const losers: MoverRow[] = pick("losers").map((l: any) => ({
         ...l,
         change: l.change ?? ((l.changePercent ?? 0) >= 0 ? "+" : "") + (l.changePercent ?? 0).toFixed(2) + "%",
-      })) : [];
-      const active: MoverRow[] = Array.isArray(combined.active) ? combined.active.map((a: any) => ({
+      }));
+      const active: MoverRow[] = pick("active").map((a: any) => ({
         ...a,
         change: a.change ?? ((a.changePercent ?? 0) >= 0 ? "+" : "") + (a.changePercent ?? 0).toFixed(2) + "%",
-      })) : [];
+      }));
 
       const sectors: SectorRow[] = Array.isArray(sectorsData)
         ? sectorsData.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }))
