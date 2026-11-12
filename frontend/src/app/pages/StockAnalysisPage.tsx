@@ -760,7 +760,7 @@ export function StockAnalysisPage() {
     .slice(-6);
 
   return (
-    <div className="mx-auto max-w-[1240px] px-4 py-5 space-y-4">
+    <div className="w-full max-w-none px-3 md:px-5 py-5 space-y-4">
       {/* Company header */}
       <div className="rounded-2xl border border-[#0D7490]/15 bg-gradient-to-br from-[#0D7490]/[0.08] via-[#0EA5E9]/[0.04] to-transparent p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
