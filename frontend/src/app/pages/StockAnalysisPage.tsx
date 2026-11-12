@@ -377,7 +377,7 @@ export function StockAnalysisPage() {
       } catch { /* silent */ }
     };
     pollLive();
-    const id = setInterval(pollLive, 10000);
+    const id = setInterval(pollLive, 3000);
     return () => { active = false; clearInterval(id); };
   }, [activeSelection.ticker]);
 

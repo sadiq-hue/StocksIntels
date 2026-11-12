@@ -18,7 +18,7 @@ console.log('[marketService] mystocks.co.ke scraper auto-refresh DISABLED — us
 // API history - see enrichVolumeFromMyStocks.
 
 const quoteCache = new Map();
-const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
+const MAX_QUOTE_AGE_MS = 30 * 1000;
 
 /**
  * Shared name mapper for consistent display
@@ -685,8 +685,7 @@ async function getStockQuote(symbol, { refresh = false } = {}) {
     // StockAnalysis realtime tick and Yahoo's market timestamp/fallback fields
     // are updated together. Bulk prefetch keeps its cheap Yahoo path.
     const canRefresh = refresh
-      && !symbol.startsWith('NSE:') && !symbol.startsWith('NGX:') && !symbol.startsWith('JSE:')
-      && (cached.provider !== 'stockanalysis' || cachedAgeMs >= 60 * 1000);
+      && !symbol.startsWith('NSE:') && !symbol.startsWith('NGX:') && !symbol.startsWith('JSE:');
     if (canRefresh) {
       const fresh = await fetchGlobalQuote(symbol, 8000);
       if (fresh) return cacheQuote(symbol, fresh);
