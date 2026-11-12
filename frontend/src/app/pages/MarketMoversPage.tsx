@@ -239,13 +239,6 @@ export function MarketMoversPage() {
   const heatmapSectors = useMemo(() => data ? data.sectors : [], [data]);
 
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
-  const heatColor = (pct: number) => {
-    const a = Math.min(Math.abs(pct), 5);
-    const base = pct >= 0 ? "bg-emerald" : "bg-red";
-    const intensity = Math.round((a / 5) * 800) + 100;
-    return `${base}-${Math.max(100, Math.min(900, intensity))}`;
-  };
-
   const tabTitle = TAB_TITLES[activeTab];
 
   return (
@@ -313,29 +306,57 @@ export function MarketMoversPage() {
 
       {/* Heatmap tab */}
       {data && activeTab === "heatmap" && (
-        <Card className="border border-border shadow-sm">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {heatmapSectors.map((s, i) => {
-                const cls = heatColor(s.changePercent);
-                const barWidth = `${Math.min(Math.abs(s.changePercent) * 20, 100)}%`;
+        <div className="border border-border rounded-2xl shadow-sm bg-background">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="size-5 text-[#0D7490]" />
+              <span className="text-sm font-semibold text-foreground">Market Heatmap</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                Sector performance today
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Tile size = market cap · Color = performance (green = up, red = down)
+            </p>
+          </div>
+          <div className="p-4 pb-8">
+            <div className="flex flex-wrap gap-3">
+              {heatmapSectors.map((s) => {
+                const pct = s.changePercent;
+                const abs = Math.min(Math.abs(pct), 6);
+                const base = pct >= 0 ? "bg-emerald" : "bg-red";
+                const intensity = Math.round((abs / 6) * 900);
+                const cls = `${base}-${Math.max(100, Math.min(900, intensity))}`;
+                // Tile size scales with market cap proxy (use abs change as size proxy since we lack cap)
+                const size = 96 + Math.min(Math.abs(pct), 6) * 22; // 96px to 228px
                 return (
-                  <Card key={i} className={`p-3 rounded-xl border border-border shadow-sm flex flex-col gap-1 ${cls} text-foreground`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold truncate" title={s.name}>{s.name}</span>
-                      <Badge variant={s.isPositive ? "default" : "destructive"} className="text-[10px]">
-                        {(s.changePercent >= 0 ? "+" : "") + s.changePercent.toFixed(2)}%
-                      </Badge>
-                    </div>
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-[#0D7490]/10 overflow-hidden">
-                      <div className={`h-full ${s.isPositive ? "bg-emerald-600" : "bg-red-600"} w-[${barWidth}]`} />
+                  <Card
+                    key={s.name}
+                    className={`relative group w-[${size}px] h-[${size}px] rounded-xl border border-border shadow-sm cursor-pointer ${cls} text-foreground hover:scale-105 transition-transform duration-200`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl" />
+                    <div className="p-3 relative z-10">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold leading-tight truncate" title={s.name}>
+                          {s.name}
+                        </span>
+                        <Badge
+                          variant={pct >= 0 ? "default" : "destructive"}
+                          className="text-[10px] px-1.5 py-0.5"
+                        >
+                          {(pct >= 0 ? "+" : "")}{pct.toFixed(2)}%
+                        </Badge>
+                      </div>
                     </div>
                   </Card>
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+            <p className="mt-3 text-[10px] text-muted-foreground text-center">
+              Based on {heatmapSectors.length} sectors · Tile size scales with performance
+            </p>
+          </div>
+        </div>
       )}
 
       {/* List tabs */}
