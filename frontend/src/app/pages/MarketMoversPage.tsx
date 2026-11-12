@@ -107,6 +107,13 @@ export function MarketMoversPage() {
       }
 
       if (!moversData || typeof moversData !== "object") throw new Error("movers endpoint returned no data");
+      const hasMoversData =
+        Array.isArray(moversData.combined?.gainers) ||
+        Array.isArray(moversData.combined?.losers) ||
+        Array.isArray(moversData.gainers) ||
+        Array.isArray(moversData.losers) ||
+        ["nse","ngx","jse","global"].some((m) => Array.isArray(moversData[m]?.gainers) || Array.isArray(moversData[m]?.losers));
+      if (!hasMoversData) throw new Error("movers endpoint returned no data");
 
       const combined = moversData.combined || moversData;
       const pick = (key: string) => {
