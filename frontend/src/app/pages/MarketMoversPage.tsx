@@ -1,34 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Link, useSearchParams } from "react-router";
-import {
-  ArrowUpRight,
-  BarChart3,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Cloud,
-  DollarSign,
-  Flame,
-  Loader2,
-  Moon,
-  RefreshCcw,
-  Search,
-  TrendingDown,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
+import { useSearchParams } from "react-router";
+import { BarChart3, ChevronLeft, ChevronRight, Cloud, Loader2, Moon, RefreshCcw, Search, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { Input } from "../components/ui/input";
-import { useAuth } from "../auth/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -70,13 +50,13 @@ function formatPrice(n?: number | null): string {
   return n.toFixed(4);
 }
 
-const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
-  { id: "gainers", label: "Top Gainers", icon: TrendingUp, description: "Biggest percentage gainers today" },
-  { id: "losers", label: "Top Losers", icon: TrendingDown, description: "Biggest percentage decliners today" },
-  { id: "active", label: "Most Active", icon: Zap, description: "Highest volume stocks today" },
-  { id: "premarket", label: "Pre-Market", icon: Cloud, description: "Pre-market movers" },
-  { id: "afterhours", label: "After Hours", icon: Moon, description: "After-hours movers" },
-  { id: "heatmap", label: "Market Heatmap", icon: BarChart3, description: "Sector performance heatmap" },
+const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "gainers", label: "Top Gainers", icon: TrendingUp },
+  { id: "losers", label: "Top Losers", icon: TrendingDown },
+  { id: "active", label: "Most Active", icon: Zap },
+  { id: "premarket", label: "Pre-Market", icon: Cloud },
+  { id: "afterhours", label: "After Hours", icon: Moon },
+  { id: "heatmap", label: "Market Heatmap", icon: BarChart3 },
 ];
 
 const TAB_TITLES: Record<TabId, string> = {
@@ -89,7 +69,6 @@ const TAB_TITLES: Record<TabId, string> = {
 };
 
 export function MarketMoversPage() {
-  const { apiFetch } = useAuth();
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get("tab") as TabId) || "gainers";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -267,7 +246,6 @@ export function MarketMoversPage() {
     return `${base}-${Math.max(100, Math.min(900, intensity))}`;
   };
 
-  const ActiveIcon = TABS_CONFIG.find((t) => t.id === activeTab)?.icon || TrendingUp;
   const tabTitle = TAB_TITLES[activeTab];
 
   return (
@@ -364,7 +342,27 @@ export function MarketMoversPage() {
       {data && activeTab !== "heatmap" && (
         <Card className="border border-border shadow-sm">
           <CardContent className="p-0">
-            <div className="overflow-hidden border-b border-border">
+            {/* Tab buttons */}
+            <div className="border-b border-border bg-[#0D7490]/5 px-4 py-2 overflow-x-auto">
+              <div className="flex gap-1">
+                {TABS_CONFIG.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setPage(1); }}
+                      className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${isActive ? "border-[#0D7490] text-[#0D7490] shadow-[0_1px_0px_0px_rgba(13,116,144,0.35)]" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+                    >
+                      <Icon className="size-3.5" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="overflow-hidden">
               <ScrollArea className="h-[520px]">
                 <Table>
                   <TableHeader>
@@ -399,6 +397,7 @@ export function MarketMoversPage() {
                 </Table>
               </ScrollArea>
             </div>
+
             {/* Pagination */}
             <div className="px-4 py-3 border-t border-border flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-muted-foreground">
