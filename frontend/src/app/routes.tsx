@@ -9,6 +9,7 @@ import { PortfolioPage } from "./pages/PortfolioPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
 import MarketPage from "./pages/MarketPage";
 import { StocksPage } from "./pages/StocksPage";
+import { MarketMoversPage } from "./pages/MarketMoversPage";
 import { NewsPage } from "./pages/NewsPage";
 import { FinancialsPage } from "./pages/FinancialsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: DashboardPage },
       { path: "markets", Component: MarketPage },
+      { path: "market-movers", Component: MarketMoversPage },
       { path: "stocks", Component: StocksPage },
       { path: "sectors", Component: SectorsPage },
       { path: "stock/:ticker", Component: StockAnalysisPage },
