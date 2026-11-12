@@ -116,7 +116,7 @@ export function MarketMoversPage() {
       })) : [];
 
       const sectors: SectorRow[] = Array.isArray(sectorsData)
-        ? sectorsData.map((s: any) => ({ name: s.name || s.symbol || "Sector", changePercent: s.changePercent ?? 0, isPositive: (s.changePercent ?? 0) >= 0 }))
+        ? sectorsData.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }))
         : (sectorsData?.sectors || []).map((s: any) => ({ name: s.name || s.symbol || "Sector", changePercent: s.changePercent ?? 0, isPositive: (s.changePercent ?? 0) >= 0 }));
 
       // Gather tickers for premarket lookup
