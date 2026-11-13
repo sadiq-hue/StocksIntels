@@ -30,7 +30,10 @@ function useHeroQuotes() {
           setLoading(false);
         }
       } catch {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoading(false);
+          setHeroError('Failed to load live prices');
+        }
       }
     };
     load();
@@ -38,7 +41,7 @@ function useHeroQuotes() {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  return { quotes, loading };
+  return { quotes, loading, error: heroError };
 }
 
 function StockChartBg() {
@@ -386,7 +389,11 @@ export function LandingPage() {
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
   const { getQuote } = useRealtimeQuotes();
-  const { quotes: heroQuotes } = useHeroQuotes();
+  const { quotes: heroQuotes, error: heroError } = useHeroQuotes();
+  const [tickerError, setTickerError] = useState<string | null>(null);
+  const [testimonialError, setTestimonialError] = useState<string | null>(null);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [heroError, setHeroError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -421,18 +428,24 @@ export function LandingPage() {
 
   useEffect(() => {
     fetch('/api/testimonials')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => { if (data.testimonials) setUserTestimonials(data.testimonials); })
-      .catch(() => {});
+      .catch(e => { setTestimonialError(e.message || 'Failed to load testimonials'); });
   }, []);
 
   const [marketArticles, setMarketArticles] = useState<Array<{ id: string; title: string; summary?: string; source?: string; publishedAt?: string; slug?: string; url?: string }>>([]);
 
   useEffect(() => {
     fetch('/api/market-intel?limit=6')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => { if (Array.isArray(data)) setMarketArticles(data.slice(0, 6)); })
-      .catch(() => {});
+      .catch(e => { setNewsError(e.message || 'Failed to load market news'); });
   }, []);
 
   const allTestimonials = useMemo(() => [...testimonials, ...userTestimonials], [userTestimonials]);
@@ -641,7 +654,13 @@ export function LandingPage() {
 
             {/* Right: Stock Cards */}
             <div className="relative mt-10 lg:mt-0">
-              <HeroStockCard quotes={heroQuotes} />
+              {heroError ? (
+                <div className="text-center text-xs text-red-500 mt-4">
+                  Failed to load live prices: {heroError}
+                </div>
+              ) : (
+                <HeroStockCard quotes={heroQuotes} />
+              )}
               {/* Floating mini cards — absolute on desktop, stacked on mobile */}
               <FloatingMiniCards quotes={heroQuotes} />
             </div>
@@ -780,7 +799,7 @@ export function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-            {allTestimonials.map((t, i) => (
+          {allTestimonials.map((t, i) => (
                 <div key={i} className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
                 style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.15}s forwards`, opacity: 0 }}>
                 <div className="flex gap-1 mb-4">
@@ -799,7 +818,10 @@ export function LandingPage() {
                   </div>
                 </div>
               </div>
-              ))}
+            ))}
+            {allTestimonials.length === 0 && testimonialError && (
+              <p className="text-center text-xs text-red-500 mt-4">Failed to load testimonials: {testimonialError}</p>
+            )}
           </div>
         </div>
       </section>
@@ -853,10 +875,12 @@ export function LandingPage() {
             </div>
           )}
 
-          {marketArticles.length === 0 && (
-            <p className="text-center text-muted-foreground">Market insights are refreshed throughout the trading day.</p>
-          )}
-        </div>
+          {marketArticles.length === 0 && newsError ? (
+              <p className="text-center text-xs text-red-500">Failed to load market news: {newsError}</p>
+            ) : marketArticles.length === 0 && (
+              <p className="text-center text-xs text-muted-foreground">Market insights are refreshed throughout the trading day.</p>
+            )}
+          </div>
       </section>
 
       {/* PRICING */}
