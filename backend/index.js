@@ -9561,8 +9561,8 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     }
 
     // Build symbol list for batch quotes
-    const nseSymbols: string[] = [];
-    const globalSymbols: string[] = [];
+    const nseSymbols = [];
+    const globalSymbols = [];
     for (const s of stocks) {
       const sym = s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker;
       if (s.market === 'NSE') nseSymbols.push(sym);
