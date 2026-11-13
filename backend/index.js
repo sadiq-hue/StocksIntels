@@ -318,6 +318,12 @@ if (serveFrontend) {
       }
     },
   }));
+
+  // SPA fallback: serve index.html for all client-side routes (React Router).
+  // Must come AFTER all API routes so /api/* still hits the backend.
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
 }
 // Serve backend/public assets (logo, etc.) for admin panel
 app.use(express.static(path.join(__dirname, 'public')));
