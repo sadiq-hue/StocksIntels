@@ -9515,6 +9515,121 @@ app.get('/api/market/sectors', async (req, res) => {
   }
 });
 
+// Hierarchical sector tree for market heatmap: Sector -> Sub-sector -> Stock
+// Tile size = market cap, Color = performance
+app.get('/api/market/sectors/tree', async (req, res) => {
+  try {
+    // Get all active stocks with sector info
+    let stocks = [];
+    try {
+      const { rows } = await pool.query(
+        `SELECT ticker, name, sector, market, currency FROM stocks WHERE is_active = true ORDER BY ticker`
+      );
+      stocks = rows;
+    } catch (e) {
+      console.warn('[sectors/tree] stocks table query failed:', e.message);
+    }
+    if (stocks.length === 0) {
+      // Fallback universe
+      const fallback = [
+        { ticker: 'AAPL', name: 'Apple Inc.', sector: 'Technology', market: 'Global', currency: 'USD' },
+        { ticker: 'MSFT', name: 'Microsoft Corporation', sector: 'Technology', market: 'Global', currency: 'USD' },
+        { ticker: 'NVDA', name: 'NVIDIA Corporation', sector: 'Technology', market: 'Global', currency: 'USD' },
+        { ticker: 'AMZN', name: 'Amazon.com Inc.', sector: 'Consumer Cyclical', market: 'Global', currency: 'USD' },
+        { ticker: 'GOOGL', name: 'Alphabet Inc.', sector: 'Technology', market: 'Global', currency: 'USD' },
+        { ticker: 'TSLA', name: 'Tesla Inc.', sector: 'Automobiles', market: 'Global', currency: 'USD' },
+        { ticker: 'META', name: 'Meta Platforms Inc.', sector: 'Technology', market: 'Global', currency: 'USD' },
+        { ticker: 'NFLX', name: 'Netflix Inc.', sector: 'Communication Services', market: 'Global', currency: 'USD' },
+        { ticker: 'JPM', name: 'JPMorgan Chase & Co.', sector: 'Financial Services', market: 'Global', currency: 'USD' },
+        { ticker: 'V', name: 'Visa Inc.', sector: 'Financial Services', market: 'Global', currency: 'USD' },
+        { ticker: 'JNJ', name: 'Johnson & Johnson', sector: 'Healthcare', market: 'Global', currency: 'USD' },
+        { ticker: 'UNH', name: 'UnitedHealth Group', sector: 'Healthcare', market: 'Global', currency: 'USD' },
+        { ticker: 'XOM', name: 'Exxon Mobil', sector: 'Energy', market: 'Global', currency: 'USD' },
+        { ticker: 'CVX', name: 'Chevron', sector: 'Energy', market: 'Global', currency: 'USD' },
+        { ticker: 'WMT', name: 'Walmart', sector: 'Consumer Defensive', market: 'Global', currency: 'USD' },
+        { ticker: 'PG', name: 'Procter & Gamble', sector: 'Consumer Defensive', market: 'Global', currency: 'USD' },
+        { ticker: 'HD', name: 'Home Depot', sector: 'Consumer Cyclical', market: 'Global', currency: 'USD' },
+        { ticker: 'DIS', name: 'Walt Disney', sector: 'Communication Services', market: 'Global', currency: 'USD' },
+        { ticker: 'KO', name: 'Coca-Cola', sector: 'Consumer Defensive', market: 'Global', currency: 'USD' },
+        { ticker: 'PEP', name: 'PepsiCo', sector: 'Consumer Defensive', market: 'Global', currency: 'USD' },
+        { ticker: 'SCOM', name: 'Safaricom PLC', sector: 'Telecommunications', market: 'NSE', currency: 'KES' },
+        { ticker: 'EQTY', name: 'Equity Group', sector: 'Banking', market: 'NSE', currency: 'KES' },
+        { ticker: 'KCB', name: 'KCB Group', sector: 'Banking', market: 'NSE', currency: 'KES' },
+      ];
+      stocks = fallback;
+    }
+
+    // Build symbol list for batch quotes
+    const symbols = stocks.map((s) => (s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker));
+
+    // Fetch batch quotes
+    let quotesMap = {};
+    try {
+      quotesMap = await getQuotesBatch(symbols);
+    } catch (e) {
+      console.warn('[sectors/tree] batch quote failed:', e.message);
+    }
+
+    // Build stock entries with quote data
+    const entries = stocks.map((s) => {
+      const sym = s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker;
+      const q = quotesMap[sym] || {};
+      const price = Number(q.price || 0);
+      const changePct = Number(q.changePercent || 0);
+      const marketCap = Number(q.marketCap || 0);
+      return {
+        ticker: s.ticker,
+        name: s.name || s.ticker,
+        sector: s.sector || 'Other',
+        market: s.market || 'Global',
+        currency: s.currency || 'USD',
+        price: price > 0 ? price : 0,
+        changePercent: changePct,
+        marketCap: marketCap > 0 ? marketCap : 0,
+      };
+    });
+
+    // Group by sector
+    const sectorMap = new Map();
+    for (const e of entries) {
+      if (!sectorMap.has(e.sector)) sectorMap.set(e.sector, []);
+      sectorMap.get(e.sector).push(e);
+    }
+
+    // Build tree: sectors sorted by total market cap desc
+    const tree = [];
+    for (const [sectorName, items] of sectorMap.entries()) {
+      const totalCap = items.reduce((sum, it) => sum + it.marketCap, 0);
+      const weightedChange =
+        totalCap > 0
+          ? items.reduce((sum, it) => sum + it.changePercent * it.marketCap, 0) / totalCap
+          : 0;
+      tree.push({
+        name: sectorName,
+        changePercent: weightedChange,
+        marketCap: totalCap,
+        children: items
+          .sort((a, b) => b.marketCap - a.marketCap)
+          .map((it) => ({
+            name: it.ticker,
+            fullName: it.name,
+            changePercent: it.changePercent,
+            price: it.price,
+            marketCap: it.marketCap,
+            currency: it.currency,
+            market: it.market,
+          })),
+      });
+    }
+    tree.sort((a, b) => b.marketCap - a.marketCap);
+
+    res.json(tree);
+  } catch (error) {
+    console.error('Error fetching sector tree:', error);
+    res.status(500).json({ error: 'Failed to fetch sector tree' });
+  }
+});
+
 // ── AI Real-Time Recommendations (behavior & performance based) ──
 app.get('/api/ai/recommendations', async (req, res) => {
   try {

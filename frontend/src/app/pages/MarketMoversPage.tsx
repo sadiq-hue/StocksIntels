@@ -32,6 +32,7 @@ interface SectorRow {
   name: string;
   changePercent: number;
   isPositive: boolean;
+  children: any[];
 }
 
 function formatCompact(n?: number | null): string {
@@ -48,6 +49,78 @@ function formatCompact(n?: number | null): string {
 function formatPrice(n?: number | null): string {
   if (n == null || !Number.isFinite(n) || n === 0) return "—";
   return n.toFixed(4);
+}
+
+// ── Squarified Treemap (StockAnalysis-style heatmap) ──────────────────────
+// Tile size = market cap, Color = performance
+function worstAspectRatio(row: { size: number }[], width: number, height: number, rowSize: number): number {
+  if (row.length === 0) return Infinity;
+  const maxSize = Math.max(...row.map((n) => n.size));
+  const minSize = Math.min(...row.map((n) => n.size));
+  if (width >= height) {
+    return Math.max((maxSize * width * width) / (rowSize * rowSize), (rowSize * rowSize) / (minSize * width * width));
+  }
+  return Math.max((maxSize * height * height) / (rowSize * rowSize), (rowSize * rowSize) / (minSize * height * height));
+}
+
+function squarify(nodes: { size: number; [key: string]: any }[], x: number, y: number, width: number, height: number, result: any[]): void {
+  if (nodes.length === 0) return;
+  nodes.sort((a, b) => b.size - a.size);
+  if (nodes.length === 1) {
+    result.push({ ...nodes[0], x, y, w: width, h: height });
+    return;
+  }
+
+  const totalSize = nodes.reduce((s, n) => s + n.size, 0);
+  const row: typeof nodes = [];
+  let rowSize = 0;
+  let bestRow: typeof nodes = [];
+  let bestRowSize = 0;
+  let bestWorst = Infinity;
+
+  for (const node of nodes) {
+    row.push(node);
+    rowSize += node.size;
+    const w = worstAspectRatio(row, width, height, rowSize);
+    if (w < bestWorst) {
+      bestWorst = w;
+      bestRow = [...row];
+      bestRowSize = rowSize;
+    } else {
+      row.pop();
+      rowSize -= node.size;
+      break;
+    }
+  }
+
+  if (width >= height) {
+    const rowHeight = bestRowSize / width;
+    let cx = x;
+    for (const node of bestRow) {
+      const nw = node.size / rowHeight;
+      result.push({ ...node, x: cx, y, w: nw, h: rowHeight });
+      cx += nw;
+    }
+    const remaining = nodes.filter((n) => !bestRow.includes(n));
+    squarify(remaining, x, y + rowHeight, width, height - rowHeight, result);
+  } else {
+    const rowWidth = bestRowSize / height;
+    let cy = y;
+    for (const node of bestRow) {
+      const nh = node.size / rowWidth;
+      result.push({ ...node, x, y: cy, w: rowWidth, h: nh });
+      cy += nh;
+    }
+    const remaining = nodes.filter((n) => !bestRow.includes(n));
+    squarify(remaining, x + rowWidth, y, width - rowWidth, height, result);
+  }
+}
+
+function heatColor(pct: number): string {
+  const a = Math.min(Math.abs(pct), 6);
+  const base = pct >= 0 ? "bg-emerald" : "bg-red";
+  const intensity = Math.round((a / 6) * 900);
+  return `${base}-${Math.max(100, Math.min(900, intensity))}`;
 }
 
 const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -93,7 +166,7 @@ export function MarketMoversPage() {
       };
       const [moversRes, sectorsRes] = await Promise.allSettled([
         fetchJson(`/market/movers`),
-        fetchJson(`/market/sectors`),
+        fetchJson(`/market/sectors/tree`),
       ]);
 
       if (moversRes.status !== "fulfilled" || !moversRes.value || typeof moversRes.value !== "object") {
@@ -138,7 +211,7 @@ export function MarketMoversPage() {
         if (sectorsRes.status !== "fulfilled") return [];
         const sd: any = sectorsRes.value;
         if (!Array.isArray(sd)) return [];
-        return sd.map((s: any) => ({ name: s.sector || s.name || s.symbol || "Sector", changePercent: s.avgChange ?? s.changePercent ?? 0, isPositive: (s.avgChange ?? s.changePercent ?? 0) >= 0 }));
+        return sd.map((s: any) => ({ name: s.name, changePercent: s.changePercent ?? 0, isPositive: (s.changePercent ?? 0) >= 0, children: s.children || [] }));
       })();
 
       // Gather tickers for premarket/afterhours lookup
@@ -330,40 +403,80 @@ export function MarketMoversPage() {
             {/* Heatmap tab content */}
             {activeTab === "heatmap" && heatmapSectors.length > 0 && (
               <div className="p-4 pb-8">
-                <div className="flex flex-wrap gap-3">
-                  {heatmapSectors.map((s) => {
-                    const pct = s.changePercent;
-                    const abs = Math.min(Math.abs(pct), 6);
-                    const base = pct >= 0 ? "bg-emerald" : "bg-red";
-                    const intensity = Math.round((abs / 6) * 900);
-                    const cls = `${base}-${Math.max(100, Math.min(900, intensity))}`;
-                    const size = 96 + Math.min(Math.abs(pct), 6) * 22; // 96px to 228px
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="size-5 text-[#0D7490]" />
+                  <span className="text-sm font-semibold text-foreground">Market Heatmap</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Sector performance today
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground mb-4">
+                  Tile size = market cap · Color = performance (green up · red down)
+                </p>
+                <div
+                  className="flex flex-wrap gap-1"
+                  style={{ width: 960, height: 540 }}
+                >
+                  {heatmapSectors.map((sector) => {
+                    const sectorTiles: { size: number; [key: string]: any }[] = sector.children.map((s: any) => ({
+                      ...s,
+                      size: s.marketCap > 0 ? s.marketCap : 1,
+                    }));
+                    const sectorResult: any[] = [];
+                    squarify(sectorTiles, 0, 0, 1, 1, sectorResult);
+
+                    const sectorChange = sector.changePercent;
                     return (
                       <Card
-                        key={s.name}
-                        className={`relative group w-[${size}px] h-[${size}px] rounded-xl border border-border shadow-sm cursor-pointer ${cls} text-foreground hover:scale-105 transition-transform duration-200`}
+                        key={sector.name}
+                        className="rounded-xl border border-border shadow-sm overflow-hidden"
+                        style={{ width: 300, height: 170 }}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl" />
-                        <div className="p-3 relative z-10">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold leading-tight truncate" title={s.name}>
-                              {s.name}
+                        <div className="relative w-full h-full overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent rounded-xl pointer-events-none" />
+                          <div className="absolute inset-0 bg-white/5 rounded-xl pointer-events-none" />
+                          <div className="flex flex-wrap gap-1 p-2">
+                            {sectorResult.map((stock) => {
+                              const pct = stock.changePercent;
+                              const stockCls = heatColor(pct);
+                              return (
+                                <div
+                                  key={stock.name}
+                                  className="rounded-sm overflow-hidden"
+                                  style={{
+                                    position: "absolute",
+                                    left: Math.round(stock.x * 286) + "px",
+                                    top: Math.round(stock.y * 162) + "px",
+                                    width: Math.max(24, Math.round(stock.w * 286)) + "px",
+                                    height: Math.max(16, Math.round(stock.h * 162)) + "px",
+                                  }}
+                                >
+                                  <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-90`}>
+                                    <div className="absolute inset-0 bg-black/20" />
+                                    <div className="relative z-10 p-1.5 text-xs font-bold text-white leading-tight">
+                                      {stock.name}
+                                      <div className="text-[9px] opacity-90 mt-0.5">
+                                        {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="absolute left-2 top-2 z-20">
+                            <span className="text-xs font-bold text-white bg-black/60 px-1.5 py-0.5 rounded">
+                              {sector.name}
                             </span>
-                            <Badge
-                              variant={pct >= 0 ? "default" : "destructive"}
-                              className="text-[10px] px-1.5 py-0.5"
-                            >
-                              {(pct >= 0 ? "+" : "")}{pct.toFixed(2)}%
-                            </Badge>
+                            <span className="text-[10px] font-bold text-white bg-black/60 px-1.5 py-0.5 rounded ml-1">
+                              {sectorChange >= 0 ? "+" : ""}{sectorChange.toFixed(2)}%
+                            </span>
                           </div>
                         </div>
                       </Card>
                     );
                   })}
                 </div>
-                <p className="mt-3 text-[10px] text-muted-foreground text-center">
-                  Based on {heatmapSectors.length} sectors · Tile size scales with performance
-                </p>
               </div>
             )}
 
