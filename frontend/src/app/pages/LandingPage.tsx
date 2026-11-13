@@ -19,6 +19,7 @@ const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TS
 function useHeroQuotes() {
   const [quotes, setQuotes] = useState<Record<string, RealtimeStockQuote>>({});
   const [loading, setLoading] = useState(true);
+  const [heroError, setHeroError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -393,7 +394,6 @@ export function LandingPage() {
   const [tickerError, setTickerError] = useState<string | null>(null);
   const [testimonialError, setTestimonialError] = useState<string | null>(null);
   const [newsError, setNewsError] = useState<string | null>(null);
-  const [heroError, setHeroError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
