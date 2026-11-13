@@ -48,7 +48,9 @@ function formatCompact(n?: number | null): string {
 
 function formatPrice(n?: number | null): string {
   if (n == null || !Number.isFinite(n) || n === 0) return "—";
-  return n.toFixed(4);
+  if (n < 1) return n.toFixed(4);   // e.g., 0.5250
+  if (n < 100) return n.toFixed(3); // e.g., 3.010
+  return n.toFixed(2);              // e.g., 172.80
 }
 
 // ── Squarified Treemap (StockAnalysis-style heatmap) ──────────────────────
