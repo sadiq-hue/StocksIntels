@@ -318,13 +318,8 @@ if (serveFrontend) {
       }
     },
   }));
-
-  // SPA fallback: serve index.html for all client-side routes (React Router).
-  // Must come AFTER all API routes so /api/* still hits the backend.
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDist, 'index.html'));
-  });
 }
+
 // Serve backend/public assets (logo, etc.) for admin panel
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -15696,6 +15691,12 @@ process.on('uncaughtException', (err) => {
   console.error('[UNCAUGHT EXCEPTION]', err.stack || err.message);
   process.exit(1);
 });
+
+// SPA fallback: serve index.html for all client-side routes (React Router).
+  // Must come AFTER all API routes so /api/* still hits the backend.
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
 
 // Start listening immediately so health checks pass even if DB init is slow
 server.listen(port, '0.0.0.0', async () => {
