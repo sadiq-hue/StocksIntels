@@ -31,6 +31,7 @@ const signalSnapshotsService = require('./signalSnapshotsService');
 const marketConditionService = require('./marketConditionService');
 const generativeMarketService = require('./generativeMarketService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
+const yahooService = require('./yahooService');
 const marketHours = require('./marketHours');
 const { refitParameters } = require('./paramRefit');
 const { pool, testConnection } = require('./db');
@@ -9560,14 +9561,33 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     }
 
     // Build symbol list for batch quotes
-    const symbols = stocks.map((s) => (s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker));
+    const nseSymbols: string[] = [];
+    const globalSymbols: string[] = [];
+    for (const s of stocks) {
+      const sym = s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker;
+      if (s.market === 'NSE') nseSymbols.push(sym);
+      else globalSymbols.push(sym);
+    }
 
-    // Fetch batch quotes
-    let quotesMap = {};
+    // Fetch batch quotes via Yahoo v7 (returns marketCap) for global symbols
+    let quotesMap: Record<string, any> = {};
     try {
-      quotesMap = await getQuotesBatch(symbols);
+      const v7 = await yahooService.fetchV7Quotes(globalSymbols);
+      quotesMap = v7;
     } catch (e) {
-      console.warn('[sectors/tree] batch quote failed:', e.message);
+      console.warn('[sectors/tree] v7 quote failed:', e.message);
+    }
+
+    // Also fetch NSE quotes via getQuotesBatch (may not have marketCap, but better than nothing)
+    if (nseSymbols.length > 0) {
+      try {
+        const nseQuotes = await getQuotesBatch(nseSymbols);
+        for (const [k, v] of Object.entries(nseQuotes)) {
+          if (!(k in quotesMap)) quotesMap[k] = v;
+        }
+      } catch (e) {
+        console.warn('[sectors/tree] NSE quote failed:', e.message);
+      }
     }
 
     // Build stock entries with quote data
