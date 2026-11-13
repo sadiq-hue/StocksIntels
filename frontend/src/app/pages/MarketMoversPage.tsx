@@ -304,159 +304,144 @@ export function MarketMoversPage() {
         </div>
       )}
 
-      {/* Heatmap tab */}
-      {data && activeTab === "heatmap" && (
-        <div className="border border-border rounded-2xl shadow-sm bg-background">
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="size-5 text-[#0D7490]" />
-              <span className="text-sm font-semibold text-foreground">Market Heatmap</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                Sector performance today
+      {/* Tab bar (always visible) */}
+      <div className="border-b border-border bg-[#0D7490]/5 px-4 py-2 overflow-x-auto">
+        <div className="flex gap-1">
+          {TABS_CONFIG.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${isActive ? "border-[#0D7490] text-[#0D7490] shadow-[0_1px_0px_0px_rgba(13,116,144,0.35)]" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+              >
+                <Icon className="size-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border border-border rounded-2xl shadow-sm bg-background p-0">
+        <div className="overflow-hidden border-b border-border">
+          <ScrollArea className="h-[520px]">
+            {/* Heatmap tab content */}
+            {activeTab === "heatmap" && heatmapSectors.length > 0 && (
+              <div className="p-4 pb-8">
+                <div className="flex flex-wrap gap-3">
+                  {heatmapSectors.map((s) => {
+                    const pct = s.changePercent;
+                    const abs = Math.min(Math.abs(pct), 6);
+                    const base = pct >= 0 ? "bg-emerald" : "bg-red";
+                    const intensity = Math.round((abs / 6) * 900);
+                    const cls = `${base}-${Math.max(100, Math.min(900, intensity))}`;
+                    const size = 96 + Math.min(Math.abs(pct), 6) * 22; // 96px to 228px
+                    return (
+                      <Card
+                        key={s.name}
+                        className={`relative group w-[${size}px] h-[${size}px] rounded-xl border border-border shadow-sm cursor-pointer ${cls} text-foreground hover:scale-105 transition-transform duration-200`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl" />
+                        <div className="p-3 relative z-10">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold leading-tight truncate" title={s.name}>
+                              {s.name}
+                            </span>
+                            <Badge
+                              variant={pct >= 0 ? "default" : "destructive"}
+                              className="text-[10px] px-1.5 py-0.5"
+                            >
+                              {(pct >= 0 ? "+" : "")}{pct.toFixed(2)}%
+                            </Badge>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-[10px] text-muted-foreground text-center">
+                  Based on {heatmapSectors.length} sectors · Tile size scales with performance
+                </p>
+              </div>
+            )}
+
+            {/* List tab content */}
+            {activeTab !== "heatmap" && (
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-[10px] uppercase tracking-wider text-muted-foreground bg-[#0D7490]/5">
+                    <TableHead className="w-5">#</TableHead>
+                    <TableHead className="w-20">Ticker</TableHead>
+                    <TableHead className="min-w-[160px]">Company</TableHead>
+                    <TableHead className="text-right w-20">Change %</TableHead>
+                    <TableHead className="text-right w-20">Price</TableHead>
+                    <TableHead className="text-right w-24">Volume</TableHead>
+                    <TableHead className="text-right w-24">Mkt Cap</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageRows.map((row, i) => {
+                    const globalIndex = (currentPage - 1) * ROWS_PER_PAGE + i + 1;
+                    return (
+                      <TableRow key={`${row.ticker}-${i}`} className="text-sm">
+                        <TableCell className="font-medium text-muted-foreground">{globalIndex}</TableCell>
+                        <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
+                        <TableCell className="max-w-[160px] truncate">{row.name}</TableCell>
+                        <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
+                          {(row.changePercent >= 0 ? "+" : "")}{row.changePercent.toFixed(2)}%
+                        </TableCell>
+                        <TableCell className="font-bold tabular-nums text-right">{formatPrice(row.price)}</TableCell>
+                        <TableCell className="tabular-nums text-right text-muted-foreground">{row.volume}</TableCell>
+                        <TableCell className="tabular-nums text-right text-muted-foreground">{formatCompact(row.marketCap)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Pagination */}
+        {activeTab !== "heatmap" && (
+          <div className="px-4 py-3 border-t border-border flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {filteredRows.length === 0 ? "No rows" : `Showing ${((currentPage - 1) * ROWS_PER_PAGE) + 1} to ${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length} rows`}
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                disabled={currentPage === 1 || filteredRows.length === 0}
+                onClick={() => setPage(currentPage - 1)}
+                className="px-2"
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <span className="px-2 text-muted-foreground">
+                Page {currentPage} of {totalPages}
               </span>
+              <Button
+                size="sm"
+                disabled={currentPage === totalPages || filteredRows.length === 0}
+                onClick={() => setPage(currentPage + 1)}
+                className="px-2"
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Tile size = market cap · Color = performance (green = up, red = down)
-            </p>
           </div>
-          <div className="p-4 pb-8">
-            <div className="flex flex-wrap gap-3">
-              {heatmapSectors.map((s) => {
-                const pct = s.changePercent;
-                const abs = Math.min(Math.abs(pct), 6);
-                const base = pct >= 0 ? "bg-emerald" : "bg-red";
-                const intensity = Math.round((abs / 6) * 900);
-                const cls = `${base}-${Math.max(100, Math.min(900, intensity))}`;
-                // Tile size scales with market cap proxy (use abs change as size proxy since we lack cap)
-                const size = 96 + Math.min(Math.abs(pct), 6) * 22; // 96px to 228px
-                return (
-                  <Card
-                    key={s.name}
-                    className={`relative group w-[${size}px] h-[${size}px] rounded-xl border border-border shadow-sm cursor-pointer ${cls} text-foreground hover:scale-105 transition-transform duration-200`}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl" />
-                    <div className="p-3 relative z-10">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold leading-tight truncate" title={s.name}>
-                          {s.name}
-                        </span>
-                        <Badge
-                          variant={pct >= 0 ? "default" : "destructive"}
-                          className="text-[10px] px-1.5 py-0.5"
-                        >
-                          {(pct >= 0 ? "+" : "")}{pct.toFixed(2)}%
-                        </Badge>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-            <p className="mt-3 text-[10px] text-muted-foreground text-center">
-              Based on {heatmapSectors.length} sectors · Tile size scales with performance
-            </p>
+        )}
+
+        {/* Empty state */}
+        {activeTab !== "heatmap" && pageRows.length === 0 && (
+          <div className="h-[400px] flex flex-col items-center justify-center text-muted-foreground border border-dashed rounded-2xl p-6">
+            <BarChart3 className="size-8 mb-2 opacity-50" />
+            <p className="text-xs">No {tabTitle.toLowerCase()} data available.</p>
           </div>
-        </div>
-      )}
-
-      {/* List tabs */}
-      {data && activeTab !== "heatmap" && (
-        <Card className="border border-border shadow-sm">
-          <CardContent className="p-0">
-            {/* Tab buttons */}
-            <div className="border-b border-border bg-[#0D7490]/5 px-4 py-2 overflow-x-auto">
-              <div className="flex gap-1">
-                {TABS_CONFIG.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => { setActiveTab(tab.id); setPage(1); }}
-                      className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors whitespace-nowrap ${isActive ? "border-[#0D7490] text-[#0D7490] shadow-[0_1px_0px_0px_rgba(13,116,144,0.35)]" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
-                    >
-                      <Icon className="size-3.5" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="overflow-hidden">
-              <ScrollArea className="h-[520px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="text-[10px] uppercase tracking-wider text-muted-foreground bg-[#0D7490]/5">
-                      <TableHead className="w-5">#</TableHead>
-                      <TableHead className="w-20">Ticker</TableHead>
-                      <TableHead className="min-w-[160px]">Company</TableHead>
-                      <TableHead className="text-right w-20">Change %</TableHead>
-                      <TableHead className="text-right w-20">Price</TableHead>
-                      <TableHead className="text-right w-24">Volume</TableHead>
-                      <TableHead className="text-right w-24">Mkt Cap</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pageRows.map((row, i) => {
-                      const globalIndex = (currentPage - 1) * ROWS_PER_PAGE + i + 1;
-                      return (
-                        <TableRow key={`${row.ticker}-${i}`} className="text-sm">
-                          <TableCell className="font-medium text-muted-foreground">{globalIndex}</TableCell>
-                          <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
-                          <TableCell className="max-w-[160px] truncate">{row.name}</TableCell>
-                          <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
-                            {(row.changePercent >= 0 ? "+" : "")}{row.changePercent.toFixed(2)}%
-                          </TableCell>
-                          <TableCell className="font-bold tabular-nums text-right">{formatPrice(row.price)}</TableCell>
-                          <TableCell className="tabular-nums text-right text-muted-foreground">{row.volume}</TableCell>
-                          <TableCell className="tabular-nums text-right text-muted-foreground">{formatCompact(row.marketCap)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </div>
-
-            {/* Pagination */}
-            <div className="px-4 py-3 border-t border-border flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                {filteredRows.length === 0 ? "No rows" : `Showing ${((currentPage - 1) * ROWS_PER_PAGE) + 1} to ${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length} rows`}
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  disabled={currentPage === 1 || filteredRows.length === 0}
-                  onClick={() => setPage(currentPage - 1)}
-                  className="px-2"
-                >
-                  <ChevronLeft className="size-3.5" />
-                </Button>
-                <span className="px-2 text-muted-foreground">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={currentPage === totalPages || filteredRows.length === 0}
-                  onClick={() => setPage(currentPage + 1)}
-                  className="px-2"
-                >
-                  <ChevronRight className="size-3.5" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty state */}
-      {data && activeTab !== "heatmap" && pageRows.length === 0 && (
-        <div className="h-[400px] flex flex-col items-center justify-center text-muted-foreground border border-dashed rounded-2xl p-6">
-          <BarChart3 className="size-8 mb-2 opacity-50" />
-          <p className="text-xs">No {tabTitle.toLowerCase()} data available.</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
