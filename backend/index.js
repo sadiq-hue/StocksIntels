@@ -9570,7 +9570,7 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     }
 
     // Fetch batch quotes via Yahoo v7 (returns marketCap) for global symbols
-    let quotesMap: Record<string, any> = {};
+    let quotesMap = {};
     try {
       const v7 = await yahooService.fetchV7Quotes(globalSymbols);
       quotesMap = v7;
