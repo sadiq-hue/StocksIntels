@@ -52,7 +52,6 @@ function formatPrice(n?: number | null): string {
 }
 
 // ── Squarified Treemap (StockAnalysis-style heatmap) ──────────────────────
-// Tile size = market cap, Color = performance
 function worstAspectRatio(row: { size: number }[], width: number, height: number, rowSize: number): number {
   if (row.length === 0) return Infinity;
   const maxSize = Math.max(...row.map((n) => n.size));
@@ -158,7 +157,6 @@ export function MarketMoversPage() {
     const maxAttempts = 3;
     try {
       setLoading(true);
-      // Public endpoint — raw fetch so a stale auth token never breaks it.
       const fetchJson = async (url: string) => {
         const res = await fetch(`${API_BASE_URL}${url}`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -214,7 +212,6 @@ export function MarketMoversPage() {
         return sd.map((s: any) => ({ name: s.name, changePercent: s.changePercent ?? 0, isPositive: (s.changePercent ?? 0) >= 0, children: s.children || [] }));
       })();
 
-      // Gather tickers for premarket/afterhours lookup
       const tickers = new Set<string>();
       [...gainers.slice(0, 10), ...losers.slice(0, 10), ...active.slice(0, 10)].forEach((r) => {
         const t = String(r.ticker || r.symbol || "").toUpperCase().replace(/^(NSE|NGX|JSE):/, "");
@@ -229,7 +226,6 @@ export function MarketMoversPage() {
         } catch { /* silent */ }
       }
 
-      // Retry on empty movers (cold backend cache can return empty arrays without erroring).
       if (gainers.length === 0 && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 2500 * attempt));
         return fetchMovers(attempt + 1);
@@ -414,69 +410,48 @@ export function MarketMoversPage() {
                   Tile size = market cap · Color = performance (green up · red down)
                 </p>
                 <div
-                  className="flex flex-wrap gap-1"
-                  style={{ width: 960, height: 540 }}
+                  className="relative w-[960px] h-[540px] border border-[#0D7490]/15 rounded-xl bg-white/10 shadow-sm"
                 >
-                  {heatmapSectors.map((sector) => {
-                    const sectorTiles: { size: number; [key: string]: any }[] = sector.children.map((s: any) => ({
-                      ...s,
-                      size: s.marketCap > 0 ? s.marketCap : 1,
-                    }));
-                    const sectorResult: any[] = [];
-                    squarify(sectorTiles, 0, 0, 1, 1, sectorResult);
-
-                    const sectorChange = sector.changePercent;
+                  {heatmapSectors.flatMap((s) =>
+                    s.children.map((st: any) => ({ ...st, size: st.marketCap > 0 ? st.marketCap : 1, sector: s.name }))
+                  )}
+                  {(function () {
+                    const allTiles: { size: number; [key: string]: any }[] = heatmapSectors.flatMap((s) =>
+                      s.children.map((st: any) => ({ ...st, size: st.marketCap > 0 ? st.marketCap : 1, sector: s.name }))
+                    );
+                    const result: any[] = [];
+                    squarify(allTiles, 0, 0, 1, 1, result);
+                    return result;
+                  })().map((stock) => {
+                    const pct = stock.changePercent;
+                    const stockCls = heatColor(pct);
                     return (
-                      <Card
-                        key={sector.name}
-                        className="rounded-xl border border-border shadow-sm overflow-hidden"
-                        style={{ width: 300, height: 170 }}
+                      <div
+                        key={stock.name}
+                        className="absolute rounded-sm overflow-hidden"
+                        style={{
+                          left: `${Math.round(stock.x * 940)}px`,
+                          top: `${Math.round(stock.y * 520)}px`,
+                          width: `${Math.max(24, Math.round(stock.w * 940))}px`,
+                          height: `${Math.max(16, Math.round(stock.h * 520))}px`,
+                        }}
                       >
-                        <div className="relative w-full h-full overflow-hidden">
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent rounded-xl pointer-events-none" />
-                          <div className="absolute inset-0 bg-white/5 rounded-xl pointer-events-none" />
-                          <div className="flex flex-wrap gap-1 p-2">
-                            {sectorResult.map((stock) => {
-                              const pct = stock.changePercent;
-                              const stockCls = heatColor(pct);
-                              return (
-                                <div
-                                  key={stock.name}
-                                  className="rounded-sm overflow-hidden"
-                                  style={{
-                                    position: "absolute",
-                                    left: Math.round(stock.x * 286) + "px",
-                                    top: Math.round(stock.y * 162) + "px",
-                                    width: Math.max(24, Math.round(stock.w * 286)) + "px",
-                                    height: Math.max(16, Math.round(stock.h * 162)) + "px",
-                                  }}
-                                >
-                                  <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-90`}>
-                                    <div className="absolute inset-0 bg-black/20" />
-                                    <div className="relative z-10 p-1.5 text-xs font-bold text-white leading-tight">
-                                      {stock.name}
-                                      <div className="text-[9px] opacity-90 mt-0.5">
-                                        {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="absolute left-2 top-2 z-20">
-                            <span className="text-xs font-bold text-white bg-black/60 px-1.5 py-0.5 rounded">
-                              {sector.name}
-                            </span>
-                            <span className="text-[10px] font-bold text-white bg-black/60 px-1.5 py-0.5 rounded ml-1">
-                              {sectorChange >= 0 ? "+" : ""}{sectorChange.toFixed(2)}%
-                            </span>
+                        <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-95`}>
+                          <div className="absolute inset-0 bg-black/20" />
+                          <div className="relative z-10 p-1 text-[9px] font-bold text-white leading-tight">
+                            {stock.name}
+                            <div className="text-[8px] opacity-90 mt-1">
+                              {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                            </div>
                           </div>
                         </div>
-                      </Card>
+                      </div>
                     );
                   })}
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground text-center">
+                  Tile size = market cap · Color = performance · Green = up · Red = down
+                </p>
               </div>
             )}
 
