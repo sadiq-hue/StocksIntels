@@ -57,6 +57,23 @@ function renderMarkdownLite(text: string): React.ReactNode {
   });
 }
 
+function renderFactorBlock({ title, text, hint }: { title: string; text: string | null | undefined; hint?: string }) {
+  if (!text) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px]">
+        <p className="mb-1 font-semibold text-foreground">{title}</p>
+        <p className="text-[11px] text-muted-foreground">Not available.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-border bg-[#0D7490]/5 p-3 text-[11px] leading-relaxed">
+      <p className="mb-1 font-semibold text-foreground">{title}{hint ? ` <span className="text-muted-foreground font-normal text-[10px]">({hint})</span>` : ''}</p>
+      <p>{renderMarkdownLite(text)}</p>
+    </div>
+  );
+}
+
 function renderStringArray(items: string[] | undefined | null): React.ReactNode {
   if (!items || items.length === 0) {
     return <span className="text-[11px] text-muted-foreground">None identified.</span>;
@@ -187,11 +204,59 @@ export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-3">
-          <div className="rounded-lg border border-border bg-[#0D7490]/5 p-3 text-[11.5px] leading-relaxed">
-            <p className="mb-2 font-semibold text-foreground">Executive Summary</p>
+          {/* Overall Assessment */}
+          <div className="rounded-lg border border-[#0D7490]/30 bg-[#0D7490]/10 p-3 text-[11.5px] leading-relaxed">
+            <p className="mb-2 font-semibold text-[#0D7490]">Overall Assessment</p>
             <p>{renderMarkdownLite(analysis.executive_summary)}</p>
+            {analysis.recommendation_context?.interpretation && (
+              <>
+                <p className="mt-2 font-semibold text-foreground">What the recommendation means</p>
+                <p>{renderMarkdownLite(analysis.recommendation_context.interpretation)}</p>
+              </>
+            )}
           </div>
-          <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11.5px]">
+
+          {/* Factor Analysis */}
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] leading-relaxed">
+            <p className="mb-2 font-semibold text-foreground">Factor Analysis</p>
+            <div className="space-y-2">
+              {analysis.factor_analysis && (
+                <>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Fundamentals</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.fundamentals)}</p>
+                  </div>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Technical Analysis</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.technical)}</p>
+                  </div>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Financial Health</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.financial_health)}</p>
+                  </div>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Macro &amp; Market Conditions</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.macro)}</p>
+                  </div>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">News &amp; Sentiment</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.news_and_sentiment)}</p>
+                  </div>
+                  <div className="border-b border-border/40 pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Valuation</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.valuation)}</p>
+                  </div>
+                  <div className="pb-1">
+                    <p className="mb-1 font-semibold text-foreground">Risk</p>
+                    <p>{renderMarkdownLite(analysis.factor_analysis.risk)}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Recommendation Context */}
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px]">
             <p className="mb-2 font-semibold text-foreground">Recommendation Context</p>
             <p className="mb-1">
               <span className="font-semibold text-foreground">Engine signal: </span>
@@ -200,7 +265,9 @@ export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
                 <span className="ml-2 text-foreground/70">({props.engineConfidence}% confidence)</span>
               )}
             </p>
-            <p>{renderMarkdownLite(analysis.recommendation_context.interpretation)}</p>
+            {analysis.recommendation_context?.interpretation && (
+              <p>{renderMarkdownLite(analysis.recommendation_context.interpretation)}</p>
+            )}
           </div>
         </TabsContent>
 
