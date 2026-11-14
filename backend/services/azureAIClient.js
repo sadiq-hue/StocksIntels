@@ -193,3 +193,11 @@ module.exports = {
   _sanitizeError,
   _isRetryable,
 };
+
+// Initialize the client on module load so isEnabled() returns true
+// when env vars are present (AZURE_AI_ENABLED=true, endpoint, api key).
+try {
+  init();
+} catch {
+  // init may fail if env vars are missing; isEnabled() will return false.
+}
