@@ -96,6 +96,10 @@ function buildPositionContext(positionData, enrichment = {}) {
     country: countryFromObj, industry: industryFromObj,
   } = positionData || {};
 
+  // companyProfile lives nested inside the signal object payload
+  // (set by _buildSignal in signalService.js line 6988-6997).
+  const companyProfile = signalObj.companyProfile || {};
+
   // analysis_data lives in payload.analysis (set by _buildSignal in signalService.js)
   const analysisDataRaw = signalObj.analysis || positionData.analysis_data || {};
   const analysisData =
@@ -122,11 +126,15 @@ function buildPositionContext(positionData, enrichment = {}) {
       position: {
         ticker: ticker || null,
         company_name: name || null,
+        company_description: companyProfile.description || null,
         exchange: market || null,
         market: market || null,
-        country: countryFromObj || positionData.country || null,
-        sector: sectorFromObj || positionData.sector || null,
-        industry: industryFromObj || positionData.industry || null,
+        country: countryFromObj || companyProfile.country || positionData.country || null,
+        sector: sectorFromObj || companyProfile.industry || positionData.sector || null,
+        industry: industryFromObj || companyProfile.industry || positionData.industry || null,
+        employees: companyProfile.employees || null,
+        ceo: companyProfile.ceo || null,
+        website: companyProfile.website || null,
         recommendation: signal || null,
         confidence_score: _num(confidence),
         position_type: type || null,
