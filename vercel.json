@@ -1,14 +1,13 @@
 {
-  "services": [
-    {
-      "name": "web",
-      "rootDirectory": "frontend",
+  "services": {
+    "web": {
+      "root": "frontend",
       "framework": "vite",
       "buildCommand": "npm run build",
       "outputDirectory": "dist",
       "installCommand": "npm install"
     }
-  ],
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/api/$1" },
     { "source": "/socket.io/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/socket.io/$1" },
