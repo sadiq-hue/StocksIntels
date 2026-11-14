@@ -1,6 +1,7 @@
 {
   "services": [
     {
+      "name": "web",
       "rootDirectory": "frontend",
       "framework": "vite",
       "buildCommand": "npm run build",
