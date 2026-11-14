@@ -164,6 +164,7 @@ const router = createBrowserRouter([
       { path: "markets", element: <MarketPage /> },
       { path: "stocks", element: <StocksPage /> },
       { path: "market-movers", element: <MarketMoversPage /> },
+      { path: "heatmap", element: <MarketMoversPage /> },
       { path: "compare", element: <ComparePage /> },
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },

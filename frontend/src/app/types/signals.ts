@@ -140,3 +140,63 @@ export interface Signal {
     overall: { score: number; grade: string };
   };
 }
+
+// ── AI Position Intelligence types (Azure GPT-5-mini interpretation layer) ──
+// These describe the structured AI output that interprets existing quantitative
+// signal data. The AI never modifies the Signal fields above.
+
+export interface AiRecommendationContext {
+  existing_recommendation: string;
+  existing_confidence: number | null;
+  interpretation: string;
+}
+
+export interface AiInvestmentThesis {
+  bullish_factors: string[];
+  bearish_factors: string[];
+  neutral_factors: string[];
+}
+
+export interface AiFactorAnalysis {
+  fundamentals: string;
+  technical: string;
+  financial_health: string;
+  macro: string;
+  news_and_sentiment: string;
+  valuation: string;
+  risk: string;
+}
+
+export interface AiFactorConflict {
+  factor_pair: string;
+  conflict: string;
+  assessment: string;
+}
+
+export interface AiPositionIntelligence {
+  executive_summary: string;
+  recommendation_context: AiRecommendationContext;
+  investment_thesis: AiInvestmentThesis;
+  factor_analysis: AiFactorAnalysis;
+  factor_conflicts: AiFactorConflict[];
+  key_risks: string[];
+  missing_information: string[];
+  thesis_invalidation_conditions: string[];
+  monitoring_priorities: string[];
+  data_quality_observations: string[];
+  limitations: string[];
+  generated_at: string;
+  model: string;
+}
+
+export interface AiAnalysisRecord {
+  id: number;
+  ticker: string;
+  model: string;
+  prompt_schema_version: string;
+  status: string;
+  output_payload: AiPositionIntelligence | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}

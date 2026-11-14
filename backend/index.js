@@ -40,6 +40,8 @@ const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
 const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendTopMoversEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
+const azureAIClient = require('./services/azureAIClient');
+const positionIntelligenceService = require('./services/positionIntelligenceService');
 const cron = require('node-cron');
 const {
   getCompanyProfile, getQuote, getIncomeStatement, getBalanceSheet,
@@ -383,6 +385,248 @@ app.post('/api/contact', async (req, res) => {
   } catch (err) {
     console.error('Contact form error:', err.message);
     res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+  }
+});
+
+// ── Azure AI Foundry — position intelligence endpoints ─────────────────
+// Mounted under /api/ai which already has aiLimiter applied (index.js:182).
+// AI interprets existing quantitative signals; never modifies them.
+
+// Health check — lightweight connectivity check without invoking GPT-5-mini.
+// Verifies configuration is present and the Azure OpenAI client can initialize.
+app.get('/api/ai/health', async (_req, res) => {
+  try {
+    const configured = !!process.env.AZURE_AI_ENDPOINT && !!process.env.AZURE_AI_API_KEY;
+    if (!configured) {
+      return res.status(503).json({
+        ok: false,
+        service: 'azure-ai-foundry',
+        error: 'Azure AI not configured',
+      });
+    }
+    // Initialize the client (no API call made) to verify config is valid
+    azureAIClient.init();
+    return res.json({
+      ok: azureAIClient.isEnabled(),
+      model: process.env.AZURE_AI_MODEL || 'gpt-5-mini',
+      service: 'azure-ai-foundry',
+    });
+  } catch (err) {
+    logger.error('[AzureAI] health check error', { message: err.message });
+    return res.status(503).json({
+      ok: false,
+      service: 'azure-ai-foundry',
+      error: 'Azure AI service unavailable',
+    });
+  }
+});
+
+// Request AI analysis for an existing position.
+// Cache-first: returns a recent analysis (<30 min) without calling Azure.
+app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res) => {
+  try {
+    if (!azureAIClient.isEnabled()) {
+      return res.status(503).json({
+        error: 'Azure AI integration is not enabled.',
+        code: 'AZURE_AI_DISABLED',
+      });
+    }
+
+    const { ticker } = req.params;
+    if (!ticker || typeof ticker !== 'string') {
+      return res.status(400).json({ error: 'Ticker is required.', code: 'INVALID_TICKER' });
+    }
+
+    const userId = req.user?.id;
+
+    // Cache-first: check for a recent completed analysis (<30 minutes).
+    const cacheResult = await pool.query(
+      `SELECT * FROM ai_position_intelligence
+       WHERE ticker = $1 AND status = 'completed'
+         AND created_at > NOW() - interval '30 minutes'
+       ORDER BY created_at DESC LIMIT 1`,
+      [ticker.toUpperCase()]
+    );
+    if (cacheResult.rows.length > 0) {
+      const row = cacheResult.rows[0];
+      return res.json({
+        ok: true,
+        ticker: row.ticker,
+        model: row.model,
+        promptSchemaVersion: row.prompt_schema_version,
+        analysis: typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload,
+        generatedAt: row.completed_at,
+        cached: true,
+      });
+    }
+
+    // Fetch the latest signal snapshot for this ticker.
+    let positionData = null;
+    const snapResult = await pool.query(
+      `SELECT * FROM signal_snapshots WHERE ticker = $1 ORDER BY analyzed_at DESC LIMIT 1`,
+      [ticker.toUpperCase()]
+    );
+
+    if (snapResult.rows.length > 0) {
+      positionData = snapResult.rows[0];
+    } else {
+      // Fall back to signal_history for the most recent assessment.
+      const histResult = await pool.query(
+        `SELECT * FROM signal_history WHERE ticker = $1 ORDER BY generated_at DESC LIMIT 1`,
+        [ticker.toUpperCase()]
+      );
+      if (histResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No signal data found for this ticker.', code: 'NO_SIGNAL_DATA' });
+      }
+      positionData = histResult.rows[0];
+    }
+
+    // Delegate to the position intelligence service: builds context, calls
+    // Azure GPT-5-mini, validates structured JSON output.
+    const aiResult = await positionIntelligenceService.analyzePosition(positionData);
+
+    if (!aiResult.ok) {
+      const statusCode = aiResult.code === 'AZURE_AI_DISABLED' ? 503
+        : aiResult.code === 'NO_SIGNAL_DATA' ? 404
+        : aiResult.code === 'INVALID_MODEL_OUTPUT' || aiResult.code === 'VALIDATION_FAILED' ? 422
+        : 502;
+      return res.status(statusCode).json({
+        error: aiResult.error,
+        code: aiResult.code,
+        model: aiResult.model,
+      });
+    }
+
+    // Quantitative integrity safeguard: ensure AI-reported recommendation
+    // matches the authoritative engine recommendation. Never let AI override.
+    const engineRecommendation = positionData.signal || null;
+    const aiReportedRecommendation = aiResult.data?.recommendation_context?.existing_recommendation || null;
+    const recommendationMismatch = engineRecommendation && aiReportedRecommendation
+      && String(engineRecommendation).toUpperCase() !== String(aiReportedRecommendation).toUpperCase();
+
+    if (recommendationMismatch) {
+      logger.warn('[AzureAI] Recommendation mismatch detected', {
+        ticker,
+        engine: engineRecommendation,
+        ai: aiReportedRecommendation,
+      });
+      // Force the engine's recommendation into the output before storage/display.
+      if (aiResult.data.recommendation_context) {
+        aiResult.data.recommendation_context.existing_recommendation = engineRecommendation;
+      }
+    }
+
+    // Store the validated AI analysis (separate from signal engine data).
+    await pool.query(
+      `INSERT INTO ai_position_intelligence
+        (position_id, ticker, user_id, model, prompt_schema_version, status, input_snapshot, output_payload, completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        `sig-${positionData.ticker}-${positionData.generated_at || Date.now()}`,
+        positionData.ticker.toUpperCase(),
+        userId || null,
+        aiResult.model,
+        aiResult.promptSchemaVersion,
+        'completed',
+        JSON.stringify(aiResult.inputContext || {}),
+        JSON.stringify(aiResult.data),
+      ]
+    );
+
+    return res.json({
+      ok: true,
+      ticker: positionData.ticker,
+      model: aiResult.model,
+      promptSchemaVersion: aiResult.promptSchemaVersion,
+      analysis: aiResult.data,
+      generatedAt: aiResult.data.generated_at,
+      recommendationMismatch,
+    });
+  } catch (err) {
+    logger.error('[AzureAI] analyze error', { ticker: req.params.ticker, message: err.message });
+    return res.status(502).json({
+      error: 'AI analysis failed.',
+      code: 'AI_ANALYSIS_FAILED',
+    });
+  }
+});
+
+// Retrieve the latest AI analysis for a position.
+app.get('/api/ai/positions/:ticker', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    let query = `SELECT * FROM ai_position_intelligence WHERE ticker = $1`;
+    const params = [ticker.toUpperCase()];
+
+    // Non-admin users can only see their own analyses (or public ones if user_id is null).
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
+      query += ` AND (user_id = $2 OR user_id IS NULL)`;
+      params.push(userId);
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT 1`;
+
+    const result = await pool.query(query, params);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No AI analysis found for this ticker.', code: 'NO_AI_ANALYSIS' });
+    }
+
+    const row = result.rows[0];
+    return res.json({
+      id: row.id,
+      ticker: row.ticker,
+      model: row.model,
+      promptSchemaVersion: row.prompt_schema_version,
+      status: row.status,
+      outputPayload: row.output_payload ? (typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload) : null,
+      errorMessage: row.error_message,
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+    });
+  } catch (err) {
+    logger.error('[AzureAI] get latest error', { ticker: req.params.ticker, message: err.message });
+    return res.status(500).json({ error: 'Failed to retrieve AI analysis.', code: 'AI_RETRIEVE_FAILED' });
+  }
+});
+
+// Retrieve historical AI analyses for a position.
+app.get('/api/ai/positions/:ticker/history', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+    let query = `SELECT * FROM ai_position_intelligence WHERE ticker = $1`;
+    const params = [ticker.toUpperCase()];
+
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
+      query += ` AND (user_id = $2 OR user_id IS NULL)`;
+      params.push(userId);
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+    params.push(limit);
+
+    const result = await pool.query(query, params);
+    return res.json({
+      ticker: ticker.toUpperCase(),
+      analyses: result.rows.map(row => ({
+        id: row.id,
+        model: row.model,
+        status: row.status,
+        outputPayload: row.output_payload ? (typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload) : null,
+        errorMessage: row.error_message,
+        createdAt: row.created_at,
+        completedAt: row.completed_at,
+      })),
+    });
+  } catch (err) {
+    logger.error('[AzureAI] get history error', { ticker: req.params.ticker, message: err.message });
+    return res.status(500).json({ error: 'Failed to retrieve AI analysis history.', code: 'AI_HISTORY_FAILED' });
   }
 });
 

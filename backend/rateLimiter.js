@@ -13,7 +13,7 @@ const authLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many auth attempts, please try again later.' }
+  message: { error: 'Too many auth attempts, please slow down.' }
 });
 
 const marketDataLimiter = rateLimit({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useLocation } from "react-router";
 import { BarChart3, ChevronLeft, ChevronRight, Cloud, Loader2, Moon, RefreshCcw, Search, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -48,12 +48,13 @@ function formatCompact(n?: number | null): string {
 
 function formatPrice(n?: number | null): string {
   if (n == null || !Number.isFinite(n) || n === 0) return "—";
-  if (n < 1) return n.toFixed(4);   // e.g., 0.5250
-  if (n < 100) return n.toFixed(3); // e.g., 3.010
-  return n.toFixed(2);              // e.g., 172.80
+  if (n < 1) return n.toFixed(4);
+  if (n < 100) return n.toFixed(3);
+  return n.toFixed(2);
 }
 
-// ── Squarified Treemap (StockAnalysis-style heatmap) ──────────────────────
+// Squarified Treemap (StockAnalysis-style heatmap)
+// Tile size = market cap, Color = performance
 function worstAspectRatio(row: { size: number }[], width: number, height: number, rowSize: number): number {
   if (row.length === 0) return Infinity;
   const maxSize = Math.max(...row.map((n) => n.size));
@@ -144,7 +145,8 @@ const TAB_TITLES: Record<TabId, string> = {
 
 export function MarketMoversPage() {
   const [searchParams] = useSearchParams();
-  const initialTab = (searchParams.get("tab") as TabId) || "gainers";
+  const location = useLocation();
+  const initialTab = (searchParams.get("tab") as TabId) || (location.pathname.includes("/heatmap") ? "heatmap" : "gainers");
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any> } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,7 +180,7 @@ export function MarketMoversPage() {
         Array.isArray(md.combined?.losers) ||
         Array.isArray(md.gainers) ||
         Array.isArray(md.losers) ||
-        ["nse","ngx","jse","global"].some((m) => Array.isArray(md[m]?.gainers) || Array.isArray(md[m]?.losers));
+        ["nse", "ngx", "jse", "global"].some((m) => Array.isArray(md[m]?.gainers) || Array.isArray(md[m]?.losers));
       if (!hasMoversData) throw new Error("movers endpoint returned no data");
 
       const combined = md.combined || md;
@@ -411,52 +413,47 @@ export function MarketMoversPage() {
                 <p className="mt-1 text-xs text-muted-foreground mb-4">
                   Tile size = market cap · Color = performance (green up · red down)
                 </p>
-                <div
-                  className="relative w-[960px] h-[540px] border border-[#0D7490]/15 rounded-xl bg-white/10 shadow-sm"
-                >
-                  {heatmapSectors.flatMap((s) =>
-                    s.children.map((st: any) => ({ ...st, size: st.marketCap > 0 ? st.marketCap : 1, sector: s.name }))
-                  )}
-                  {(function () {
-                    const allTiles: { size: number; [key: string]: any }[] = heatmapSectors.flatMap((s) =>
-                      s.children.map((st: any) => ({ ...st, size: st.marketCap > 0 ? st.marketCap : 1, sector: s.name }))
-                    );
-                    const result: any[] = [];
-                    squarify(allTiles, 0, 0, 1, 1, result);
-                    return result;
-                  })().map((stock) => {
-                    const pct = stock.changePercent;
-                    const stockCls = heatColor(pct);
-                    return (
-                      <div
-                        key={stock.name}
-                        className="absolute rounded-sm overflow-hidden"
-                        style={{
-                          left: `${Math.round(stock.x * 940)}px`,
-                          top: `${Math.round(stock.y * 520)}px`,
-                          width: `${Math.max(24, Math.round(stock.w * 940))}px`,
-                          height: `${Math.max(16, Math.round(stock.h * 520))}px`,
-                        }}
-                      >
-                        <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-95`}>
-                          <div className="absolute inset-0 bg-black/20" />
-                          <div className="relative z-10 p-1 text-[9px] font-bold text-white leading-tight">
-                            {stock.name}
-                            <div className="text-[8px] opacity-90 mt-1">
-                              {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                <div className="relative w-[960px] h-[540px] border border-[#0D7490]/15 rounded-xl bg-white/10 shadow-sm">
+                  {heatmapSectors.flatMap((sector) => {
+                    const allTiles: { size: number; [key: string]: any }[] = sector.children.map((s: any) => ({
+                      ...s,
+                      size: s.marketCap > 0 ? s.marketCap : 1,
+                    }));
+                    const sectorResult: any[] = [];
+                    squarify(allTiles, 0, 0, 1, 1, sectorResult);
+                    return sectorResult.map((stock) => {
+                      const pct = typeof stock.changePercent === "number" ? stock.changePercent : 0;
+                      const stockCls = heatColor(pct);
+                      const displayName = String(stock.fullName || stock.name || stock.symbol || "");
+                      return (
+                        <div
+                          key={`${stock.symbol || stock.name}-${sector.name}`}
+                          className="absolute rounded-sm overflow-hidden"
+                          style={{
+                            left: `${Math.round(stock.x * 940)}px`,
+                            top: `${Math.round(stock.y * 520)}px`,
+                            width: `${Math.max(24, Math.round(stock.w * 940))}px`,
+                            height: `${Math.max(16, Math.round(stock.h * 520))}px`,
+                          }}
+                        >
+                          <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-95`}>
+                            <div className="absolute inset-0 bg-black/20" />
+                            <div className="relative z-10 p-1 text-[9px] font-bold text-white leading-tight">
+                              {displayName}
+                              <div className="text-[8px] opacity-90 mt-1">
+                                {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })})}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground text-center">
+                    Tile size = market cap · Color = performance · Green = up · Red = down
+                  </p>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground text-center">
-                  Tile size = market cap · Color = performance · Green = up · Red = down
-                </p>
-              </div>
-            )}
-
+              )}
             {/* List tab content */}
             {activeTab !== "heatmap" && (
               <Table>
@@ -498,7 +495,7 @@ export function MarketMoversPage() {
         {activeTab !== "heatmap" && (
           <div className="px-4 py-3 border-t border-border flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
-              {filteredRows.length === 0 ? "No rows" : `Showing ${((currentPage - 1) * ROWS_PER_PAGE) + 1} to ${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length} rows`}
+              {filteredRows.length === 0 ? "No rows" : `Showing ${(currentPage - 1) * ROWS_PER_PAGE + 1} to ${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length} rows`}
             </div>
             <div className="flex items-center gap-1">
               <Button
