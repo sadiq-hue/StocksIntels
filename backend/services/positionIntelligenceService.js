@@ -77,16 +77,27 @@ function _pct(v) {
  * signal data. Sections A–I per the integration specification.
  */
 function buildPositionContext(positionData, enrichment = {}) {
+  const payload = positionData.payload || {};
+
+  // signal_snapshots stores the full signal object in the `payload` column
+  // (see signalSnapshotsService.js). analysis_data lives on signal_history,
+  // not signal_snapshots. Prefer payload, fall back to top-level fields.
+  const signalObj = typeof payload === 'string'
+    ? (() => { try { return JSON.parse(payload); } catch { return {}; } })()
+    : payload;
+
   const {
     ticker, name, signal, confidence, action, type,
-    entry_price: entryPrice, stop_loss: stopLoss,
-    target1, target2, target3, risk_reward: riskReward,
-    position_size: positionSize,
-    sector, market, currency, price, regime, data_source: dataSource,
+    entry: entryPrice, stopLoss,
+    target1, target2, target3, riskReward: riskReward,
+    positionSize: positionSize,
+    sector: sectorFromObj, market, currency, price, regime, dataSource: dataSource,
     generated_at: generatedAt, analyzed_at: analyzedAt,
-    analysis_data: analysisDataRaw,
+    country: countryFromObj, industry: industryFromObj,
   } = positionData || {};
 
+  // analysis_data lives in payload.analysis (set by _buildSignal in signalService.js)
+  const analysisDataRaw = signalObj.analysis || positionData.analysis_data || {};
   const analysisData =
     analysisDataRaw == null
       ? {}
@@ -97,43 +108,45 @@ function buildPositionContext(positionData, enrichment = {}) {
   const fundamental = analysisData.fundamental || {};
   const technical = analysisData.technical || {};
   const financial = analysisData.financial || {};
-  const macro = analysisData.macro || {};
-  const insider = analysisData.insider || {};
+  // Macro score/grade may live on the signal object top-level (macro param passed to
+  // _buildSignal) or inside analysis_data. Prefer top-level, fall back to analysis.
+  const macro = positionData.macro || signalObj.macro || analysisData.macro || {};
+  const insider = positionData.insider || signalObj.insider || analysisData.insider || {};
 
   const news = Array.isArray(positionData.news) ? positionData.news : (enrichment.news || []);
   const newsSummary = positionData.news_summary || enrichment.newsSummary || null;
   const catalyst = positionData.catalyst || enrichment.catalyst || null;
 
-  return {
-    // A. Position identity & recommendation
-    position: {
-      ticker: ticker || null,
-      company_name: name || null,
-      exchange: market || null,
-      market: market || null,
-      country: positionData.country || null,
-      sector: sector || null,
-      industry: positionData.industry || null,
-      recommendation: signal || null,
-      confidence_score: _num(confidence),
-      position_type: type || null,
-      investment_style: type || null,
-      holding_period: positionData.timeframe || null,
-      analysis_timestamp: generatedAt || analyzedAt || null,
-      original_analysis_price: _num(entryPrice) || _num(price),
-    },
-    // B. Market & price information
-    market_data: {
-      current_market_price: _num(price),
-      daily_price_change: positionData.change != null ? _num(positionData.change) : null,
-      daily_price_change_pct: positionData.change_pct != null ? _num(positionData.change_pct) : null,
-      price_since_analysis_pct: null, // computed client-side if both prices known
-      original_analysis_price: _num(entryPrice) || _num(price),
-      price_timestamp: generatedAt || analyzedAt || null,
-      current_price_timestamp: positionData.analyzed_at || null,
-      volume: positionData.volume || null,
-      currency: currency || null,
-    },
+    return {
+      // A. Position identity & recommendation
+      position: {
+        ticker: ticker || null,
+        company_name: name || null,
+        exchange: market || null,
+        market: market || null,
+        country: countryFromObj || positionData.country || null,
+        sector: sectorFromObj || positionData.sector || null,
+        industry: industryFromObj || positionData.industry || null,
+        recommendation: signal || null,
+        confidence_score: _num(confidence),
+        position_type: type || null,
+        investment_style: type || null,
+        holding_period: positionData.timeframe || null,
+        analysis_timestamp: generatedAt || analyzedAt || null,
+        original_analysis_price: _num(entryPrice) || _num(price),
+      },
+      // B. Market & price information
+      market_data: {
+        current_market_price: _num(price),
+        daily_price_change: positionData.change != null ? _num(positionData.change) : null,
+        daily_price_change_pct: positionData.change_pct != null ? _num(positionData.change_pct) : null,
+        price_since_analysis_pct: null,
+        original_analysis_price: _num(entryPrice) || _num(price),
+        price_timestamp: generatedAt || analyzedAt || null,
+        current_price_timestamp: positionData.analyzed_at || null,
+        volume: positionData.volume || null,
+        currency: currency || null,
+      },
     // C. Fundamental analysis
     fundamentals: {
       pe_ratio: _num(fundamental.metrics ? fundamental.metrics.pe_ratio : fundamental.pe_ratio),
@@ -236,7 +249,7 @@ function buildPositionContext(positionData, enrichment = {}) {
       bear_case: positionData.bear_case != null ? positionData.bear_case : (analysisData.bear_case != null ? analysisData.bear_case : null),
       base_case: positionData.base_case != null ? positionData.base_case : (analysisData.base_case != null ? analysisData.base_case : null),
       bull_case: positionData.bull_case != null ? positionData.bull_case : (analysisData.bull_case != null ? analysisData.bull_case : null),
-      original_downside_level: _num(positionData.stop_loss),
+      original_downside_level: _num(stopLoss),
       existing_target_1: _num(target1),
       existing_target_2: _num(target2),
       existing_target_3: _num(target3),
