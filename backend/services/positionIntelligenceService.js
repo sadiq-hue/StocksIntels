@@ -362,6 +362,9 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
   const rr = _num(row.risk_reward) ?? _num(payload.riskReward);
   const alloc = row.position_size != null ? row.position_size : payload.positionSize;
   const sentimentLabel = newsSummary && newsSummary.net ? String(newsSummary.net) : null;
+  const overallScore = analysis.overall && analysis.overall.score != null ? _num(analysis.overall.score) : null;
+  // Mirrors the page's displayed "Risk Level" (MarketIntelligenceCard riskLevel).
+  const riskLevelDisplay = overallScore == null ? null : (overallScore >= 70 ? 'Moderate' : 'Elevated');
 
   return {
     source_priority: 'AUTHORITATIVE: position, levels, factors, technicals and counts below are engine outputs. Interpret them; never contradict or override them. If a field is null, say "not provided" — do not guess.',
@@ -478,7 +481,9 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       existing_targets: [t1, t2, t3].filter((x) => x != null),
       downside_level: stop,
       risk_reward: rr,
-      cross_factor_risk: payload.intelligence && payload.intelligence.riskLevel ? payload.intelligence.riskLevel : null,
+      overall_score: overallScore,
+      risk_level: riskLevelDisplay,
+      cross_factor_risk_signal: payload.intelligence && payload.intelligence.riskLevel ? payload.intelligence.riskLevel : null,
       cross_factor_summary: payload.intelligence && payload.intelligence.summary ? payload.intelligence.summary : null,
     },
 
@@ -532,8 +537,9 @@ YOUR RESPONSIBILITIES:
 
 CONSISTENCY RULES (critical — read before writing):
 - The supplied context is authoritative. Never state that a value is missing when it appears anywhere in the context — including inside fundamentals.factors, financial_health.factors, technicals, levels, or the news counts.
-- Use news_and_sentiment.sentiment_label as the overall news sentiment. Do NOT recount the individual headlines to override or contradict that label. You may note that per-headline labels vary, but the overall label stands.
+- Use news_and_sentiment.sentiment_label as the overall news sentiment. Do NOT enumerate or compare the positive/neutral/negative headline counts, and do NOT recount headlines to override that label. You may note that individual headlines vary, but the overall label stands.
 - Use levels.analysis_price, levels.downside_level and levels.*target* for all level references. Never claim stops or targets are unavailable when they are present.
+- Use valuation_and_risk.risk_level as the risk label shown to users. Do not replace it with cross_factor_risk_signal.
 - For each factor, rely on its "signal" and "rating" text and any numbers inside them. If a numeric value is absent, say "no numeric value provided" — do not invent one and do not describe it as present.
 - If two supplied fields appear inconsistent (for example a rating text implies a value that is otherwise missing, or a label conflicts with a headline mix), explicitly identify the inconsistency rather than silently picking one.
 
