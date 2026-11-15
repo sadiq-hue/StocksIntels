@@ -10016,7 +10016,7 @@ app.get('/api/market/sectors/tree', async (req, res) => {
             market,
             currency: r.currency || 'USD',
             price,
-            change: 0,
+            change: Number(r.change) || 0,
             changePercent: changePct,
             volume,
             marketCap: 0,

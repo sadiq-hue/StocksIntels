@@ -250,17 +250,31 @@ async function fetchListPage(exchange, limit, search, cursor) {
       const d = resp.data || {};
       const rows = Array.isArray(d.stocks) ? d.stocks : (Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []));
       return {
-        data: rows.map(r => ({
-          symbol: r.symbol || null,
-          ticker: bareTicker(r.symbol),
-          name: r.name || r.symbol || '',
-          exchange: r.exchange || exchange,
-          currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
-          sector: r.sector || null,
-          price: Number(r.price) || 0,
-          changePct: (Number(r.changePct) || 0) * 100,
-          volume: Number(r.volume) || 0,
-        })),
+        data: rows.map(r => {
+          const price = Number(r.price) || 0;
+          const change = Number(r.change) || 0;
+          let changePct = Number(r.changePct) || 0;
+          if (changePct) {
+            changePct *= 100; // API returns a fraction
+          } else if (change) {
+            // Listing rows ship changePct=0 with previousClose===price, but still
+            // carry the absolute change, so derive the percent from it.
+            const prev = price - change;
+            changePct = prev > 0 ? (change / prev) * 100 : 0;
+          }
+          return {
+            symbol: r.symbol || null,
+            ticker: bareTicker(r.symbol),
+            name: r.name || r.symbol || '',
+            exchange: r.exchange || exchange,
+            currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
+            sector: r.sector || null,
+            price,
+            change,
+            changePct,
+            volume: Number(r.volume) || 0,
+          };
+        }),
         hasMore: !!d.hasMore,
         nextCursor: d.nextCursor || null,
       };
