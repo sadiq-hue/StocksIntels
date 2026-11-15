@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v7';
+const PROMPT_SCHEMA_VERSION = 'v8';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -100,6 +100,72 @@ function _numsOf(s) {
 // unavailable so they are consolidated into data_quality.missing_fields instead
 // of being repeated inside factor sections.
 const NO_DATA_RE = /no\s+(data|analyst|roe|debt)|not available|insufficient|n\/a|unavailable/i;
+
+// ── Deterministic missing-data consolidation ─────────────────────────
+// The model is asked not to repeat missing-data notes outside Data Quality, but
+// LLM adherence is imperfect. This pass guarantees the requirement: it removes
+// missing-field sentences from non-Data-Quality sections and injects ONE
+// consolidated list into data_quality_observations.
+const MISSING_WORDS = '(not provided|not available|missing|absent|null|unavailable|no data|limited)';
+function _missingPatterns(fields) {
+  const defs = [
+    { test: /fair[ _-]?value/i, src: 'fair[ _-]?value' },
+    { test: /roe|return on equity/i, src: '(\\broe\\b|return on equity)' },
+    { test: /analyst|estimate/i, src: '((analyst|earnings) estimates?)' },
+    { test: /market[- ]?level volume|market[- ]?volume/i, src: '(market[ -]?level volume|market[ -]?volume)' },
+    { test: /market current price/i, src: 'market current price' },
+  ];
+  const pats = [];
+  for (const d of defs) {
+    if (fields.some((f) => d.test.test(f))) {
+      pats.push(new RegExp(d.src + '[^.]{0,90}' + MISSING_WORDS + '|' + MISSING_WORDS + '[^.]{0,90}' + d.src, 'i'));
+    }
+  }
+  return pats;
+}
+function _stripMissing(text, patterns) {
+  if (typeof text !== 'string' || !text) return text;
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const kept = parts.filter((s) => !patterns.some((p) => p.test(s)));
+  return kept.join(' ').trim();
+}
+function _stripArray(arr, patterns) {
+  if (!Array.isArray(arr)) return arr;
+  return arr
+    .map((x) => (typeof x === 'string' ? _stripMissing(x, patterns) : x))
+    .filter((x) => x == null || (typeof x === 'string' ? x.trim() !== '' : true));
+}
+function consolidateMissingData(parsed, missingFields) {
+  if (!parsed || !Array.isArray(missingFields) || missingFields.length === 0) return;
+  const patterns = _missingPatterns(missingFields);
+  if (!patterns.length) return;
+
+  if (parsed.executive_summary) parsed.executive_summary = _stripMissing(parsed.executive_summary, patterns);
+  if (parsed.factor_analysis) {
+    for (const k of Object.keys(parsed.factor_analysis)) {
+      parsed.factor_analysis[k] = _stripMissing(parsed.factor_analysis[k], patterns);
+    }
+  }
+  if (parsed.investment_thesis) {
+    for (const k of Object.keys(parsed.investment_thesis)) {
+      parsed.investment_thesis[k] = _stripArray(parsed.investment_thesis[k], patterns);
+    }
+  }
+  parsed.key_risks = _stripArray(parsed.key_risks, patterns);
+  parsed.monitoring_priorities = _stripArray(parsed.monitoring_priorities, patterns);
+  if (Array.isArray(parsed.factor_conflicts)) {
+    parsed.factor_conflicts = parsed.factor_conflicts.map((c) => ({
+      ...c,
+      conflict: typeof c.conflict === 'string' ? _stripMissing(c.conflict, patterns) : c.conflict,
+      assessment: typeof c.assessment === 'string' ? _stripMissing(c.assessment, patterns) : c.assessment,
+    }));
+  }
+
+  const line = 'Unavailable in the supplied data: ' + missingFields.join(', ') + '.';
+  const existing = Array.isArray(parsed.data_quality_observations) ? parsed.data_quality_observations : [];
+  const cleaned = existing.filter((x) => !patterns.some((p) => p.test(String(x))));
+  parsed.data_quality_observations = [line, ...cleaned];
+}
 
 /**
  * Build the complete position context payload from the stored quantitative
@@ -605,7 +671,7 @@ CONSISTENCY RULES (critical — read before writing):
 STYLE RULES:
 - Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
 - Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
-- MISSING-DATA CONSOLIDATION (strict): the only authoritative list of unavailable fields is data_quality.missing_fields. List them exactly once, in data_quality_observations. Do NOT name any missing field (fair value, ROE, analyst/earnings estimates, market-level volume/current price, or any excluded factor) in executive_summary, factor_analysis, factor_conflicts, risk, or monitoring_priorities. Factor sections must describe the implications of available evidence only. In monitoring_priorities, refer generically to "currently unavailable metrics" rather than naming them.
+- MISSING-DATA CONSOLIDATION (strict): the system injects the consolidated unavailable-fields list into data_quality_observations. Do NOT mention, name, or list any missing/unavailable field anywhere else in your response (executive_summary, factor_analysis, factor_conflicts, key_risks, investment_thesis, or monitoring_priorities). In monitoring_priorities, refer generically to "currently unavailable metrics" without naming them. Factor sections must describe the implications of available evidence only.
 - Always state the engine holding_period and risk_level ("~1 month", "Moderate"/"Elevated") exactly as supplied — include them in executive_summary or the risk section.
 - The recorded news catalyst may be referenced in executive_summary and news_and_sentiment; mention it elsewhere only where it adds a distinct analytical purpose (e.g., position sizing). Do not repeat it in monitoring_priorities unless it is a primary risk, and then keep it to one clause.
 - In factor_analysis, address each factor on its own terms; never generalize one missing metric into a whole category.
@@ -864,6 +930,9 @@ Please provide a structured analytical interpretation of this position following
       rawOutput: rawOutput ? rawOutput.slice(0, 500) : null,
     };
   }
+
+  // Deterministic consolidation: missing fields appear only in Data Quality.
+  consolidateMissingData(parsed, context.data_quality && context.data_quality.missing_fields);
 
   // Ensure model field is set correctly.
   parsed.model = MODEL;
