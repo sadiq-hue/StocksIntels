@@ -404,10 +404,23 @@ export function MarketMoversPage() {
       })();
 
       const tickers = new Set<string>();
-      [...gainers.slice(0, 10), ...losers.slice(0, 10), ...active.slice(0, 10)].forEach((r) => {
+      const isGlobalMover = (r: any) => String(r?.market || "").toUpperCase() === "GLOBAL";
+      [...gainers, ...losers, ...active].filter(isGlobalMover).forEach((r) => {
         const t = normalizeTicker(r.ticker || r.symbol);
         if (t && !/[:=^]/.test(t)) tickers.add(t);
       });
+      // Extended-hours quotes only exist for US listings, so use a broad Global
+      // universe (top names by market cap) rather than just the current movers.
+      const globalUniverse = sectors
+        .flatMap((s) => s.children || [])
+        .filter((c: any) => String(c.market || "").toUpperCase() === "GLOBAL" && Number(c.price) > 0)
+        .sort((a: any, b: any) => Number(b.marketCap) - Number(a.marketCap))
+        .map((c: any) => normalizeTicker(c.name || c.ticker))
+        .filter((t: string) => t && !/[:=^]/.test(t));
+      for (const t of globalUniverse) {
+        if (tickers.size >= 120) break;
+        tickers.add(t);
+      }
       let premarket: Record<string, any> = {};
       if (tickers.size > 0) {
         try {
@@ -456,49 +469,44 @@ export function MarketMoversPage() {
     navigate(`/app/stock/${encodeURIComponent(t)}${q}`);
   };
 
+  // Pre/post-market prints are separate from the regular-session movers table.
+  // Build both so the Premarket and After Hours tabs can fall back to the most
+  // recent extended session instead of showing an empty table on weekends.
+  const extendedRows = useMemo<{ pre: MoverRow[]; post: MoverRow[] }>(() => {
+    const entries = Object.entries(data?.premarket || {});
+    const build = (session: "pre" | "post"): MoverRow[] => entries.map(([symbol, q]: [string, any]) => {
+      const prefix = session === "pre" ? "preMarket" : "postMarket";
+      const c = Number(q[`${prefix}ChangePercent`] ?? 0);
+      const volume = Number(q[`${prefix}Volume`] ?? q.regularMarketVolume ?? 0);
+      const time = Number(q[`${prefix}Time`]);
+      return {
+        ticker: normalizeTicker(symbol), symbol,
+        name: q.company_name || q.name || symbol,
+        price: Number(q[`${prefix}Price`] ?? 0),
+        change: (c >= 0 ? "+" : "") + c.toFixed(2) + "%",
+        changePercent: c, isPositive: c >= 0,
+        changeAmount: Number.isFinite(Number(q[`${prefix}Change`])) ? Number(q[`${prefix}Change`]) : null,
+        volume: formatCompact(volume),
+        rawVolume: volume,
+        marketCap: Number(q.marketCap ?? 0),
+        currency: q.currency ?? "USD", market: q.market ?? "Global",
+        updatedAt: Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : null,
+      };
+    }).filter((r) => r.price > 0);
+    return { pre: build("pre"), post: build("post") };
+  }, [data]);
+
   const rows = useMemo<MoverRow[]>(() => {
     if (!data) return [];
     switch (activeTab) {
       case "gainers": return data.gainers;
       case "losers": return data.losers;
       case "active": return data.active;
-      case "premarket":
-        return Object.entries(data.premarket).map(([symbol, q]: [string, any]) => {
-          const c = Number(q.preMarketChangePercent ?? 0);
-          return {
-            ticker: normalizeTicker(symbol), symbol,
-            name: q.company_name || q.name || symbol,
-            price: Number(q.preMarketPrice ?? 0),
-            change: (c >= 0 ? "+" : "") + c.toFixed(2) + "%",
-            changePercent: c, isPositive: c >= 0,
-            changeAmount: Number.isFinite(Number(q.preMarketChange)) ? Number(q.preMarketChange) : null,
-            volume: formatCompact(Number(q.preMarketVolume ?? 0)),
-            rawVolume: Number(q.preMarketVolume ?? 0),
-            marketCap: Number(q.marketCap ?? 0),
-            currency: q.currency ?? "USD", market: q.market ?? "Global",
-            updatedAt: Number.isFinite(Number(q.preMarketTime)) && Number(q.preMarketTime) > 0 ? new Date(Number(q.preMarketTime)).toISOString() : null,
-          };
-        }).filter((r) => r.price > 0);
-      case "afterhours":
-        return Object.entries(data.premarket).map(([symbol, q]: [string, any]) => {
-          const c = Number(q.postMarketChangePercent ?? 0);
-          return {
-            ticker: normalizeTicker(symbol), symbol,
-            name: q.company_name || q.name || symbol,
-            price: Number(q.postMarketPrice ?? 0),
-            change: (c >= 0 ? "+" : "") + c.toFixed(2) + "%",
-            changePercent: c, isPositive: c >= 0,
-            changeAmount: Number.isFinite(Number(q.postMarketChange)) ? Number(q.postMarketChange) : null,
-            volume: formatCompact(Number(q.postMarketVolume ?? 0)),
-            rawVolume: Number(q.postMarketVolume ?? 0),
-            marketCap: Number(q.marketCap ?? 0),
-            currency: q.currency ?? "USD", market: q.market ?? "Global",
-            updatedAt: Number.isFinite(Number(q.postMarketTime)) && Number(q.postMarketTime) > 0 ? new Date(Number(q.postMarketTime)).toISOString() : null,
-          };
-        }).filter((r) => r.price > 0);
+      case "premarket": return extendedRows.pre.length ? extendedRows.pre : extendedRows.post;
+      case "afterhours": return extendedRows.post.length ? extendedRows.post : extendedRows.pre;
       default: return data.gainers;
     }
-  }, [data, activeTab]);
+  }, [data, activeTab, extendedRows]);
 
   const filteredRows = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -568,7 +576,10 @@ export function MarketMoversPage() {
     return [...seen.entries()];
   }, [heatmapTiles]);
   const globalIndices = indices.filter((i) => i.market === "Global").slice(0, 4);
-  const africanIndices = indices.filter((i) => ["NSE", "NGX", "JSE"].includes(i.market)).slice(0, 4);
+  const AFRICAN_INDEX_ORDER = ["NSE:NSEASI", "NSE:NSE20", "NGX:ASI", "NGX:NGX30", "^J203.JO", "^J200.JO"];
+  const africanIndices = AFRICAN_INDEX_ORDER
+    .map((sym) => indices.find((i) => i.symbol === sym))
+    .filter((i): i is IndexRow => Boolean(i));
   const shownIndices = [...globalIndices, ...africanIndices];
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const isListTab = activeTab !== "heatmap";
@@ -593,10 +604,16 @@ export function MarketMoversPage() {
     : TAB_TITLES[activeTab];
   const emptyMessage =
     activeTab === "premarket"
-      ? `Premarket session is closed or no premarket quotes are available for the tracked universe. Last checked ${lastUpdated || "—"}.`
+      ? `Premarket session is closed or no premarket quotes are available for the tracked universe. Last checked ${lastUpdated || "-"}.`
       : activeTab === "afterhours"
-        ? `After-hours session is closed or no after-hours quotes are available for the tracked universe. Last checked ${lastUpdated || "—"}.`
+        ? `After-hours session is closed or no after-hours quotes are available for the tracked universe. Last checked ${lastUpdated || "-"}.`
         : `No ${sectionTitle.toLowerCase()} data available right now.`;
+  const extendedFallback: string | null =
+    activeTab === "premarket" && extendedRows.pre.length === 0 && extendedRows.post.length > 0
+      ? "after-hours"
+      : activeTab === "afterhours" && extendedRows.post.length === 0 && extendedRows.pre.length > 0
+        ? "pre-market"
+        : null;
 
   return (
     <div className="w-full max-w-none px-3 md:px-5 py-5 space-y-4">
@@ -765,6 +782,12 @@ export function MarketMoversPage() {
               URL.revokeObjectURL(url);
             }} disabled={filteredRows.length === 0}>Download</Button>
           </div>
+        </div>
+      )}
+
+      {isListTab && extendedFallback && (
+        <div className="rounded-lg border border-[#0D7490]/25 bg-[#0D7490]/[0.06] px-3 py-2 text-[11px] text-muted-foreground">
+          {activeTab === "premarket" ? "Pre-market is closed" : "After-hours is closed"} — showing the most recent {extendedFallback} session.
         </div>
       )}
 

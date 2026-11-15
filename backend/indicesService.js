@@ -24,7 +24,19 @@ const GLOBAL_INDICES = {
   '^STOXX50E': { name: 'Euro Stoxx 50', symbol: '^STOXX50E', market: 'Global', currency: 'EUR' },
 };
 
-const ALL_INDICES = { ...NSE_INDICES, ...GLOBAL_INDICES };
+const NGX_INDICES = {
+  'NGX:ASI': { name: 'NGX All Share Index', symbol: 'NGX:ASI', market: 'NGX', currency: 'NGN', ngxCode: 'ASI' },
+  'NGX:NGX30': { name: 'NGX 30 Index', symbol: 'NGX:NGX30', market: 'NGX', currency: 'NGN', ngxCode: 'NGX30' },
+  'NGX:NGXBNK': { name: 'NGX Banking Index', symbol: 'NGX:NGXBNK', market: 'NGX', currency: 'NGN', ngxCode: 'NGXBNK' },
+};
+
+const JSE_INDICES = {
+  '^J203.JO': { name: 'FTSE/JSE All Share Index', symbol: '^J203.JO', market: 'JSE', currency: 'ZAR' },
+  '^J200.JO': { name: 'FTSE/JSE Top 40 Index', symbol: '^J200.JO', market: 'JSE', currency: 'ZAR' },
+  '^J580.JO': { name: 'FTSE/JSE Financials Index', symbol: '^J580.JO', market: 'JSE', currency: 'ZAR' },
+};
+
+const ALL_INDICES = { ...NSE_INDICES, ...GLOBAL_INDICES, ...NGX_INDICES, ...JSE_INDICES };
 
 const SECTORS = [
   'Technology', 'Banking', 'Financial', 'Telecommunications', 'Manufacturing',
@@ -81,8 +93,9 @@ function formatCompact(v) {
 
 async function fetchIndexFromYahoo(symbol) {
   if (symbol.startsWith('NSE:')) return null; // Yahoo doesn't cover NSE indices
+  if (symbol.startsWith('NGX:')) return null; // Yahoo doesn't cover NGX indices
   try {
-    const cleanSymbol = symbol.includes('.') ? symbol : symbol.replace('^', '%5E');
+    const cleanSymbol = encodeURIComponent(symbol);
     const { data } = await axios.get(
       `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?range=1d&interval=1m`,
       { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
@@ -115,6 +128,35 @@ async function fetchIndexFromYahoo(symbol) {
   }
 }
 
+// NGX publishes index values through its public data widget endpoint.
+async function fetchNgxIndexFromSite(code) {
+  try {
+    const { data } = await axios.get('https://ngxgroup.com/wp-json/ngx-data-widgets/v1/home/indices-page', {
+      params: { index: code, compare: 'NONE' },
+      timeout: 9000,
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+    });
+    const q = data?.primary?.quote;
+    const price = Number(q?.currentPrice);
+    if (!Number.isFinite(price) || price <= 0) return null;
+    // NGX returns changePercentage already in percent (e.g. -0.0387 = -0.04%).
+    const changePercent = Number(q.changePercentage) || 0;
+    const previousClose = changePercent !== 0 ? price / (1 + changePercent / 100) : price;
+    return {
+      price,
+      change: price - previousClose,
+      changePercent,
+      previousClose,
+      open: null,
+      dayHigh: null,
+      dayLow: null,
+      volume: 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchIndexLive(symbol) {
   // For NSE indices, scrape NSE website directly (free, real-time)
   if (symbol.startsWith('NSE:')) {
@@ -129,6 +171,9 @@ async function fetchIndexLive(symbol) {
       if (data) return data;
     }
     return null;
+  }
+  if (symbol.startsWith('NGX:')) {
+    return fetchNgxIndexFromSite(ALL_INDICES[symbol]?.ngxCode);
   }
   // Yahoo for global indices (free, real-time)
   const yahooData = await fetchIndexFromYahoo(symbol);

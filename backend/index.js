@@ -9773,73 +9773,43 @@ app.get('/api/content/daily-brief', requireContentKey, async (req, res) => {
 
 app.get('/api/market/premarket', async (req, res) => {
   try {
-    const symbols = req.query.symbols ? req.query.symbols.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const symbols = req.query.symbols
+      ? [...new Set(req.query.symbols.split(',').map(s => s.trim()).filter(Boolean))]
+      : [];
     if (symbols.length === 0) return res.json({});
-    const axios = require('axios');
+    // One crumb-authenticated v7 batch is far faster and more reliable than a
+    // per-symbol v8 chart call, and it carries the last extended-session prints.
+    const { fetchV7Quotes } = require('./yahooService');
+    const v7 = await fetchV7Quotes(symbols);
     const results = {};
-    await Promise.allSettled(symbols.map(async (sym) => {
-      try {
-        const cleanSym = sym.includes('.') ? sym : sym.replace('^', '%5E');
-        const { data } = await axios.get(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSym}?interval=1d&range=1d&includePreMarket=true`,
-          { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
-        );
-        const meta = data?.chart?.result?.[0]?.meta;
-        if (meta) {
-          results[sym] = {
-            symbol: meta.symbol || sym,
-            company_name: meta.longName || meta.shortName || sym,
-            preMarketPrice: meta.preMarketPrice ?? null,
-            preMarketChange: meta.preMarketChange ?? null,
-            preMarketChangePercent: meta.preMarketChangePercent ?? null,
-            preMarketTime: meta.preMarketTime ?? null,
-            postMarketPrice: meta.postMarketPrice ?? null,
-            postMarketChange: meta.postMarketChange ?? null,
-            postMarketChangePercent: meta.postMarketChangePercent ?? null,
-            postMarketTime: meta.postMarketTime ?? null,
-            regularMarketPrice: meta.regularMarketPrice ?? null,
-            regularMarketPreviousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
-            regularMarketChange: meta.regularMarketChange ?? null,
-            regularMarketChangePercent: meta.regularMarketChangePercent ?? null,
-            regularMarketTime: meta.regularMarketTime ?? null,
-            regularMarketDayHigh: meta.regularMarketDayHigh ?? null,
-            regularMarketDayLow: meta.regularMarketDayLow ?? null,
-            regularMarketVolume: meta.regularMarketVolume ?? null,
-            marketState: meta.marketState || (isMarketOpen('Global').open ? 'REGULAR' : 'CLOSED'),
-            currentTradingPeriod: meta.currentTradingPeriod || null,
-            exchange: meta.exchangeName || '',
-            currency: meta.currency || 'USD',
-          };
-        }
-      } catch {}
-    }));
-    // Merge real pre/post-market prints from the crumb-authenticated v7 quote API.
-    // The v8 chart endpoint carries these only during/right after extended sessions;
-    // v7 reports the last session's after-hours/pre-market trade regardless.
-    try {
-      const { fetchV7Quotes } = require('./yahooService');
-      const v7 = await fetchV7Quotes(symbols);
-      for (const sym of symbols) {
-        const v = v7[sym.toUpperCase()];
-        if (!v || !results[sym]) continue;
-        results[sym] = {
-          ...results[sym],
-          preMarketPrice: results[sym].preMarketPrice ?? v.preMarketPrice ?? null,
-          preMarketChange: results[sym].preMarketChange ?? v.preMarketChange ?? null,
-          preMarketChangePercent: results[sym].preMarketChangePercent ?? v.preMarketChangePercent ?? null,
-          preMarketTime: results[sym].preMarketTime ?? v.preMarketTime ?? null,
-          postMarketPrice: results[sym].postMarketPrice ?? v.postMarketPrice ?? null,
-          postMarketChange: results[sym].postMarketChange ?? v.postMarketChange ?? null,
-          postMarketChangePercent: results[sym].postMarketChangePercent ?? v.postMarketChangePercent ?? null,
-          postMarketTime: results[sym].postMarketTime ?? v.postMarketTime ?? null,
-          marketState: results[sym].marketState || v.marketState || 'CLOSED',
-          regularMarketPrice: results[sym].regularMarketPrice ?? v.regularMarketPrice ?? null,
-          regularMarketTime: results[sym].regularMarketTime ?? v.regularMarketTime ?? null,
-          fiftyTwoWeekHigh: results[sym].fiftyTwoWeekHigh ?? v.fiftyTwoWeekHigh ?? null,
-          fiftyTwoWeekLow: results[sym].fiftyTwoWeekLow ?? v.fiftyTwoWeekLow ?? null,
-        };
-      }
-    } catch {}
+    for (const sym of symbols) {
+      const v = v7[sym.toUpperCase()] || v7[sym];
+      if (!v) continue;
+      results[sym] = {
+        symbol: sym,
+        company_name: v.company_name || sym,
+        preMarketPrice: v.preMarketPrice ?? null,
+        preMarketChange: v.preMarketChange ?? null,
+        preMarketChangePercent: v.preMarketChangePercent ?? null,
+        preMarketTime: v.preMarketTime ?? null,
+        postMarketPrice: v.postMarketPrice ?? null,
+        postMarketChange: v.postMarketChange ?? null,
+        postMarketChangePercent: v.postMarketChangePercent ?? null,
+        postMarketTime: v.postMarketTime ?? null,
+        regularMarketPrice: v.regularMarketPrice ?? null,
+        regularMarketChange: v.regularMarketChange ?? null,
+        regularMarketChangePercent: v.regularMarketChangePercent ?? null,
+        regularMarketTime: v.regularMarketTime ?? null,
+        regularMarketDayHigh: v.regularMarketDayHigh ?? null,
+        regularMarketDayLow: v.regularMarketDayLow ?? null,
+        regularMarketVolume: v.regularMarketVolume ?? null,
+        marketState: v.marketState || (isMarketOpen('Global').open ? 'REGULAR' : 'CLOSED'),
+        currency: v.currency || 'USD',
+        exchange: v.exchange || '',
+        fiftyTwoWeekHigh: v.fiftyTwoWeekHigh ?? null,
+        fiftyTwoWeekLow: v.fiftyTwoWeekLow ?? null,
+      };
+    }
     res.json(results);
   } catch (error) {
     console.error('Error fetching premarket:', error.message);
