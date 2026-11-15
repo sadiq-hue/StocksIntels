@@ -226,6 +226,10 @@ function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
       const group = isAfrican(market) ? "African" : "Global";
       if (mode === "global" && group === "African") continue;
       if (mode === "african" && group === "Global") continue;
+      // Skip rows with no usable quote — they render as empty/grey boxes.
+      const priceNum = Number(c.price) || 0;
+      const pctNum = Number(c.changePercent) || 0;
+      if (!(priceNum > 0) && pctNum === 0) continue;
       // African: always log-activity (caps are mostly 0 and inconsistent).
       // Global: market cap, falling back to log activity.
       const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
@@ -862,10 +866,10 @@ export function MarketMoversPage() {
           ) : (
             <>
               <div className="relative w-full aspect-[16/9] min-h-[360px] border border-[#0D7490]/15 rounded-xl overflow-hidden bg-muted/20">
-                {heatmapGroupRegions.map(([name, r]) => (
+                {heatmapGroupRegions.length > 1 && heatmapGroupRegions.map(([name, r]) => (
                   <div
-                    key={`sector-${name}`}
-                    className="absolute border border-white/30 pointer-events-none"
+                    key={`group-${name}`}
+                    className="absolute border border-white/25 pointer-events-none"
                     style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` }}
                   />
                 ))}
@@ -879,7 +883,7 @@ export function MarketMoversPage() {
                       key={`${name}-${t.sector || ""}-${i}`}
                       onClick={() => goToStock(name, t.market)}
                       title={`${label}${t.sector ? ` · ${t.sector}` : ""} · ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`}
-                      className="absolute overflow-hidden border border-white/20 text-left focus:outline-none focus:ring-2 focus:ring-white/60"
+                      className="absolute overflow-hidden border border-black/10 text-left focus:outline-none focus:ring-2 focus:ring-white/60"
                       style={{
                         left: `${t.x * 100}%`, top: `${t.y * 100}%`,
                         width: `${t.w * 100}%`, height: `${t.h * 100}%`,
@@ -888,10 +892,12 @@ export function MarketMoversPage() {
                       }}
                     >
                       <div className="absolute inset-0 bg-black/10" />
-                      {t.w * 100 >= 4 && t.h * 100 >= 5 && (
+                      {t.w * 100 >= 2 && t.h * 100 >= 2.5 && (
                         <div className="relative z-10 p-1 text-[9px] font-bold leading-tight">
-                          <div className="truncate">{name}</div>
-                          <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
+                          <div className="truncate">{name || "—"}</div>
+                          {t.w * 100 >= 5 && t.h * 100 >= 6 && (
+                            <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
+                          )}
                         </div>
                       )}
                     </button>
