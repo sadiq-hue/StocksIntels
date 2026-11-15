@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v5';
+const PROMPT_SCHEMA_VERSION = 'v6';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -582,9 +582,9 @@ CONSISTENCY RULES (critical — read before writing):
 STYLE RULES:
 - Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
 - Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
-- State each data limitation exactly once, in data_quality_observations. Do not repeat the same missing-field note inside factor sections.
-- Consolidate duplicates in data_quality_observations. In particular, mention each of the following only once across the whole response: market.volume being null, missing fair_value, and missing ROE / analyst estimates.
-- The recorded news catalyst may be referenced in Overall Assessment and News & Sentiment; mention it elsewhere only where it adds a distinct analytical purpose (e.g., position sizing). Do not restate it in every section.
+- MISSING-DATA CONSOLIDATION (strict): market.volume being null, missing fair_value, missing ROE, and missing analyst/earnings estimates must be mentioned ONLY in data_quality_observations. Do NOT mention any of these in executive_summary, factor_analysis, factor_conflicts, risk, or monitoring_priorities. In a factor section, describe the implications of available evidence; do not enumerate unavailable fields. State each missing item exactly once in data_quality_observations, without restating it in parentheses or quoting repeated engine labels.
+- Always state the engine holding_period and risk_level ("~1 month", "Moderate"/"Elevated") exactly as supplied — include them in executive_summary or the risk section.
+- The recorded news catalyst may be referenced in executive_summary and news_and_sentiment; mention it elsewhere only where it adds a distinct analytical purpose (e.g., position sizing). Do not repeat it in monitoring_priorities unless it is a primary risk, and then keep it to one clause.
 - In factor_analysis, address each factor on its own terms; never generalize one missing metric into a whole category.
 - In monitoring_priorities, explicitly label any technical threshold that is not an engine rule as AI-generated guidance (for example: "AI-generated monitoring: RSI above 70 — not an engine rule"). This applies to RSI > 70 and similar thresholds. Never invent price levels, targets, or engine invalidation conditions.
 - Write like a research analyst: explain what the metrics mean and how they relate; highlight genuine supporting and opposing evidence and uncertainty; do not simply restate numbers already visible on the page.
