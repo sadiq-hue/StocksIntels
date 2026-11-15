@@ -814,15 +814,17 @@ export function MarketMoversPage() {
                       className="absolute overflow-hidden border border-white/20 text-left focus:outline-none focus:ring-2 focus:ring-white/60"
                       style={{
                         left: `${t.x * 100}%`, top: `${t.y * 100}%`,
-                        width: `${Math.max(1.2, t.w * 100)}%`, height: `${Math.max(1.2, t.h * 100)}%`,
+                        width: `${t.w * 100}%`, height: `${t.h * 100}%`,
                         backgroundColor: heatStyle(pct),
                       }}
                     >
                       <div className="absolute inset-0 bg-black/10" />
-                      <div className="relative z-10 p-1 text-[9px] font-bold leading-tight text-white">
-                        <div className="truncate">{name}</div>
-                        <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
-                      </div>
+                      {t.w * 100 >= 4 && t.h * 100 >= 5 && (
+                        <div className="relative z-10 p-1 text-[9px] font-bold leading-tight text-white">
+                          <div className="truncate">{name}</div>
+                          <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
