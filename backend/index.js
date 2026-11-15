@@ -15976,6 +15976,14 @@ class AppError extends Error {
 if (serveFrontend) {
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
+    // Never serve index.html for a missing static asset. Doing so returns
+    // text/html for a hashed <script type="module"> request and the browser
+    // fails with a strict-MIME error. A 404 is the correct, diagnosable answer.
+    const lastSegment = req.path.split('/').pop() || '';
+    if (req.path.startsWith('/assets/') || /\.[a-z0-9]+$/i.test(lastSegment)) {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 } else {
