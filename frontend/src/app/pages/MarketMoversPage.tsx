@@ -137,7 +137,7 @@ function worstAspectRatio(row: { size: number }[], width: number, height: number
 }
 
 function squarify(nodes: { size: number; [key: string]: any }[], x: number, y: number, width: number, height: number, result: any[]): void {
-  if (nodes.length === 0) return;
+  if (!nodes.length || !(width > 1e-9) || !(height > 1e-9)) return;
   nodes.sort((a, b) => b.size - a.size);
   if (nodes.length === 1) {
     result.push({ ...nodes[0], x, y, w: width, h: height });
@@ -162,26 +162,27 @@ function squarify(nodes: { size: number; [key: string]: any }[], x: number, y: n
       break;
     }
   }
+  const safeRowSize = bestRowSize > 0 ? bestRowSize : 1e-9;
   if (width >= height) {
-    const rowHeight = bestRowSize / width;
+    const rowHeight = safeRowSize / width;
     let cx = x;
     for (const node of bestRow) {
-      const nw = node.size / rowHeight;
+      const nw = Math.max(1e-9, node.size / rowHeight);
       result.push({ ...node, x: cx, y, w: nw, h: rowHeight });
       cx += nw;
     }
     const remaining = nodes.filter((n) => !bestRow.includes(n));
-    squarify(remaining, x, y + rowHeight, width, height - rowHeight, result);
+    squarify(remaining, x, y + rowHeight, width, Math.max(0, height - rowHeight), result);
   } else {
-    const rowWidth = bestRowSize / height;
+    const rowWidth = safeRowSize / height;
     let cy = y;
     for (const node of bestRow) {
-      const nh = node.size / rowWidth;
+      const nh = Math.max(1e-9, node.size / rowWidth);
       result.push({ ...node, x, y: cy, w: rowWidth, h: nh });
       cy += nh;
     }
     const remaining = nodes.filter((n) => !bestRow.includes(n));
-    squarify(remaining, x + rowWidth, y, width - rowWidth, height, result);
+    squarify(remaining, x + rowWidth, y, Math.max(0, width - rowWidth), height, result);
   }
 }
 
@@ -213,58 +214,78 @@ function scaleSizes(nodes: any[], area: number): any[] {
 }
 
 function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
-  // Flatten every stock first, keep only the largest few, THEN group by sector.
-  // Slicing after layout (or capping per sector before layout) leaves uncovered
-  // holes in the rectangle — this way the treemap always fills the area exactly.
   const isAfrican = (m?: string) => ["NSE", "NGX", "JSE"].includes(String(m || "").toUpperCase());
+  // Activity-based sizing for stocks without market cap (NSE). Raw share volume
+  // spans 1..millions and produced ~65,000:1 slivers; log10 keeps ordering while
+  // compressing the range so tiles stay readable.
+  const activitySize = (v: number) => (v > 0 ? Math.log10(1 + v) : 1);
+
   const flat: any[] = [];
   for (const s of sectors) {
     for (const c of (s.children || [])) {
       const market = c.market || "Global";
-      if (mode === "global" && isAfrican(market)) continue;
-      if (mode === "african" && !isAfrican(market)) continue;
+      const group = isAfrican(market) ? "African" : "Global";
+      if (mode === "global" && group === "African") continue;
+      if (mode === "african" && group === "Global") continue;
       const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
-      const act = parseCompact(c.volume);
-      flat.push({ ...c, sector: s.name, market, size: cap > 0 ? cap : act > 0 ? act : 1 });
+      const size = cap > 0 ? cap : activitySize(parseCompact(c.volume));
+      flat.push({ ...c, sector: s.name, market, group, size });
     }
   }
   if (!flat.length) return [];
   flat.sort((a, b) => b.size - a.size);
 
-  // "All" reserves a slice for African markets so global mega-caps don't crowd
-  // them out entirely (NSE has no market cap, so it sizes by activity).
   let chosen: any[];
   if (mode === "all") {
-    const african = flat.filter((c) => isAfrican(c.market)).slice(0, 60);
-    const global = flat.filter((c) => !isAfrican(c.market)).slice(0, 160);
+    const african = flat.filter((c) => c.group === "African").slice(0, 60);
+    const global = flat.filter((c) => c.group === "Global").slice(0, 160);
     chosen = [...global, ...african];
   } else {
     chosen = flat.slice(0, 200);
   }
+  if (!chosen.length) return [];
 
-  const groups = new Map<string, any[]>();
+  // Level 1 — market groups. In "All" mode reserve ~18% of the area for African
+  // markets so global mega-caps cannot crowd them out.
+  const groupMap = new Map<string, Map<string, any[]>>();
   for (const t of chosen) {
-    if (!groups.has(t.sector)) groups.set(t.sector, []);
-    groups.get(t.sector)!.push(t);
+    if (!groupMap.has(t.group)) groupMap.set(t.group, new Map());
+    const sm = groupMap.get(t.group)!;
+    if (!sm.has(t.sector)) sm.set(t.sector, []);
+    sm.get(t.sector)!.push(t);
   }
-  const rawNodes = [...groups.entries()].map(([name, children]) => ({
-    name,
-    size: children.reduce((sum, c) => sum + c.size, 0),
-    children,
-  }));
-  if (!rawNodes.length) return [];
+  const groupNodes: any[] = [];
+  for (const [g, sm] of groupMap) {
+    const sectorNodes = [...sm.entries()].map(([name, children]) => ({
+      name,
+      size: children.reduce((sum, c) => sum + c.size, 0),
+      children,
+    }));
+    groupNodes.push({ name: g, size: sectorNodes.reduce((sum, n) => sum + n.size, 0), sectorNodes });
+  }
+  if (mode === "all") {
+    const g = groupNodes.find((n) => n.name === "Global");
+    const a = groupNodes.find((n) => n.name === "African");
+    if (g && a && a.size < g.size * 0.18) a.size = g.size * 0.18;
+  }
 
-  const nodes = scaleSizes(rawNodes, 1);
-  const regions: any[] = [];
-  squarify(nodes, 0, 0, 1, 1, regions);
+  const groupScaled = scaleSizes(groupNodes, 1);
+  const groupRegions: any[] = [];
+  squarify(groupScaled, 0, 0, 1, 1, groupRegions);
 
   const tiles: any[] = [];
-  for (const region of regions) {
-    const area = Math.max(1e-6, region.w * region.h);
-    const kids = scaleSizes(region.children || [], area);
-    const out: any[] = [];
-    squarify(kids, region.x, region.y, region.w, region.h, out);
-    tiles.push(...out.map((t) => ({ ...t, region: { x: region.x, y: region.y, w: region.w, h: region.h } })));
+  for (const gr of groupRegions) {
+    const gArea = Math.max(1e-6, gr.w * gr.h);
+    const sectorScaled = scaleSizes(gr.sectorNodes || [], gArea);
+    const sectorRegions: any[] = [];
+    squarify(sectorScaled, gr.x, gr.y, gr.w, gr.h, sectorRegions);
+    for (const sr of sectorRegions) {
+      const sArea = Math.max(1e-6, sr.w * sr.h);
+      const kids = scaleSizes(sr.children || [], sArea);
+      const out: any[] = [];
+      squarify(kids, sr.x, sr.y, sr.w, sr.h, out);
+      tiles.push(...out.map((t) => ({ ...t, group: gr.name, region: { x: sr.x, y: sr.y, w: sr.w, h: sr.h } })));
+    }
   }
   return tiles;
 }
