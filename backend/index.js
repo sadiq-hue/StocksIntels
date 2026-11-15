@@ -9966,9 +9966,12 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     const entries = stocks.map((s) => {
       const sym = s.market === 'NSE' ? 'NSE:' + s.ticker : s.ticker;
       const q = quotesMap[sym] || {};
-      const price = Number(q.price || 0);
-      const changePct = Number(q.changePercent || 0);
-      const marketCap = Number(q.marketCap || 0);
+      // Yahoo v7 uses regularMarket*; the NSE batch uses price/changePercent.
+      const price = Number(q.regularMarketPrice ?? q.price ?? 0);
+      const changePct = Number(q.regularMarketChangePercent ?? q.changePercent ?? 0);
+      const changeAbs = Number(q.regularMarketChange ?? q.change ?? 0);
+      const volume = Number(q.regularMarketVolume ?? q.volume ?? 0);
+      const marketCap = Number(q.marketCap ?? 0);
       return {
         ticker: s.ticker,
         name: s.name || s.ticker,
@@ -9976,7 +9979,9 @@ app.get('/api/market/sectors/tree', async (req, res) => {
         market: s.market || 'Global',
         currency: s.currency || 'USD',
         price: price > 0 ? price : 0,
+        change: changeAbs,
         changePercent: changePct,
+        volume: volume > 0 ? volume : 0,
         marketCap: marketCap > 0 ? marketCap : 0,
       };
     });
@@ -9992,10 +9997,11 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     const tree = [];
     for (const [sectorName, items] of sectorMap.entries()) {
       const totalCap = items.reduce((sum, it) => sum + it.marketCap, 0);
-      const weightedChange =
-        totalCap > 0
-          ? items.reduce((sum, it) => sum + it.changePercent * it.marketCap, 0) / totalCap
-          : 0;
+      // When caps are unavailable (e.g. NSE), fall back to a simple average so
+      // the sector still gets a real performance colour instead of neutral.
+      const weightedChange = totalCap > 0
+        ? items.reduce((sum, it) => sum + it.changePercent * it.marketCap, 0) / totalCap
+        : (items.length ? items.reduce((sum, it) => sum + it.changePercent, 0) / items.length : 0);
       tree.push({
         name: sectorName,
         changePercent: weightedChange,
@@ -10006,7 +10012,9 @@ app.get('/api/market/sectors/tree', async (req, res) => {
             name: it.ticker,
             fullName: it.name,
             changePercent: it.changePercent,
+            change: it.change,
             price: it.price,
+            volume: it.volume,
             marketCap: it.marketCap,
             currency: it.currency,
             market: it.market,
