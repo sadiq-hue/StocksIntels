@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useSearchParams, useLocation } from "react-router";
+import { useSearchParams, useLocation, useNavigate, Link } from "react-router";
 import { BarChart3, ChevronLeft, ChevronRight, Cloud, Loader2, Moon, RefreshCcw, Search, TrendingDown, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input";
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 type TabId = "gainers" | "losers" | "active" | "premarket" | "afterhours" | "heatmap";
+type SortKey = "ticker" | "name" | "changePercent" | "price" | "volume" | "marketCap";
 
 interface MoverRow {
   ticker: string;
@@ -118,11 +119,54 @@ function squarify(nodes: { size: number; [key: string]: any }[], x: number, y: n
   }
 }
 
-function heatColor(pct: number): string {
-  const a = Math.min(Math.abs(pct), 6);
-  const base = pct >= 0 ? "bg-emerald" : "bg-red";
-  const intensity = Math.round((a / 6) * 900);
-  return `${base}-${Math.max(100, Math.min(900, intensity))}`;
+function parseCompact(v?: string | number | null): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const m = String(v).trim().toUpperCase().match(/^(-?\d+(?:\.\d+)?)\s*([KMBT])?$/);
+  if (!m) return 0;
+  const n = Number(m[1]);
+  const mult = m[2] === "T" ? 1e12 : m[2] === "B" ? 1e9 : m[2] === "M" ? 1e6 : m[2] === "K" ? 1e3 : 1;
+  return Number.isFinite(n) ? n * mult : 0;
+}
+
+function normalizeTicker(t?: string | null): string {
+  return String(t || "").toUpperCase().replace(/^(NSE|NGX|JSE|US|GLOBAL):/, "").trim();
+}
+
+// Inline heat colour (do NOT build Tailwind class names dynamically — those get
+// purged from the production CSS and the tiles render colourless).
+function heatStyle(pct: number): string {
+  const clamped = Math.max(-6, Math.min(6, Number.isFinite(pct) ? pct : 0));
+  const alpha = Math.min(0.95, 0.25 + (Math.abs(clamped) / 6) * 0.7);
+  return clamped >= 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
+}
+
+// Build a NON-overlapping, sector-grouped treemap:
+//   1) squarify sectors into the full area by aggregate market cap;
+//   2) squarify each sector's stocks inside that sector's region.
+function buildHeatmap(sectors: SectorRow[]): any[] {
+  const nodes = sectors
+    .map((s) => {
+      const children = (s.children || []).slice(0, 60);
+      const size = children.reduce((sum, c: any) => sum + (Number(c.marketCap) > 0 ? Number(c.marketCap) : 1), 0);
+      return { name: s.name, size: size > 0 ? size : 1, children };
+    })
+    .filter((n) => n.children.length > 0);
+  if (!nodes.length) return [];
+  const regions: any[] = [];
+  squarify(nodes, 0, 0, 1, 1, regions);
+  const tiles: any[] = [];
+  for (const region of regions) {
+    const kids = (region.children || []).map((c: any) => {
+      const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
+      const act = parseCompact(c.volume);
+      return { ...c, sector: region.name, size: cap > 0 ? cap : act > 0 ? act : 1 };
+    });
+    const out: any[] = [];
+    squarify(kids, region.x, region.y, region.w, region.h, out);
+    tiles.push(...out);
+  }
+  return tiles.slice(0, 300);
 }
 
 const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -146,6 +190,7 @@ const TAB_TITLES: Record<TabId, string> = {
 export function MarketMoversPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const initialTab = (searchParams.get("tab") as TabId) || (location.pathname.includes("/heatmap") ? "heatmap" : "gainers");
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any> } | null>(null);
@@ -154,6 +199,9 @@ export function MarketMoversPage() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("changePercent");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [marketFilter, setMarketFilter] = useState<"all" | "Global" | "NSE" | "NGX" | "JSE">("all");
   const ROWS_PER_PAGE = 20;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -256,6 +304,20 @@ export function MarketMoversPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchMovers]);
 
+  // Reset sorting sensibly per tab (losers = most negative first).
+  useEffect(() => {
+    setSortKey("changePercent");
+    setSortDir(activeTab === "losers" ? "asc" : "desc");
+  }, [activeTab]);
+
+  const goToStock = (ticker?: string | null, market?: string | null) => {
+    const t = normalizeTicker(ticker);
+    if (!t) return;
+    const m = String(market || "").toLowerCase();
+    const q = m && m !== "global" ? `?market=${encodeURIComponent(m)}` : "";
+    navigate(`/app/stock/${encodeURIComponent(t)}${q}`);
+  };
+
   const rows = useMemo(() => {
     if (!data) return [];
     switch (activeTab) {
@@ -302,14 +364,102 @@ export function MarketMoversPage() {
 
   const filteredRows = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return rows.filter((r) => r.ticker.toLowerCase().includes(term) || r.name.toLowerCase().includes(term));
-  }, [rows, searchTerm]);
+    let list = rows.filter(
+      (r) =>
+        (r.ticker.toLowerCase().includes(term) || String(r.name || "").toLowerCase().includes(term)) &&
+        (marketFilter === "all" || r.market === marketFilter),
+    );
+    const dir = sortDir === "asc" ? 1 : -1;
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === "ticker") cmp = a.ticker.localeCompare(b.ticker);
+      else if (sortKey === "name") cmp = String(a.name || "").localeCompare(String(b.name || ""));
+      else if (sortKey === "changePercent") cmp = a.changePercent - b.changePercent;
+      else if (sortKey === "price") cmp = a.price - b.price;
+      else if (sortKey === "volume") cmp = parseCompact(a.volume) - parseCompact(b.volume);
+      else if (sortKey === "marketCap") cmp = a.marketCap - b.marketCap;
+      return cmp * dir;
+    });
+    return list;
+  }, [rows, searchTerm, marketFilter, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir(key === "ticker" || key === "name" ? "asc" : "desc");
+    }
+    setPage(1);
+  };
+
+  const sortHead = (label: string, k: SortKey, className = "") => (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground"
+      >
+        {label}
+        {sortKey === k ? <span className="text-[8px]">{sortDir === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </TableHead>
+  );
+
+  const downloadCsv = () => {
+    const header = ["Ticker", "Company", "Price", "ChangePercent", "Volume", "MarketCap", "Market"];
+    const lines = [header.join(",")].concat(
+      filteredRows.map((r) =>
+        [
+          r.ticker,
+          `"${String(r.name || "").replace(/"/g, '""')}"`,
+          r.price,
+          r.changePercent,
+          r.volume,
+          r.marketCap,
+          r.market,
+        ].join(","),
+      ),
+    );
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeTab}-movers.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = filteredRows.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
 
-  const heatmapSectors = useMemo(() => data ? data.sectors : [], [data]);
+  // Heatmap data: prefer the live sector tree; if it is unavailable, fall back
+  // to the live movers so the heatmap is never blank.
+  const heatmapSectors = useMemo<SectorRow[]>(() => {
+    if (data?.sectors?.length) return data.sectors;
+    if (!data) return [];
+    const map = new Map<string, any>();
+    for (const r of [...data.gainers, ...data.losers, ...data.active]) {
+      const t = normalizeTicker(r.ticker);
+      if (!t || map.has(t)) continue;
+      map.set(t, {
+        name: t,
+        fullName: r.name,
+        changePercent: r.changePercent,
+        price: r.price,
+        marketCap: r.marketCap,
+        currency: r.currency,
+        market: r.market,
+        volume: r.volume,
+      });
+    }
+    const children = [...map.values()];
+    return children.length
+      ? [{ name: "Market", changePercent: 0, isPositive: true, children }]
+      : [];
+  }, [data]);
+
+  const heatmapTiles = useMemo(() => buildHeatmap(heatmapSectors), [heatmapSectors]);
 
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const tabTitle = TAB_TITLES[activeTab];
@@ -346,13 +496,22 @@ export function MarketMoversPage() {
             />
           </div>
           <div className="flex items-center gap-1 text-xs">
-            <span className="text-muted-foreground">Indicators</span>
-            <Button variant="outline" size="sm" className="px-2">Screener</Button>
+            <Button variant="outline" size="sm" className="px-2" onClick={() => navigate("/app/stocks")}>Screener</Button>
+            <Button variant="outline" size="sm" className="px-2" onClick={downloadCsv} disabled={filteredRows.length === 0}>Download</Button>
           </div>
-          <div className="flex items-center gap-1 text-xs">
-            <Button variant="outline" size="sm" className="px-2">Download</Button>
-            <Button variant="outline" size="sm" className="px-2">Add View</Button>
-            <Button variant="outline" size="sm" className="px-2">Edit View</Button>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Market</span>
+            <select
+              value={marketFilter}
+              onChange={(e) => { setMarketFilter(e.target.value as typeof marketFilter); setPage(1); }}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            >
+              <option value="all">All</option>
+              <option value="Global">Global</option>
+              <option value="NSE">NSE</option>
+              <option value="NGX">NGX</option>
+              <option value="JSE">JSE</option>
+            </select>
           </div>
         </div>
       </div>
@@ -367,6 +526,13 @@ export function MarketMoversPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Stale data warning (previous data still shown) */}
+      {error && data && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Showing the last available data — refresh failed: {error}
+        </div>
       )}
 
       {/* Loading state */}
@@ -401,78 +567,114 @@ export function MarketMoversPage() {
         <div className="overflow-hidden border-b border-border">
           <ScrollArea className="h-[520px]">
             {/* Heatmap tab content */}
-            {activeTab === "heatmap" && heatmapSectors.length > 0 && (
+            {activeTab === "heatmap" && (
               <div className="p-4 pb-8">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-2">
                   <BarChart3 className="size-5 text-[#0D7490]" />
-                  <span className="text-sm font-semibold text-foreground">Market Heatmap</span>
+                  <span className="text-sm font-semibold text-foreground">Market Heat Map</span>
                   <span className="ml-auto text-xs text-muted-foreground">
-                    Sector performance today
+                    Tile size = market cap / activity · Color = performance
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground mb-4">
-                  Tile size = market cap · Color = performance (green up · red down)
-                </p>
-                <div className="relative w-[960px] h-[540px] border border-[#0D7490]/15 rounded-xl bg-white/10 shadow-sm">
-                  {heatmapSectors.flatMap((sector) => {
-                    const allTiles: { size: number; [key: string]: any }[] = sector.children.map((s: any) => ({
-                      ...s,
-                      size: s.marketCap > 0 ? s.marketCap : 1,
-                    }));
-                    const sectorResult: any[] = [];
-                    squarify(allTiles, 0, 0, 1, 1, sectorResult);
-                    return sectorResult.map((stock) => {
-                      const pct = typeof stock.changePercent === "number" ? stock.changePercent : 0;
-                      const stockCls = heatColor(pct);
-                      const displayName = String(stock.fullName || stock.name || stock.symbol || "");
-                      return (
-                        <div
-                          key={`${stock.symbol || stock.name}-${sector.name}`}
-                          className="absolute rounded-sm overflow-hidden"
-                          style={{
-                            left: `${Math.round(stock.x * 940)}px`,
-                            top: `${Math.round(stock.y * 520)}px`,
-                            width: `${Math.max(24, Math.round(stock.w * 940))}px`,
-                            height: `${Math.max(16, Math.round(stock.h * 520))}px`,
-                          }}
-                        >
-                          <div className={`absolute inset-0 ${stockCls} rounded-sm opacity-95`}>
-                            <div className="absolute inset-0 bg-black/20" />
-                            <div className="relative z-10 p-1 text-[9px] font-bold text-white leading-tight">
-                              {displayName}
-                              <div className="text-[8px] opacity-90 mt-1">
-                                {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })})}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground text-center">
-                    Tile size = market cap · Color = performance · Green = up · Red = down
-                  </p>
+
+                {/* Live top-movers summary (same movers feed) */}
+                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {[
+                    { label: "Top Gainers", rows: data?.gainers || [], tone: "text-emerald-600" },
+                    { label: "Top Losers", rows: data?.losers || [], tone: "text-red-600" },
+                    { label: "Most Active", rows: data?.active || [], tone: "text-[#0D7490]" },
+                  ].map((g) => (
+                    <div key={g.label} className="rounded-lg border border-border bg-muted/30 p-2">
+                      <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">{g.label}</p>
+                      <div className="space-y-0.5">
+                        {g.rows.slice(0, 3).map((r) => (
+                          <button
+                            key={`${g.label}-${r.ticker}`}
+                            onClick={() => goToStock(r.ticker, r.market)}
+                            className="flex w-full items-center justify-between gap-2 rounded px-1 py-0.5 text-left hover:bg-muted"
+                          >
+                            <span className="truncate text-[11.5px] font-medium text-foreground">{normalizeTicker(r.ticker)}</span>
+                            <span className={`text-[11px] font-semibold tabular-nums ${changeColor(r.changePercent)}`}>
+                              {(r.changePercent >= 0 ? "+" : "")}{r.changePercent.toFixed(2)}%
+                            </span>
+                          </button>
+                        ))}
+                        {g.rows.length === 0 && <p className="text-[11px] text-muted-foreground">No data</p>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
+
+                {loading && !data ? (
+                  <div className="h-[360px] flex items-center justify-center text-xs text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin mr-2" /> Loading market heat map…
+                  </div>
+                ) : heatmapTiles.length === 0 ? (
+                  <div className="h-[360px] flex flex-col items-center justify-center text-muted-foreground">
+                    <BarChart3 className="size-8 mb-2 opacity-40" />
+                    <p className="text-xs">No heat-map data available right now.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative w-full aspect-[16/9] min-h-[360px] border border-[#0D7490]/15 rounded-xl overflow-hidden bg-muted/20">
+                      {heatmapTiles.map((t, i) => {
+                        const pct = Number.isFinite(t.changePercent) ? t.changePercent : 0;
+                        const name = normalizeTicker(t.name);
+                        const label = String(t.fullName || t.name || "");
+                        return (
+                          <button
+                            key={`${name}-${t.sector || ""}-${i}`}
+                            onClick={() => goToStock(name, t.market)}
+                            title={`${label}${t.sector ? ` · ${t.sector}` : ""} · ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`}
+                            className="absolute overflow-hidden border border-white/20 text-left focus:outline-none focus:ring-2 focus:ring-white/60"
+                            style={{
+                              left: `${t.x * 100}%`,
+                              top: `${t.y * 100}%`,
+                              width: `${Math.max(1.2, t.w * 100)}%`,
+                              height: `${Math.max(1.2, t.h * 100)}%`,
+                              backgroundColor: heatStyle(pct),
+                            }}
+                          >
+                            <div className="absolute inset-0 bg-black/10" />
+                            <div className="relative z-10 p-1 text-[9px] font-bold leading-tight text-white">
+                              <div className="truncate">{name}</div>
+                              <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground text-center">
+                      Tile size = market cap (or activity when cap is unavailable) · Green = up · Red = down · Click a tile to open its analysis.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
             {/* List tab content */}
             {activeTab !== "heatmap" && (
               <Table>
                 <TableHeader>
                   <TableRow className="text-[10px] uppercase tracking-wider text-muted-foreground bg-[#0D7490]/5">
                     <TableHead className="w-5">#</TableHead>
-                    <TableHead className="w-20">Ticker</TableHead>
-                    <TableHead className="min-w-[160px]">Company</TableHead>
-                    <TableHead className="text-right w-20">Change %</TableHead>
-                    <TableHead className="text-right w-20">Price</TableHead>
-                    <TableHead className="text-right w-24">Volume</TableHead>
-                    <TableHead className="text-right w-24">Mkt Cap</TableHead>
+                    {sortHead("Ticker", "ticker", "w-20")}
+                    {sortHead("Company", "name", "min-w-[160px]")}
+                    {sortHead("Change %", "changePercent", "text-right w-20")}
+                    {sortHead("Price", "price", "text-right w-20")}
+                    {sortHead("Volume", "volume", "text-right w-24")}
+                    {sortHead("Mkt Cap", "marketCap", "text-right w-24")}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows.map((row, i) => {
                     const globalIndex = (currentPage - 1) * ROWS_PER_PAGE + i + 1;
                     return (
-                      <TableRow key={`${row.ticker}-${i}`} className="text-sm">
+                      <TableRow
+                        key={`${row.ticker}-${i}`}
+                        className="text-sm cursor-pointer hover:bg-muted/40"
+                        onClick={() => goToStock(row.ticker, row.market)}
+                        title={`Open ${normalizeTicker(row.ticker)} analysis`}
+                      >
                         <TableCell className="font-medium text-muted-foreground">{globalIndex}</TableCell>
                         <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
                         <TableCell className="max-w-[160px] truncate">{row.name}</TableCell>
