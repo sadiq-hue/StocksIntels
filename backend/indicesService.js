@@ -369,5 +369,7 @@ module.exports = {
   fetchIndexLive,
   NSE_INDICES,
   GLOBAL_INDICES,
+  NGX_INDICES,
+  JSE_INDICES,
   ALL_INDICES,
 };

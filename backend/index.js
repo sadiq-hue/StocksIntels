@@ -9688,8 +9688,14 @@ app.get('/api/earnings/upcoming', async (req, res) => {
 app.get('/api/market/indices', async (req, res) => {
   try {
     const all = await indicesService.getAllIndices();
-    const rank = { NSE: 0, Global: 1, NGX: 2, JSE: 3 };
-    res.json(Object.values(all).sort((a, b) => (rank[a.market] ?? 9) - (rank[b.market] ?? 9)));
+    // Fixed order: the UI takes the first four Global cards.
+    const order = [
+      ...Object.keys(indicesService.NSE_INDICES),
+      ...Object.keys(indicesService.GLOBAL_INDICES),
+      ...Object.keys(indicesService.NGX_INDICES),
+      ...Object.keys(indicesService.JSE_INDICES),
+    ];
+    res.json(order.map((sym) => all[sym]).filter(Boolean));
   } catch (error) {
     console.error('Error fetching indices:', error);
     res.status(500).json({ error: 'Failed to fetch market indices' });
