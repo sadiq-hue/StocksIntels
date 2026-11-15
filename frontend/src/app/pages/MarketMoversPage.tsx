@@ -65,9 +65,9 @@ function formatCompact(n?: number | null): string {
 
 function formatPrice(n?: number | null): string {
   if (n == null || !Number.isFinite(n) || n === 0) return "—";
-  if (n < 1) return n.toFixed(4);
-  if (n < 100) return n.toFixed(3);
-  return n.toFixed(2);
+  const abs = Math.abs(n);
+  const maxDecimals = abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: maxDecimals });
 }
 
 function parseCompact(v?: string | number | null): number {

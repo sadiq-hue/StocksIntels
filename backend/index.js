@@ -9807,6 +9807,7 @@ app.get('/api/market/premarket', async (req, res) => {
         regularMarketDayHigh: v.regularMarketDayHigh ?? null,
         regularMarketDayLow: v.regularMarketDayLow ?? null,
         regularMarketVolume: v.regularMarketVolume ?? null,
+        marketCap: v.marketCap ?? null,
         marketState: v.marketState || (isMarketOpen('Global').open ? 'REGULAR' : 'CLOSED'),
         currency: v.currency || 'USD',
         exchange: v.exchange || '',
