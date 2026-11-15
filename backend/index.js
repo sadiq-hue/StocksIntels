@@ -8139,6 +8139,20 @@ app.get('/api/stock/:symbol', async (req, res) => {
     const asOfIso = quote.asOf || quote.lastPriceUpdate || quote.lastUpdated || null;
     const asOfTs = asOfIso ? Math.floor(new Date(asOfIso).getTime() / 1000) : null;
     const gmtoffset = mk === 'nse' ? 10800 : mk === 'ngx' ? 3600 : mk === 'jse' ? 7200 : null;
+    // Closed African exchanges report scrape time, not the last trade. Anchor
+    // the header to the most recent weekday close instead of "now".
+    let lastCloseTs = null;
+    if (!marketOpen && mk !== 'global') {
+      const closeUtcHour = mk === 'nse' ? 12 : 15;
+      const d = new Date();
+      d.setUTCHours(closeUtcHour, 0, 0, 0);
+      if (d.getTime() > Date.now()) d.setUTCDate(d.getUTCDate() - 1);
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
+      lastCloseTs = Math.floor(d.getTime() / 1000);
+    }
+    const quoteTs = lastCloseTs || (quote.timestamp
+      ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000))
+      : (asOfTs && Number.isFinite(asOfTs) ? asOfTs : Math.floor(Date.now() / 1000)));
     res.json({
       symbol: quote.symbol || upper,
       company_name: quote.company_name || upper,
@@ -8160,9 +8174,7 @@ app.get('/api/stock/:symbol', async (req, res) => {
       currentTradingPeriod: gmtoffset != null ? { regular: { gmtoffset } } : undefined,
       asOf: asOfIso,
       stale: quote.stale != null ? Boolean(quote.stale) : undefined,
-      timestamp: quote.timestamp
-        ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000))
-        : (asOfTs && Number.isFinite(asOfTs) ? asOfTs : Math.floor(Date.now() / 1000)),
+      timestamp: quoteTs,
       lastUpdated: quote.lastUpdated || asOfIso || new Date().toISOString(),
     });
   } catch (error) {
