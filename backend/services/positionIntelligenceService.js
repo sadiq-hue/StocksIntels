@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v6';
+const PROMPT_SCHEMA_VERSION = 'v7';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -95,6 +95,11 @@ function _numsOf(s) {
     .map(Number)
     .filter((n) => Number.isFinite(n));
 }
+
+// Treat engine "no data / not available / insufficient / n/a" ratings as
+// unavailable so they are consolidated into data_quality.missing_fields instead
+// of being repeated inside factor sections.
+const NO_DATA_RE = /no\s+(data|analyst|roe|debt)|not available|insufficient|n\/a|unavailable/i;
 
 /**
  * Build the complete position context payload from the stored quantitative
@@ -336,17 +341,23 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
   const insider = payload.insider || null;
   const macro = payload.macro || analysis.macro || {};
 
+  const unavailableFactors = [];
   const factors = FACTOR_META.map((f) => {
     const signal = metrics[f.key] != null ? metrics[f.key] : null;
     const rating = metrics[f.ratingKey] != null ? metrics[f.ratingKey] : null;
     if (signal == null && rating == null) return null;
+    const text = String(rating != null ? rating : signal);
+    if (NO_DATA_RE.test(text)) {
+      unavailableFactors.push(f.name);
+      return null;
+    }
     return {
       name: f.name,
       group: f.group,
       signal,
       rating,
       assessed: true,
-      numbers: _numsOf(rating != null ? rating : signal),
+      numbers: _numsOf(text),
     };
   }).filter(Boolean);
 
@@ -377,6 +388,17 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
     reward_risk_average: _num(payload.targets.rewardRiskAverage),
     reward_risk_extended: _num(payload.targets.rewardRiskExtended),
   } : null;
+
+  // Single consolidated list of unavailable fields. Only data_quality_observations
+  // should mention these; factor sections describe available evidence only.
+  const MISSING_LABEL = {
+    'Return on Equity': 'Return on Equity (ROE)',
+    'Earnings Surprise': 'Analyst/earnings estimates',
+  };
+  const missingFields = unavailableFactors.map((n) => MISSING_LABEL[n] || n);
+  if (payload.fairValue == null) missingFields.push('Fair value');
+  if ((row.price != null ? row.price : payload.price) == null) missingFields.push('Market current price');
+  if (payload.volume == null) missingFields.push('Market-level volume');
 
   return {
     source_priority: 'AUTHORITATIVE: position, levels, factors, technicals and counts below are engine outputs. Interpret them; never contradict or override them. If a field is null, say "not provided" — do not guess.',
@@ -519,6 +541,7 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       flags: payload.intelligence && payload.intelligence.dataIntegrity
         ? payload.intelligence.dataIntegrity.flags
         : null,
+      missing_fields: missingFields,
     },
   };
 }
@@ -582,12 +605,20 @@ CONSISTENCY RULES (critical — read before writing):
 STYLE RULES:
 - Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
 - Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
-- MISSING-DATA CONSOLIDATION (strict): market.volume being null, missing fair_value, missing ROE, and missing analyst/earnings estimates must be mentioned ONLY in data_quality_observations. Do NOT mention any of these in executive_summary, factor_analysis, factor_conflicts, risk, or monitoring_priorities. In a factor section, describe the implications of available evidence; do not enumerate unavailable fields. State each missing item exactly once in data_quality_observations, without restating it in parentheses or quoting repeated engine labels.
+- MISSING-DATA CONSOLIDATION (strict): the only authoritative list of unavailable fields is data_quality.missing_fields. List them exactly once, in data_quality_observations. Do NOT name any missing field (fair value, ROE, analyst/earnings estimates, market-level volume/current price, or any excluded factor) in executive_summary, factor_analysis, factor_conflicts, risk, or monitoring_priorities. Factor sections must describe the implications of available evidence only. In monitoring_priorities, refer generically to "currently unavailable metrics" rather than naming them.
 - Always state the engine holding_period and risk_level ("~1 month", "Moderate"/"Elevated") exactly as supplied — include them in executive_summary or the risk section.
 - The recorded news catalyst may be referenced in executive_summary and news_and_sentiment; mention it elsewhere only where it adds a distinct analytical purpose (e.g., position sizing). Do not repeat it in monitoring_priorities unless it is a primary risk, and then keep it to one clause.
 - In factor_analysis, address each factor on its own terms; never generalize one missing metric into a whole category.
 - In monitoring_priorities, explicitly label any technical threshold that is not an engine rule as AI-generated guidance (for example: "AI-generated monitoring: RSI above 70 — not an engine rule"). This applies to RSI > 70 and similar thresholds. Never invent price levels, targets, or engine invalidation conditions.
 - Write like a research analyst: explain what the metrics mean and how they relate; highlight genuine supporting and opposing evidence and uncertainty; do not simply restate numbers already visible on the page.
+
+FINAL SELF-CHECK (run before returning JSON):
+1. Missing fields appear only in data_quality_observations (the data_quality.missing_fields list); no other section names them, including monitoring_priorities.
+2. sentiment_label and catalyst.direction are reported separately when they differ.
+3. risk_reward is quoted exactly as supplied (with its basis when available), not recalculated, and never described as attractive.
+4. holding_period and risk_level are stated exactly as supplied.
+5. position_score, confidence_score, recommendation, position_type and risk_reward are used distinctly; confidence is never presented as a probability of success.
+6. No invented thresholds, price levels, or engine rules; any AI-generated monitoring threshold is explicitly labelled.
 
 OUTPUT FORMAT:
 Return valid JSON only — no markdown code fences, no preamble, no explanatory text outside the JSON. The JSON must conform to this schema:
