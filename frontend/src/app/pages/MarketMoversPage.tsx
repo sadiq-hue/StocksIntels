@@ -137,8 +137,9 @@ function normalizeTicker(t?: string | null): string {
 // purged from the production CSS and the tiles render colourless).
 function heatStyle(pct: number): string {
   const clamped = Math.max(-6, Math.min(6, Number.isFinite(pct) ? pct : 0));
+  if (clamped === 0) return "rgba(148,163,184,0.35)"; // neutral / no move (e.g., closed market)
   const alpha = Math.min(0.95, 0.25 + (Math.abs(clamped) / 6) * 0.7);
-  return clamped >= 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
+  return clamped > 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
 }
 
 // Build a NON-overlapping, sector-grouped treemap:
