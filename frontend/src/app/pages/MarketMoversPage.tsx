@@ -473,7 +473,7 @@ export function MarketMoversPage() {
           <div className="min-w-0">
             <h1 className="text-[22px] font-bold tracking-tight text-foreground">{tabTitle}</h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Real-time {activeTab} across Global and African markets.
+              Live market data across Global and African markets.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -648,6 +648,11 @@ export function MarketMoversPage() {
                     <p className="mt-2 text-xs text-muted-foreground text-center">
                       Tile size = market cap (or activity when cap is unavailable) · Green = up · Red = down · Click a tile to open its analysis.
                     </p>
+                    {heatmapTiles.some((t) => !(Number(t.price) > 0) && !Number(t.changePercent)) && (
+                      <p className="mt-1 text-[10.5px] text-muted-foreground text-center">
+                        Neutral tiles indicate the latest quote for that stock is unavailable (e.g., market closed or delayed).
+                      </p>
+                    )}
                   </>
                 )}
               </div>
