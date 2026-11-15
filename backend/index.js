@@ -2629,9 +2629,9 @@ async function fetchRealTopMovers() {
   };
   try {
     const saMovers = require('./stockAnalysisMovers');
-    const [g, l] = await Promise.all([saMovers.getGainers(15), saMovers.getLosers(15)]);
+    const [g, l] = await Promise.all([saMovers.getGainers(30), saMovers.getLosers(30)]);
     if (g.length || l.length) {
-      global = { gainers: g.map(mapSA).slice(0, 10), losers: l.map(mapSA).slice(0, 10) };
+      global = { gainers: g.map(mapSA).slice(0, 30), losers: l.map(mapSA).slice(0, 30) };
     }
   } catch (e) { console.warn('[movers] stockanalysis global failed:', e.message); }
 
@@ -2640,7 +2640,7 @@ async function fetchRealTopMovers() {
     const yahooScreener = async (scrId) => {
       try {
         const r = await axios.get(
-          `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${scrId}&count=20`,
+          `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${scrId}&count=50`,
           { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
         );
         return r.data?.finance?.result?.[0]?.quotes || [];
@@ -2656,7 +2656,7 @@ async function fetchRealTopMovers() {
       };
     };
     const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
-    global = { gainers: yG.map(mapYahoo).slice(0, 10), losers: yL.map(mapYahoo).slice(0, 10) };
+    global = { gainers: yG.map(mapYahoo).slice(0, 30), losers: yL.map(mapYahoo).slice(0, 30) };
   }
 
   const { listMovers } = require('./mystocksAfricaApi');
@@ -2676,8 +2676,8 @@ async function fetchRealTopMovers() {
     try { gRows = await listMovers(ex); } catch { gRows = []; }
     try { lRows = await listMovers(ex, 'losers'); } catch { lRows = []; }
     africa[ex.toLowerCase()] = {
-      gainers: gRows.filter(keepStock).filter(r => (r.changePct || 0) > 0).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10).map(map),
-      losers: lRows.filter(keepStock).filter(r => (r.changePct || 0) < 0).sort((a, b) => (a.changePct || 0) - (b.changePct || 0)).slice(0, 10).map(map),
+      gainers: gRows.filter(keepStock).filter(r => (r.changePct || 0) > 0).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 20).map(map),
+      losers: lRows.filter(keepStock).filter(r => (r.changePct || 0) < 0).sort((a, b) => (a.changePct || 0) - (b.changePct || 0)).slice(0, 20).map(map),
     };
   }
 
@@ -2699,8 +2699,8 @@ async function fetchRealTopMovers() {
     return out;
   };
   const combined = {
-    gainers: interleave(global.gainers, africaGainers, 15),
-    losers: interleave(global.losers, africaLosers, 15),
+    gainers: interleave(global.gainers, africaGainers, 50),
+    losers: interleave(global.losers, africaLosers, 50),
   };
   return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined };
 }
@@ -2736,6 +2736,8 @@ async function getMarketSnapshot() {
       changePercent: data.changePercent || 0,
       isPositive: data.change >= 0,
       volume: formatVolume(data.volume),
+      rawVolume: Number(data.volume) || 0,
+      changeAmount: Number.isFinite(Number(data.change)) ? Number(data.change) : null,
       trades: Math.floor((data.volume || 0) / 100).toLocaleString(),
     };
   });
@@ -2743,9 +2745,9 @@ async function getMarketSnapshot() {
   const globalStocks = stocks.filter(s => !s.symbol.startsWith('NSE:'));
   const getMovers = (stockList) => {
     const sorted = [...stockList].sort((a, b) => parseFloat(b.change) - parseFloat(a.change));
-    return { gainers: sorted.filter(s => s.isPositive).slice(0, 10), losers: sorted.filter(s => !s.isPositive).reverse().slice(0, 10) };
+    return { gainers: sorted.filter(s => s.isPositive).slice(0, 30), losers: sorted.filter(s => !s.isPositive).reverse().slice(0, 30) };
   };
-  const getActive = (stockList) => [...stockList].sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume)).slice(0, 10);
+  const getActive = (stockList) => [...stockList].sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume)).slice(0, 20);
   let realMovers = null;
   try { realMovers = await fetchRealTopMovers(); } catch (e) { console.warn('[movers] real fetch failed:', e.message); }
   const hasReal = realMovers && (realMovers.combined.gainers.length || realMovers.combined.losers.length);
@@ -9388,7 +9390,7 @@ let moversCache = { data: null, at: 0, inFlight: null };
 
 async function buildDailyMovers() {
   const snapshot = await getMarketSnapshot();
-  return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d' };
+  return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d', updatedAt: snapshot.updatedAt || new Date().toISOString() };
 }
 
 app.get('/api/market/movers', async (req, res) => {
@@ -9402,7 +9404,7 @@ app.get('/api/market/movers', async (req, res) => {
         gainers: gainers.filter(g => g.market === m).slice(0, 10),
         losers: losers.filter(l => l.market === m).slice(0, 10),
       });
-      return res.json({ nse: bucket('NSE'), ngx: bucket('NGX'), jse: bucket('JSE'), global: bucket('Global'), combined: { gainers, losers }, active: [], period });
+      return res.json({ nse: bucket('NSE'), ngx: bucket('NGX'), jse: bucket('JSE'), global: bucket('Global'), combined: { gainers, losers }, active: [], period, updatedAt: new Date().toISOString() });
     } catch (error) {
       console.error('Error fetching period movers:', error);
       return res.status(500).json({ error: 'Failed to fetch top movers' });

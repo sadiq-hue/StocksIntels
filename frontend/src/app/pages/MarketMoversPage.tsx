@@ -16,7 +16,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 type TabId = "gainers" | "losers" | "active" | "premarket" | "afterhours" | "heatmap";
 type PeriodId = "1d" | "1w" | "1mo" | "ytd" | "1y" | "3y" | "5y";
-type SortKey = "ticker" | "name" | "changePercent" | "price" | "volume" | "marketCap";
+type SortKey = "ticker" | "name" | "changeAmount" | "changePercent" | "price" | "volume" | "marketCap";
 type MarketFilter = "all" | "Global" | "NSE" | "NGX" | "JSE";
 
 interface MoverRow {
@@ -26,12 +26,14 @@ interface MoverRow {
   price: number;
   change?: string;
   changePercent: number;
+  changeAmount?: number | null;
   isPositive: boolean;
   volume: string;
   rawVolume?: number;
   marketCap: number;
   currency: string;
   market: string;
+  updatedAt?: string | null;
 }
 interface SectorRow {
   name: string;
@@ -79,6 +81,40 @@ function parseCompact(v?: string | number | null): number {
 
 function normalizeTicker(t?: string | null): string {
   return String(t || "").toUpperCase().replace(/^(NSE|NGX|JSE|US|GLOBAL):/, "").trim();
+}
+
+function openOf(s: any): boolean {
+  return typeof s === "boolean" ? s : !!s?.open;
+}
+
+/** Last weekday (Mon–Fri) in the exchange timezone; used when today is a
+ *  weekend so we never label Friday's session as "today". Public holidays are
+ *  not modelled here (the backend session status remains authoritative). */
+function tradingDateLabel(tz: string): string {
+  const now = new Date();
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(now.getTime() - i * 86400000);
+    const wd = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(dt);
+    if (wd !== "Sat" && wd !== "Sun") {
+      return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(dt);
+    }
+  }
+  return "";
+}
+
+function fmtTzTime(iso: string | number | null | undefined, tz: string): string {
+  if (iso == null) return "—";
+  const d = new Date(iso as any);
+  if (isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+}
+
+function absChangeOf(row: MoverRow): number {
+  if (row.changeAmount != null && Number.isFinite(Number(row.changeAmount))) return Number(row.changeAmount);
+  const pct = Number(row.changePercent) || 0;
+  const p = Number(row.price) || 0;
+  if (p > 0 && pct !== 0) return p - p / (1 + pct / 100);
+  return 0;
 }
 
 function displayVolume(r: MoverRow): string {
@@ -221,6 +257,9 @@ export function MarketMoversPage() {
   const [period, setPeriod] = useState<PeriodId>("1d");
   const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any> } | null>(null);
   const [indices, setIndices] = useState<IndexRow[]>([]);
+  const [status, setStatus] = useState<any>(null);
+  const [asOf, setAsOf] = useState<string>("");
+  const [cached, setCached] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -242,10 +281,11 @@ export function MarketMoversPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       };
-      const [moversRes, sectorsRes, indicesRes] = await Promise.allSettled([
+      const [moversRes, sectorsRes, indicesRes, statusRes] = await Promise.allSettled([
         fetchJson(`/market/movers?period=${effectivePeriod}`),
         fetchJson(`/market/sectors/tree`),
         fetchJson(`/market/indices`),
+        fetchJson(`/market/status`),
       ]);
 
       if (moversRes.status !== "fulfilled" || !moversRes.value || typeof moversRes.value !== "object") {
@@ -276,6 +316,8 @@ export function MarketMoversPage() {
         ticker: normalizeTicker(r.ticker || r.symbol),
         change: r.change ?? ((r.changePercent ?? 0) >= 0 ? "+" : "") + Number(r.changePercent ?? 0).toFixed(2) + "%",
         rawVolume: Number.isFinite(Number(r.rawVolume)) && Number(r.rawVolume) > 0 ? Number(r.rawVolume) : parseCompact(r.volume),
+        changeAmount: Number.isFinite(Number(r.changeAmount)) ? Number(r.changeAmount) : null,
+        updatedAt: r.updatedAt || null,
       });
       const gainers: MoverRow[] = pick("gainers").map(withChange);
       const losers: MoverRow[] = pick("losers").map(withChange);
@@ -318,6 +360,9 @@ export function MarketMoversPage() {
 
       setData({ gainers, losers, active, sectors, premarket });
       setIndices(idx);
+      setStatus(statusRes.status === "fulfilled" ? statusRes.value : null);
+      setAsOf(md.updatedAt || new Date().toISOString());
+      setCached(!!md.cached);
       setLastUpdated(new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" }));
       setError(null);
     } catch (e: any) {
@@ -361,32 +406,36 @@ export function MarketMoversPage() {
       case "active": return data.active;
       case "premarket":
         return Object.entries(data.premarket).map(([symbol, q]: [string, any]) => {
-          const c = Number(q.preMarketChangePercent ?? q.changePercent ?? 0);
+          const c = Number(q.preMarketChangePercent ?? 0);
           return {
             ticker: normalizeTicker(symbol), symbol,
             name: q.company_name || q.name || symbol,
-            price: Number(q.preMarketPrice ?? q.price ?? 0),
+            price: Number(q.preMarketPrice ?? 0),
             change: (c >= 0 ? "+" : "") + c.toFixed(2) + "%",
             changePercent: c, isPositive: c >= 0,
-            volume: formatCompact(Number(q.preMarketVolume ?? q.volume ?? 0)),
-            rawVolume: Number(q.preMarketVolume ?? q.volume ?? 0),
+            changeAmount: Number.isFinite(Number(q.preMarketChange)) ? Number(q.preMarketChange) : null,
+            volume: formatCompact(Number(q.preMarketVolume ?? 0)),
+            rawVolume: Number(q.preMarketVolume ?? 0),
             marketCap: Number(q.marketCap ?? 0),
             currency: q.currency ?? "USD", market: q.market ?? "Global",
+            updatedAt: Number.isFinite(Number(q.preMarketTime)) && Number(q.preMarketTime) > 0 ? new Date(Number(q.preMarketTime)).toISOString() : null,
           };
         }).filter((r) => r.price > 0);
       case "afterhours":
         return Object.entries(data.premarket).map(([symbol, q]: [string, any]) => {
-          const c = Number(q.postMarketChangePercent ?? q.changePercent ?? 0);
+          const c = Number(q.postMarketChangePercent ?? 0);
           return {
             ticker: normalizeTicker(symbol), symbol,
             name: q.company_name || q.name || symbol,
-            price: Number(q.postMarketPrice ?? q.price ?? 0),
+            price: Number(q.postMarketPrice ?? 0),
             change: (c >= 0 ? "+" : "") + c.toFixed(2) + "%",
             changePercent: c, isPositive: c >= 0,
-            volume: formatCompact(Number(q.postMarketVolume ?? q.volume ?? 0)),
-            rawVolume: Number(q.postMarketVolume ?? q.volume ?? 0),
+            changeAmount: Number.isFinite(Number(q.postMarketChange)) ? Number(q.postMarketChange) : null,
+            volume: formatCompact(Number(q.postMarketVolume ?? 0)),
+            rawVolume: Number(q.postMarketVolume ?? 0),
             marketCap: Number(q.marketCap ?? 0),
             currency: q.currency ?? "USD", market: q.market ?? "Global",
+            updatedAt: Number.isFinite(Number(q.postMarketTime)) && Number(q.postMarketTime) > 0 ? new Date(Number(q.postMarketTime)).toISOString() : null,
           };
         }).filter((r) => r.price > 0);
       default: return data.gainers;
@@ -405,6 +454,7 @@ export function MarketMoversPage() {
       let cmp = 0;
       if (sortKey === "ticker") cmp = a.ticker.localeCompare(b.ticker);
       else if (sortKey === "name") cmp = String(a.name || "").localeCompare(String(b.name || ""));
+      else if (sortKey === "changeAmount") cmp = absChangeOf(a) - absChangeOf(b);
       else if (sortKey === "changePercent") cmp = a.changePercent - b.changePercent;
       else if (sortKey === "price") cmp = Number(a.price) - Number(b.price);
       else if (sortKey === "volume") cmp = (Number(a.rawVolume) || parseCompact(a.volume)) - (Number(b.rawVolume) || parseCompact(b.volume));
@@ -455,9 +505,31 @@ export function MarketMoversPage() {
   const globalIndices = indices.filter((i) => i.market === "Global").slice(0, 4);
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const isListTab = activeTab !== "heatmap";
+
+  // Exchange-aware session labels. We use the Global (US) calendar for the
+  // header; African sessions are reported via the market-status API too.
+  const SESSION_TZ = "America/New_York";
+  const marketOpen = openOf(status?.global) || ["nse", "ngx", "jse"].some((k) => openOf(status?.[k]));
+  const lastSession = tradingDateLabel(SESSION_TZ);
+  const sessionWord = marketOpen ? "Today" : "Last Trading Session";
+  const sessionSuffix = marketOpen ? "" : ` · ${lastSession}`;
+  const asOfTime = fmtTzTime(asOf, SESSION_TZ);
+  const freshness = error
+    ? "Stale"
+    : cached
+      ? (marketOpen ? "Delayed (cached)" : "Cached · last session")
+      : marketOpen ? "Live" : "Last trading session";
+
+  const periodWord = period === "1d" ? sessionWord : PERIOD_LABEL[period];
   const sectionTitle = activeTab === "gainers" || activeTab === "losers"
-    ? `${TAB_TITLES[activeTab]} ${PERIOD_LABEL[period]}`
+    ? `${TAB_TITLES[activeTab]} ${periodWord}`
     : TAB_TITLES[activeTab];
+  const emptyMessage =
+    activeTab === "premarket"
+      ? `Premarket session is closed or no premarket quotes are available for the tracked universe. Last checked ${lastUpdated || "—"}.`
+      : activeTab === "afterhours"
+        ? `After-hours session is closed or no after-hours quotes are available for the tracked universe. Last checked ${lastUpdated || "—"}.`
+        : `No ${sectionTitle.toLowerCase()} data available right now.`;
 
   return (
     <div className="w-full max-w-none px-3 md:px-5 py-5 space-y-4">
@@ -473,7 +545,8 @@ export function MarketMoversPage() {
               {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCcw className="size-4" />}
               <span>Refresh</span>
             </Button>
-            <span className="text-xs text-muted-foreground">Updated {lastUpdated || "—"}</span>
+            <span className={`text-[11px] font-semibold ${error ? "text-amber-700" : marketOpen ? "text-emerald-600" : "text-muted-foreground"}`}>{freshness}</span>
+            <span className="text-[11px] text-muted-foreground">as of {asOfTime}{sessionSuffix}</span>
           </div>
         </div>
 
@@ -514,7 +587,7 @@ export function MarketMoversPage() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-foreground">Stock Indexes</h2>
-            <span className="text-[11px] text-muted-foreground">{lastUpdated || "—"}</span>
+            <span className="text-[11px] text-muted-foreground">{marketOpen ? `Today · ${asOfTime}` : `Last session${sessionSuffix} · ${asOfTime}`}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {globalIndices.map((i) => (
@@ -558,7 +631,7 @@ export function MarketMoversPage() {
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="text-[15px] font-bold text-foreground">{sectionTitle}</h2>
-            <p className="text-[11px] text-muted-foreground">Updated {lastUpdated || "—"}</p>
+            <p className="text-[11px] text-muted-foreground">{marketOpen ? "Live" : "Last trading session"}{sessionSuffix} · as of {asOfTime}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
@@ -606,21 +679,25 @@ export function MarketMoversPage() {
       {isListTab && (
         <div className="border border-border rounded-2xl shadow-sm bg-background overflow-hidden">
           <ScrollArea className="h-[620px]">
-            <Table>
+            <Table className="min-w-[880px]">
               <TableHeader>
                 <TableRow className="text-[10px] uppercase tracking-wider text-muted-foreground bg-[#0D7490]/5">
                   <TableHead className="w-8">#</TableHead>
-                  {sortHead("Ticker", "ticker", "w-24")}
-                  {sortHead("Company", "name", "min-w-[180px]")}
-                  {sortHead("Change %", "changePercent", "text-right w-24")}
-                  {sortHead("Price", "price", "text-right w-24")}
-                  {sortHead("Volume", "volume", "text-right w-32")}
+                  {sortHead("Symbol", "ticker", "w-20")}
+                  {sortHead("Company", "name", "min-w-[160px]")}
+                  {sortHead("Price", "price", "text-right w-20")}
+                  {sortHead("Change", "changeAmount", "text-right w-20")}
+                  {sortHead("Change %", "changePercent", "text-right w-20")}
+                  {sortHead("Volume", "volume", "text-right w-28")}
                   {sortHead("Mkt Cap", "marketCap", "text-right w-24")}
+                  <TableHead className="text-right w-16">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pageRows.map((row, i) => {
                   const globalIndex = (currentPage - 1) * ROWS_PER_PAGE + i + 1;
+                  const amt = absChangeOf(row);
+                  const amtText = `${amt >= 0 ? "+" : "-"}${formatPrice(Math.abs(amt))}`;
                   return (
                     <TableRow
                       key={`${row.ticker}-${i}`}
@@ -631,12 +708,14 @@ export function MarketMoversPage() {
                       <TableCell className="font-medium text-muted-foreground">{globalIndex}</TableCell>
                       <TableCell className="font-semibold tabular-nums">{row.ticker}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{row.name}</TableCell>
+                      <TableCell className="font-bold tabular-nums text-right">{formatPrice(Number(row.price))}</TableCell>
+                      <TableCell className={`tabular-nums text-right ${changeColor(row.changePercent)}`}>{amtText}</TableCell>
                       <TableCell className={`font-semibold tabular-nums text-right ${changeColor(row.changePercent)}`}>
                         {(row.changePercent >= 0 ? "+" : "")}{Number(row.changePercent).toFixed(2)}%
                       </TableCell>
-                      <TableCell className="font-bold tabular-nums text-right">{formatPrice(Number(row.price))}</TableCell>
                       <TableCell className="tabular-nums text-right text-muted-foreground">{displayVolume(row)}</TableCell>
                       <TableCell className="tabular-nums text-right text-muted-foreground">{formatCompact(Number(row.marketCap))}</TableCell>
+                      <TableCell className="tabular-nums text-right text-muted-foreground">{fmtTzTime(row.updatedAt || asOf, SESSION_TZ)}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -645,7 +724,7 @@ export function MarketMoversPage() {
             {pageRows.length === 0 && (
               <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
                 <BarChart3 className="size-8 mb-2 opacity-40" />
-                <p className="text-xs">No {sectionTitle.toLowerCase()} data available right now.</p>
+                <p className="text-xs">{emptyMessage}</p>
               </div>
             )}
           </ScrollArea>
