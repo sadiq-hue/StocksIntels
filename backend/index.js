@@ -8136,6 +8136,9 @@ app.get('/api/stock/:symbol', async (req, res) => {
     if (!quote) return res.status(404).json({ error: 'Stock not found' });
     const mk = lookup.startsWith('NSE:') ? 'nse' : lookup.startsWith('NGX:') ? 'ngx' : lookup.startsWith('JSE:') ? 'jse' : 'global';
     const marketOpen = mk === 'nse' ? marketHours.nseOpen() : mk === 'ngx' ? marketHours.ngxOpen() : mk === 'jse' ? marketHours.jseOpen() : isMarketOpen('Global').open;
+    const asOfIso = quote.asOf || quote.lastPriceUpdate || quote.lastUpdated || null;
+    const asOfTs = asOfIso ? Math.floor(new Date(asOfIso).getTime() / 1000) : null;
+    const gmtoffset = mk === 'nse' ? 10800 : mk === 'ngx' ? 3600 : mk === 'jse' ? 7200 : null;
     res.json({
       symbol: quote.symbol || upper,
       company_name: quote.company_name || upper,
@@ -8148,12 +8151,19 @@ app.get('/api/stock/:symbol', async (req, res) => {
       dayLow: quote.dayLow || quote.low || 0,
       previousClose: quote.previousClose || quote.previous_close || 0,
       marketCap: quote.marketCap || 0,
+      fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ?? quote.yearHigh ?? null,
+      fiftyTwoWeekLow: quote.fiftyTwoWeekLow ?? quote.yearLow ?? null,
       currency: quote.currency || (mk === 'nse' ? 'KES' : mk === 'ngx' ? 'NGN' : mk === 'jse' ? 'ZAR' : 'USD'),
       provider: quote.provider || 'synthetic',
       exchange: quote.exchange || (mk === 'nse' ? 'NSE' : mk === 'ngx' ? 'NGX' : mk === 'jse' ? 'JSE' : 'Global'),
-      marketState: marketOpen ? 'REGULAR' : 'CLOSED',
-      timestamp: quote.timestamp ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000)) : Math.floor(Date.now() / 1000),
-      lastUpdated: quote.lastUpdated || new Date().toISOString(),
+      marketState: quote.marketState || quote.marketStatus || (marketOpen ? 'REGULAR' : 'CLOSED'),
+      currentTradingPeriod: gmtoffset != null ? { regular: { gmtoffset } } : undefined,
+      asOf: asOfIso,
+      stale: quote.stale != null ? Boolean(quote.stale) : undefined,
+      timestamp: quote.timestamp
+        ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000))
+        : (asOfTs && Number.isFinite(asOfTs) ? asOfTs : Math.floor(Date.now() / 1000)),
+      lastUpdated: quote.lastUpdated || asOfIso || new Date().toISOString(),
     });
   } catch (error) {
     console.error(`Error fetching stock ${req.params.symbol}:`, error.message);
@@ -8195,7 +8205,11 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
     if (isNse || isNgx || isJse) {
       try {
         const msa = require('./mystocksAfricaApi');
-        bars = await msa.fetchHistorical(upper, range || '6mo');
+        let africaSymbol = upper;
+        if (upper.endsWith('.NSE')) africaSymbol = `NSE:${upper.slice(0, -4)}`;
+        else if (upper.endsWith('.NR')) africaSymbol = `NSE:${upper.slice(0, -3)}`;
+        else if (upper.endsWith('.KE')) africaSymbol = `NSE:${upper.slice(0, -3)}`;
+        bars = await msa.fetchHistorical(africaSymbol, range || '6mo');
       } catch (e) { /* optional module – fall through to Yahoo */ }
     }
 

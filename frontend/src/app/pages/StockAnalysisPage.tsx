@@ -159,10 +159,22 @@ export function StockAnalysisPage() {
   const [activeMarket, setActiveMarket] = useState<StockMarket>(initialUrl?.market || "nse");
   const [africaUniverse, setAfricaUniverse] = useState<StockListItem[]>([]);
   const stockUniverse = useMemo(
-    () => (activeMarket === "nse" ? [...kenyanStocks, ...africaUniverse] : globalStocks),
+    () => (activeMarket === "global"
+      ? globalStocks
+      : activeMarket === "nse"
+        ? kenyanStocks
+        : africaUniverse.filter((s) => s.market === activeMarket)),
     [activeMarket, africaUniverse]
   );
-  const [selectedStock, setSelectedStock] = useState<StockListItem>(initialUrl?.stock || stockUniverse[0]);
+  const [selectedStock, setSelectedStock] = useState<StockListItem>(initialUrl?.stock || stockUniverse[0] || kenyanStocks[0]);
+
+  // If the exchange universe finishes loading (or the selected ticker isn't on
+  // the active exchange), fall back to a real listing instead of a placeholder.
+  useEffect(() => {
+    if (stockUniverse.length > 0 && !stockUniverse.some((s) => s.ticker === selectedStock?.ticker)) {
+      setSelectedStock(stockUniverse[0]);
+    }
+  }, [stockUniverse, selectedStock?.ticker]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "financials" | "statistics" | "dividends" | "history" | "profile">("overview");
   const [sortBy, setSortBy] = useState<"ticker" | "price" | "change" | "volume">("ticker");
@@ -255,7 +267,7 @@ export function StockAnalysisPage() {
         });
       }
     }
-  }, [urlTicker]);
+  }, [urlTicker, urlMarket]);
 
   // Load NGX (Nigeria) & JSE (South Africa) listings into the African Stocks tab,
   // alongside the Kenyan NSE universe.
@@ -320,6 +332,12 @@ export function StockAnalysisPage() {
   const finSymbol = activeSelection.market === 'jse' ? `JSE:${activeSelection.ticker}`
     : activeSelection.market === 'ngx' ? `NGX:${activeSelection.ticker}`
     : activeSelection.ticker;
+  // History providers expect exchange-qualified symbols: NSE:SCOM / NGX:MTN / JSE:MTN.
+  const historySymbol = activeSelection.market === 'nse' ? `NSE:${activeSelection.ticker}`
+    : activeSelection.market === 'ngx' ? `NGX:${activeSelection.ticker}`
+    : activeSelection.market === 'jse' ? `JSE:${activeSelection.ticker}`
+    : activeSelection.ticker;
+  const isAfricanMarket = ["nse", "ngx", "jse"].includes(activeSelection.market);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -587,6 +605,7 @@ export function StockAnalysisPage() {
   const tickerLine = exchangeLabel ? `${exchangeLabel}: ${activeSelection.ticker}` : activeSelection.ticker;
   const displayName = yahooData?.company_name?.trim() || liveQuote?.company_name?.trim() || activeSelection.name || activeSelection.ticker;
   const currencyLabel = yahooData?.currency || liveQuote?.currency || activeSelection.currency || (isNse ? 'KES' : 'USD');
+  const priceModeLabel = isAfricanMarket ? (isRegular ? 'Delayed Price' : 'Last Close') : 'Real-Time Price';
 
   // Fetch signal from the SAME source as the Market Intelligence page
   // (/api/signals, the signal-engine cache + monitored open positions) so this
@@ -671,15 +690,10 @@ export function StockAnalysisPage() {
     let cancelled = false;
     setTvFailed(false);
     setChartLoading(true);
-    const m = activeSelection.market;
-    const symbol = m === "nse"
-      ? `${activeSelection.ticker}.NSE`
-      : (m === "ngx" || m === "jse")
-        ? `${m.toUpperCase()}:${activeSelection.ticker}`
-        : activeSelection.ticker;
+    setChartHistory([]);
     const fetchHistory = async () => {
       try {
-        const bars = await fetchStockHistory(symbol, periodToRange(chartPeriod));
+        const bars = await fetchStockHistory(historySymbol, periodToRange(chartPeriod));
         if (!cancelled && bars.length > 0) {
           setChartHistory(bars);
         }
@@ -688,7 +702,26 @@ export function StockAnalysisPage() {
     };
     fetchHistory();
     return () => { cancelled = true; };
-  }, [activeSelection.ticker, activeSelection.market, chartPeriod]);
+  }, [historySymbol, chartPeriod]);
+
+  // African listing feeds don't expose a 52-week range, so derive it once from
+  // a year of closing/high/low history.
+  const [range52, setRange52] = useState<{ low: number; high: number } | null>(null);
+  useEffect(() => {
+    if (!isAfricanMarket) { setRange52(null); return; }
+    let cancelled = false;
+    fetchStockHistory(historySymbol, "1y")
+      .then((bars) => {
+        if (cancelled || bars.length === 0) return;
+        const highs = bars.map((b) => Number(b.high) || Number(b.close) || 0).filter((n) => n > 0);
+        const lows = bars.map((b) => Number(b.low) || Number(b.close) || 0).filter((n) => n > 0);
+        if (highs.length && lows.length) {
+          setRange52({ low: Math.min(...lows), high: Math.max(...highs) });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [historySymbol, isAfricanMarket]);
 
   const chartData = useMemo(() => {
     if (chartHistory.length === 0) return [];
@@ -778,8 +811,8 @@ export function StockAnalysisPage() {
   const fi = fr?.incomeStatement || null;
   const fh = Array.isArray(fr?.incomeStatementHistory) ? fr!.incomeStatementHistory : [];
   const latestDiv = Array.isArray(fr?.dividendHistory) ? fr!.dividendHistory[0] : null;
-  const yearLow = fq?.yearLow ?? yahooData?.fiftyTwoWeekLow ?? null;
-  const yearHigh = fq?.yearHigh ?? yahooData?.fiftyTwoWeekHigh ?? null;
+  const yearLow = fq?.yearLow ?? yahooData?.fiftyTwoWeekLow ?? liveQuote?.fiftyTwoWeekLow ?? range52?.low ?? null;
+  const yearHigh = fq?.yearHigh ?? yahooData?.fiftyTwoWeekHigh ?? liveQuote?.fiftyTwoWeekHigh ?? range52?.high ?? null;
   const curSym = liveQuote?.currency || activeSelection.currency || (isNse ? "KES" : "USD");
   const money = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) !== 0 ? `${curSym} ${formatCompact(Number(v))}` : "—");
   const priceOf = (v?: number | null) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? `${curSym} ${formatPrice(Number(v))}` : "—");
@@ -800,7 +833,7 @@ export function StockAnalysisPage() {
     { label: "Open", value: priceOf(fq?.open) },
     { label: "Previous Close", value: priceOf(fq?.previousClose || liveQuote?.previousClose) },
     { label: "Day Range", value: fq?.dayLow || fq?.dayHigh ? `${formatPrice(fq?.dayLow)} – ${formatPrice(fq?.dayHigh)}` : "—" },
-    { label: "52-Week Range", value: fq?.yearLow || fq?.yearHigh ? `${formatPrice(fq?.yearLow)} – ${formatPrice(fq?.yearHigh)}` : "—" },
+    { label: "52-Week Range", value: yearLow || yearHigh ? `${formatPrice(yearLow)} – ${formatPrice(yearHigh)}` : "—" },
   ].filter((s) => s.value !== "—" && s.value !== "N/A");
 
   const financialSeries = fh
@@ -824,7 +857,7 @@ export function StockAnalysisPage() {
               {displayName} <span className="text-muted-foreground font-medium">({activeSelection.ticker})</span>
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {tickerLine} · Real-Time Price · {currencyLabel}
+              {tickerLine} · {priceModeLabel} · {currencyLabel}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-muted-foreground">
@@ -1210,7 +1243,7 @@ export function StockAnalysisPage() {
                 ["Current Ratio", fk?.currentRatio ? fk.currentRatio.toFixed(2) : "—"],
                 ["Dividend Yield", pctOf(fk?.dividendYieldPercentage ?? fk?.dividendYield)],
                 ["Payout Ratio", fk?.payoutRatio ? pctOf(fk.payoutRatio) : "—"],
-                ["52-Week Range", fq?.yearLow || fq?.yearHigh ? `${formatPrice(fq?.yearLow)} – ${formatPrice(fq?.yearHigh)}` : "—"],
+                ["52-Week Range", yearLow || yearHigh ? `${formatPrice(yearLow)} - ${formatPrice(yearHigh)}` : "-"],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between border-b border-border/60 py-2 text-[11px]">
                   <span className="text-muted-foreground">{label}</span>
