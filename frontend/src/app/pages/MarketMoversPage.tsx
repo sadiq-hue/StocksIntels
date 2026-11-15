@@ -235,39 +235,21 @@ function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
   if (!flat.length) return [];
   flat.sort((a, b) => b.size - a.size);
 
-  let chosen: any[];
-  if (mode === "all") {
-    const african = flat.filter((c) => c.group === "African").slice(0, 60);
-    const global = flat.filter((c) => c.group === "Global").slice(0, 160);
-    chosen = [...global, ...african];
-  } else {
-    chosen = flat.slice(0, 200);
-  }
-  if (!chosen.length) return [];
-
-  // Level 1 — market groups. In "All" mode reserve ~18% of the area for African
-  // markets so global mega-caps cannot crowd them out.
-  const groupMap = new Map<string, Map<string, any[]>>();
-  for (const t of chosen) {
-    if (!groupMap.has(t.group)) groupMap.set(t.group, new Map());
-    const sm = groupMap.get(t.group)!;
-    if (!sm.has(t.sector)) sm.set(t.sector, []);
-    sm.get(t.sector)!.push(t);
-  }
+  // One treemap per market group. Grouping by sector inside a small group caused
+  // extreme region skew (huge sector vs 1-stock sector) and dropped slivers, so
+  // each group is laid out flat; sector remains in the tooltip.
   const groupNodes: any[] = [];
-  for (const [g, sm] of groupMap) {
-    const sectorNodes = [...sm.entries()].map(([name, children]) => ({
-      name,
-      size: children.reduce((sum, c) => sum + c.size, 0),
-      children,
-    }));
-    groupNodes.push({ name: g, size: sectorNodes.reduce((sum, n) => sum + n.size, 0), sectorNodes });
-  }
   if (mode === "all") {
-    const g = groupNodes.find((n) => n.name === "Global");
-    const a = groupNodes.find((n) => n.name === "African");
-    if (g && a && a.size < g.size * 0.18) a.size = g.size * 0.18;
+    const global = flat.filter((c) => c.group === "Global").slice(0, 160);
+    const african = flat.filter((c) => c.group === "African").slice(0, 60);
+    const gSum = global.reduce((sum, c) => sum + c.size, 0);
+    const aSum = african.reduce((sum, c) => sum + c.size, 0);
+    if (global.length) groupNodes.push({ name: "Global", size: gSum, tiles: global });
+    if (african.length) groupNodes.push({ name: "African", size: Math.max(aSum, gSum * 0.18), tiles: african });
+  } else {
+    groupNodes.push({ name: mode === "african" ? "African" : "Global", size: 1, tiles: flat.slice(0, 200) });
   }
+  if (!groupNodes.length) return [];
 
   const groupScaled = scaleSizes(groupNodes, 1);
   const groupRegions: any[] = [];
@@ -275,17 +257,11 @@ function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
 
   const tiles: any[] = [];
   for (const gr of groupRegions) {
-    const gArea = Math.max(1e-6, gr.w * gr.h);
-    const sectorScaled = scaleSizes(gr.sectorNodes || [], gArea);
-    const sectorRegions: any[] = [];
-    squarify(sectorScaled, gr.x, gr.y, gr.w, gr.h, sectorRegions);
-    for (const sr of sectorRegions) {
-      const sArea = Math.max(1e-6, sr.w * sr.h);
-      const kids = scaleSizes(sr.children || [], sArea);
-      const out: any[] = [];
-      squarify(kids, sr.x, sr.y, sr.w, sr.h, out);
-      tiles.push(...out.map((t) => ({ ...t, group: gr.name, region: { x: sr.x, y: sr.y, w: sr.w, h: sr.h } })));
-    }
+    const area = Math.max(1e-6, gr.w * gr.h);
+    const kids = scaleSizes(gr.tiles || [], area);
+    const placed: any[] = [];
+    squarify(kids, gr.x, gr.y, gr.w, gr.h, placed);
+    tiles.push(...placed.map((t) => ({ ...t, group: gr.name, region: { x: gr.x, y: gr.y, w: gr.w, h: gr.h } })));
   }
   return tiles;
 }
@@ -577,10 +553,10 @@ export function MarketMoversPage() {
     return children.length ? [{ name: "Market", changePercent: 0, isPositive: true, children }] : [];
   }, [data]);
   const heatmapTiles = useMemo(() => buildHeatmap(heatmapSectors, heatMarket), [heatmapSectors, heatMarket]);
-  const heatmapSectorRegions = useMemo(() => {
+  const heatmapGroupRegions = useMemo(() => {
     const seen = new Map<string, any>();
     for (const t of heatmapTiles) {
-      if (t.sector && t.region && !seen.has(t.sector)) seen.set(t.sector, t.region);
+      if (t.group && t.region && !seen.has(t.group)) seen.set(t.group, t.region);
     }
     return [...seen.entries()];
   }, [heatmapTiles]);
@@ -884,7 +860,7 @@ export function MarketMoversPage() {
           ) : (
             <>
               <div className="relative w-full aspect-[16/9] min-h-[360px] border border-[#0D7490]/15 rounded-xl overflow-hidden bg-muted/20">
-                {heatmapSectorRegions.map(([name, r]) => (
+                {heatmapGroupRegions.map(([name, r]) => (
                   <div
                     key={`sector-${name}`}
                     className="absolute border border-white/30 pointer-events-none"
