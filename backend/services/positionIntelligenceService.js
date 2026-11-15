@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v4';
+const PROMPT_SCHEMA_VERSION = 'v5';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -366,9 +366,29 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
   const overallScore = analysis.overall && analysis.overall.score != null ? _num(analysis.overall.score) : null;
   // Mirrors the page's displayed "Risk Level" (MarketIntelligenceCard riskLevel).
   const riskLevelDisplay = overallScore == null ? null : (overallScore >= 70 ? 'Moderate' : 'Elevated');
+  // How the engine derived risk_reward: with scenario targets it is
+  // (average target - entry)/(entry - stop); otherwise (min target - entry)/(entry - stop)
+  // (see riskManager.calculateTradeLevels and scenarioTargets.buildScenarioTargets).
+  const targetMethod = payload.targetMethod || null;
+  const riskRewardBasis = rr == null ? null : (targetMethod === 'scenario' ? 'average_target' : 'minimum_target');
+  const targetRewardRisk = payload.targets ? {
+    method: payload.targets.method || null,
+    reward_risk_minimum: _num(payload.targets.rewardRiskMinimum),
+    reward_risk_average: _num(payload.targets.rewardRiskAverage),
+    reward_risk_extended: _num(payload.targets.rewardRiskExtended),
+  } : null;
 
   return {
     source_priority: 'AUTHORITATIVE: position, levels, factors, technicals and counts below are engine outputs. Interpret them; never contradict or override them. If a field is null, say "not provided" — do not guess.',
+
+    metric_definitions: {
+      position_score: 'Weighted engine composite (0-100). This is NOT confidence.',
+      confidence_score: 'Engine conviction (0-100). This is NOT a probability of success.',
+      recommendation: 'Engine classification (Strong Buy / Buy / Hold / Sell / Strong Sell).',
+      position_type: 'Trade style label (e.g., Aggressive Buy, Swing Trade).',
+      risk_level: 'Displayed risk classification (Moderate / Elevated).',
+      risk_reward: 'Reward-to-risk ratio (reward distance / risk distance). This is NOT a probability.',
+    },
 
     position: {
       ticker: row.ticker || payload.ticker || null,
@@ -486,7 +506,9 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       risk_reward: rr,
       overall_score: overallScore,
       risk_level: riskLevelDisplay,
-      risk_reward_note: 'Engine-supplied reward-to-risk ratio; do not recalculate. A value below 1 means the potential reward is smaller than the risk distance.',
+      risk_reward_basis: riskRewardBasis,
+      target_reward_risk: targetRewardRisk,
+      risk_reward_note: 'Engine-supplied reward-to-risk ratio (reward / risk distance); do not recalculate. <1 means potential reward is smaller than the risk distance. This is not a probability and does not by itself imply attractive asymmetry.',
       cross_factor_risk_signal: payload.intelligence && payload.intelligence.riskLevel ? payload.intelligence.riskLevel : null,
       cross_factor_summary: payload.intelligence && payload.intelligence.summary ? payload.intelligence.summary : null,
     },
@@ -551,7 +573,8 @@ CONSISTENCY RULES (critical — read before writing):
   · A missing metric (e.g., ROE or analyst estimates) does not mean the whole category is missing when a related factor is assessed (e.g., Margin Trend = "Margin stable").
 - A factor present in fundamentals.factors / financial_health.factors with a signal or rating is ASSESSED. Never describe Margin Trend as unspecified or missing when its rating is "Margin stable" — treat margin as assessed (stable/neutral). Only factors completely absent are unspecified.
 - news_and_sentiment.sentiment_label is the OVERALL aggregate; news_and_sentiment.catalyst.direction is a SPECIFIC recorded event. If they differ (for example overall sentiment is positive while the recorded catalyst direction is negative, such as a Crisis), state both: overall coverage is positive, and the specific catalyst remains a risk. Never say there is "no negative catalyst" when catalyst.direction is negative.
-- levels.risk_reward is the engine's supplied reward-to-risk ratio. Do not recalculate it. A value below 1 means the potential reward is smaller than the risk distance; do not describe it as attractive or acceptable asymmetry without evidence.
+- levels.risk_reward is the engine's supplied reward-to-risk ratio (reward distance / risk distance), computed against the engine target basis in valuation_and_risk.risk_reward_basis (minimum_target or average_target). Do NOT recalculate it. A value below 1 means the potential reward is smaller than the risk distance. Do not describe it as attractive/acceptable asymmetry, and never imply that a Strong Buy recommendation, a high position score, or high confidence implies a good risk/reward. Where they diverge, explicitly acknowledge the tension between Strong Buy / score / confidence and a sub-1 risk/reward with a Moderate risk label.
+- Keep these metrics strictly distinct and never substitute one for another: position_score (weighted engine composite), confidence_score (engine conviction — NOT a probability of success), recommendation, position_type, risk_level, and risk_reward. Do not present confidence as a probability and do not present position_score as confidence.
 - recommendation, confidence_score, risk_level and holding_period are engine outputs. Preserve them exactly (including the stated holding period and "Moderate"/"Elevated" risk label) and never present expected upside as guaranteed.
 - Do not assert a company development as verified when it appears only as a headline — attribute it to the headline ("a headline reports…"). Do not invent price levels, thresholds, or engine invalidation rules.
 - Engine invalidation conditions come only from the supplied levels and engine fields. Your own monitoring suggestions are AI-generated and must be labelled as such.
@@ -560,7 +583,11 @@ STYLE RULES:
 - Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
 - Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
 - State each data limitation exactly once, in data_quality_observations. Do not repeat the same missing-field note inside factor sections.
+- Consolidate duplicates in data_quality_observations. In particular, mention each of the following only once across the whole response: market.volume being null, missing fair_value, and missing ROE / analyst estimates.
+- The recorded news catalyst may be referenced in Overall Assessment and News & Sentiment; mention it elsewhere only where it adds a distinct analytical purpose (e.g., position sizing). Do not restate it in every section.
 - In factor_analysis, address each factor on its own terms; never generalize one missing metric into a whole category.
+- In monitoring_priorities, explicitly label any technical threshold that is not an engine rule as AI-generated guidance (for example: "AI-generated monitoring: RSI above 70 — not an engine rule"). This applies to RSI > 70 and similar thresholds. Never invent price levels, targets, or engine invalidation conditions.
+- Write like a research analyst: explain what the metrics mean and how they relate; highlight genuine supporting and opposing evidence and uncertainty; do not simply restate numbers already visible on the page.
 
 OUTPUT FORMAT:
 Return valid JSON only — no markdown code fences, no preamble, no explanatory text outside the JSON. The JSON must conform to this schema:
