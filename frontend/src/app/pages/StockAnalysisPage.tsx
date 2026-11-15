@@ -1001,25 +1001,6 @@ export function StockAnalysisPage() {
               </Card>
             )}
 
-            {/* News */}
-            <Card className="border border-border shadow-sm">
-              <div className="p-4">
-                <h2 className="text-sm font-semibold text-foreground">News</h2>
-                {stockSignal?.news && stockSignal.news.length > 0 ? (
-                  <div className="mt-3 divide-y divide-border">
-                    {stockSignal.news.slice(0, 8).map((n: any, i: number) => (
-                      <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block py-2.5 group">
-                        <p className="text-[12px] font-medium text-foreground leading-snug group-hover:text-[#0D7490]">{n.headline}</p>
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">{n.source}{n.timestamp ? ` · ${n.timestamp}` : ""}</p>
-                      </a>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">No recent news available.</p>
-                )}
-              </div>
-            </Card>
-
             {/* NSE insights */}
             {activeSelection.market === "nse" && nseInsights && (
               <Card className="border border-border shadow-sm">
@@ -1151,6 +1132,25 @@ export function StockAnalysisPage() {
                   </div>
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground">No StocksIntels analysis available for this listing yet.</p>
+                )}
+              </div>
+            </Card>
+
+            {/* News */}
+            <Card className="border border-border shadow-sm">
+              <div className="p-4">
+                <h2 className="text-sm font-semibold text-foreground">News</h2>
+                {stockSignal?.news && stockSignal.news.length > 0 ? (
+                  <div className="mt-3 divide-y divide-border">
+                    {stockSignal.news.slice(0, 8).map((n: any, i: number) => (
+                      <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block py-2.5 group">
+                        <p className="text-[12px] font-medium text-foreground leading-snug group-hover:text-[#0D7490]">{n.headline}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">{n.source}{n.timestamp ? ` · ${n.timestamp}` : ""}</p>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">No recent news available.</p>
                 )}
               </div>
             </Card>
