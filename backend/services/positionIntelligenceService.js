@@ -512,7 +512,8 @@ Please provide a structured analytical interpretation of this position following
   let rawOutput;
   try {
     const result = await azureAIClient.createResponse(SYSTEM_PROMPT, userPrompt, {
-      maxOutputTokens: 2500,
+      maxOutputTokens: 12000,
+      reasoningEffort: 'low',
       requestId: `ai-intel-${ticker}-${Date.now()}`,
     });
     rawOutput = result.outputText;

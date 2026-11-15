@@ -94,6 +94,7 @@ async function createResponse(systemPrompt, userPrompt, options = {}) {
   const {
     maxOutputTokens = 2000,
     requestId = null,
+    reasoningEffort = 'low',
   } = options;
 
   const client = init();
@@ -101,14 +102,19 @@ async function createResponse(systemPrompt, userPrompt, options = {}) {
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await client.responses.create({
+      const reqBody = {
         model: MODEL,
         input: [
           { type: 'message', role: 'system', content: systemPrompt },
           { type: 'message', role: 'user', content: userPrompt },
         ],
         max_output_tokens: maxOutputTokens,
-      });
+      };
+      // Reasoning models (gpt-5-mini) spend output tokens on hidden reasoning.
+      // Keep it low so the token budget is available for the JSON response.
+      if (reasoningEffort) reqBody.reasoning = { effort: reasoningEffort };
+
+      const res = await client.responses.create(reqBody);
 
       logger.info('[AzureAI] response received', {
         requestId,
