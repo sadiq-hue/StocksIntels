@@ -9990,9 +9990,12 @@ app.get('/api/market/sectors/tree', async (req, res) => {
     // The `stocks` table only carries Global + NSE, so without this the African
     // heatmap would show NSE only.
     try {
-      const { listAllStocks } = require('./mystocksAfricaApi');
+      const { listStocks } = require('./mystocksAfricaApi');
+      // One 200-row page per exchange is plenty for the heatmap's 50 African
+      // tiles and keeps a cold request well inside the proxy timeout (walking
+      // every JSE page can take over a minute).
       const universes = await Promise.allSettled(
-        ['NGX', 'JSE'].map((ex) => listAllStocks(ex, { limit: 200, maxPages: 5 }).then((v) => ({ ex, v })))
+        ['NGX', 'JSE'].map((ex) => listStocks(ex, { limit: 200 }).then((v) => ({ ex, v })))
       );
       const seen = new Set(entries.map((e) => `${e.market}:${e.ticker}`));
       for (const res of universes) {
