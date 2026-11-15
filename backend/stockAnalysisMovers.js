@@ -30,9 +30,8 @@ function num(s) {
   return isFinite(n) ? n : 0;
 }
 
-async function fetchList(kind) {
-  const resp = await axios.get(`https://stockanalysis.com/markets/${kind}/`, { timeout: 20000, headers: HEADERS });
-  const $ = cheerio.load(resp.data);
+function parseRows(html) {
+  const $ = cheerio.load(html);
   const out = [];
   $('table tr').each((_, tr) => {
     const cells = $(tr).find('td').map((__, td) => $(td).text().trim()).get();
@@ -49,6 +48,30 @@ async function fetchList(kind) {
     });
   });
   return out;
+}
+
+async function fetchList(kind) {
+  const url = `https://stockanalysis.com/markets/${kind}/`;
+  let rows = [];
+  try {
+    const resp = await axios.get(url, { timeout: 20000, headers: HEADERS });
+    const body = String(resp.data || '');
+    if (!/Just a moment|cf-challenge|challenge-platform/i.test(body)) {
+      rows = parseRows(body);
+    }
+  } catch { /* fall through to renderer */ }
+  // Cloudflare sometimes serves an interstitial to plain HTTP clients. The
+  // renderer container's Chromium can load the real page, so use it as backup.
+  if (rows.length < 5) {
+    try {
+      const { render } = require('./rendererClient');
+      const rendered = await render(url, { html: true, selector: 'table tbody tr', timeout: 45000 });
+      rows = parseRows(rendered.html || '');
+    } catch (e) {
+      console.warn(`[stockanalysis] ${kind} renderer fallback failed: ${e.message}`);
+    }
+  }
+  return rows;
 }
 
 async function getGainers(limit = 15) { return (await fetchList('gainers')).slice(0, limit); }
