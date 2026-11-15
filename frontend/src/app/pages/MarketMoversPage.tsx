@@ -18,6 +18,7 @@ type TabId = "gainers" | "losers" | "active" | "premarket" | "afterhours" | "hea
 type PeriodId = "1d" | "1w" | "1mo" | "ytd" | "1y" | "3y" | "5y";
 type SortKey = "ticker" | "name" | "changeAmount" | "changePercent" | "price" | "volume" | "marketCap";
 type MarketFilter = "all" | "Global" | "NSE" | "NGX" | "JSE";
+type HeatMarket = "all" | "global" | "african";
 
 interface MoverRow {
   ticker: string;
@@ -184,11 +185,22 @@ function squarify(nodes: { size: number; [key: string]: any }[], x: number, y: n
   }
 }
 
-function heatStyle(pct: number): string {
-  const clamped = Math.max(-6, Math.min(6, Number.isFinite(pct) ? pct : 0));
-  if (clamped === 0) return "rgba(148,163,184,0.35)";
-  const alpha = Math.min(0.95, 0.25 + (Math.abs(clamped) / 6) * 0.7);
-  return clamped > 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
+function heatStyle(pct: number): { backgroundColor: string; color: string } {
+  const p = Number.isFinite(pct) ? pct : 0;
+  const a = Math.abs(p);
+  if (a < 0.05) return { backgroundColor: "rgba(100,116,139,0.35)", color: "#0f172a" }; // flat / no move
+  if (p > 0) {
+    if (a >= 5) return { backgroundColor: "rgba(21,128,61,0.92)", color: "#ffffff" };
+    if (a >= 3) return { backgroundColor: "rgba(22,163,74,0.85)", color: "#ffffff" };
+    if (a >= 2) return { backgroundColor: "rgba(34,197,94,0.78)", color: "#052e16" };
+    if (a >= 1) return { backgroundColor: "rgba(74,222,128,0.72)", color: "#052e16" };
+    return { backgroundColor: "rgba(134,239,172,0.65)", color: "#052e16" };
+  }
+  if (a >= 5) return { backgroundColor: "rgba(153,27,27,0.92)", color: "#ffffff" };
+  if (a >= 3) return { backgroundColor: "rgba(185,28,28,0.86)", color: "#ffffff" };
+  if (a >= 2) return { backgroundColor: "rgba(220,38,38,0.80)", color: "#ffffff" };
+  if (a >= 1) return { backgroundColor: "rgba(248,113,113,0.75)", color: "#450a0a" };
+  return { backgroundColor: "rgba(252,165,165,0.68)", color: "#450a0a" };
 }
 
 // Scale node sizes so their total equals the rectangle area. squarify expects
@@ -200,24 +212,38 @@ function scaleSizes(nodes: any[], area: number): any[] {
   return nodes.map((n) => ({ ...n, size: Math.max((n.size > 0 ? n.size : 1) * k, 1e-9) }));
 }
 
-function buildHeatmap(sectors: SectorRow[]): any[] {
+function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
   // Flatten every stock first, keep only the largest few, THEN group by sector.
   // Slicing after layout (or capping per sector before layout) leaves uncovered
   // holes in the rectangle — this way the treemap always fills the area exactly.
+  const isAfrican = (m?: string) => ["NSE", "NGX", "JSE"].includes(String(m || "").toUpperCase());
   const flat: any[] = [];
   for (const s of sectors) {
     for (const c of (s.children || [])) {
+      const market = c.market || "Global";
+      if (mode === "global" && isAfrican(market)) continue;
+      if (mode === "african" && !isAfrican(market)) continue;
       const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
       const act = parseCompact(c.volume);
-      flat.push({ ...c, sector: s.name, size: cap > 0 ? cap : act > 0 ? act : 1 });
+      flat.push({ ...c, sector: s.name, market, size: cap > 0 ? cap : act > 0 ? act : 1 });
     }
   }
   if (!flat.length) return [];
   flat.sort((a, b) => b.size - a.size);
-  const top = flat.slice(0, 220);
+
+  // "All" reserves a slice for African markets so global mega-caps don't crowd
+  // them out entirely (NSE has no market cap, so it sizes by activity).
+  let chosen: any[];
+  if (mode === "all") {
+    const african = flat.filter((c) => isAfrican(c.market)).slice(0, 60);
+    const global = flat.filter((c) => !isAfrican(c.market)).slice(0, 160);
+    chosen = [...global, ...african];
+  } else {
+    chosen = flat.slice(0, 200);
+  }
 
   const groups = new Map<string, any[]>();
-  for (const t of top) {
+  for (const t of chosen) {
     if (!groups.has(t.sector)) groups.set(t.sector, []);
     groups.get(t.sector)!.push(t);
   }
@@ -295,6 +321,7 @@ export function MarketMoversPage() {
   const [sortKey, setSortKey] = useState<SortKey>("changePercent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
+  const [heatMarket, setHeatMarket] = useState<HeatMarket>("all");
   const ROWS_PER_PAGE = 20;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -528,7 +555,7 @@ export function MarketMoversPage() {
     const children = [...map.values()];
     return children.length ? [{ name: "Market", changePercent: 0, isPositive: true, children }] : [];
   }, [data]);
-  const heatmapTiles = useMemo(() => buildHeatmap(heatmapSectors), [heatmapSectors]);
+  const heatmapTiles = useMemo(() => buildHeatmap(heatmapSectors, heatMarket), [heatmapSectors, heatMarket]);
   const heatmapSectorRegions = useMemo(() => {
     const seen = new Map<string, any>();
     for (const t of heatmapTiles) {
@@ -786,7 +813,21 @@ export function MarketMoversPage() {
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <BarChart3 className="size-5 text-[#0D7490]" />
             <span className="text-sm font-semibold text-foreground">Market Heat Map</span>
-            <span className="ml-auto text-[11px] text-muted-foreground">Tile size = market cap / activity · Color = performance</span>
+            <div className="ml-auto flex items-center gap-1">
+              {([
+                { id: "all", label: "All markets" },
+                { id: "global", label: "Global" },
+                { id: "african", label: "African" },
+              ] as { id: HeatMarket; label: string }[]).map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setHeatMarket(m.id)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${heatMarket === m.id ? "bg-[#0D7490] text-white" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -833,6 +874,7 @@ export function MarketMoversPage() {
                   const pct = Number.isFinite(t.changePercent) ? t.changePercent : 0;
                   const name = normalizeTicker(t.name);
                   const label = String(t.fullName || t.name || "");
+                  const tone = heatStyle(pct);
                   return (
                     <button
                       key={`${name}-${t.sector || ""}-${i}`}
@@ -842,12 +884,13 @@ export function MarketMoversPage() {
                       style={{
                         left: `${t.x * 100}%`, top: `${t.y * 100}%`,
                         width: `${t.w * 100}%`, height: `${t.h * 100}%`,
-                        backgroundColor: heatStyle(pct),
+                        backgroundColor: tone.backgroundColor,
+                        color: tone.color,
                       }}
                     >
                       <div className="absolute inset-0 bg-black/10" />
                       {t.w * 100 >= 4 && t.h * 100 >= 5 && (
-                        <div className="relative z-10 p-1 text-[9px] font-bold leading-tight text-white">
+                        <div className="relative z-10 p-1 text-[9px] font-bold leading-tight">
                           <div className="truncate">{name}</div>
                           <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
                         </div>
@@ -857,7 +900,7 @@ export function MarketMoversPage() {
                 })}
               </div>
               <p className="mt-2 text-xs text-muted-foreground text-center">
-                Tile size = market cap (or activity when cap is unavailable) · Green = up · Red = down · Click a tile to open its analysis.
+                Tile size = market cap (or activity when cap is unavailable) · Includes Global + African (NSE/NGX/JSE) · Green = up · Red = down · Click a tile to open its analysis.
               </p>
               {heatmapTiles.some((t) => !(Number(t.price) > 0) && !Number(t.changePercent)) && (
                 <p className="mt-1 text-[10.5px] text-muted-foreground text-center">
