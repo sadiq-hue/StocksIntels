@@ -240,8 +240,8 @@ function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
   if (!flat.length) return [];
   flat.sort((a, b) => b.size - a.size);
 
-  const global = flat.filter((c) => c.group === "Global").slice(0, 160);
-  const african = flat.filter((c) => c.group === "African").slice(0, 60);
+  const global = flat.filter((c) => c.group === "Global").slice(0, 120);
+  const african = flat.filter((c) => c.group === "African").slice(0, 50);
 
   // Deterministic regions (no squarify on 2 thin groups, which can consume the
   // full width and drop the remaining tiles).
@@ -892,8 +892,8 @@ export function MarketMoversPage() {
                       }}
                     >
                       <div className="absolute inset-0 bg-black/10" />
-                      {t.w * 100 >= 2 && t.h * 100 >= 2.5 && (
-                        <div className="relative z-10 p-1 text-[9px] font-bold leading-tight">
+                      {t.w * 100 >= 1.8 && t.h * 100 >= 2.2 && (
+                        <div className="relative z-10 p-1 text-[8px] font-bold leading-none">
                           <div className="truncate">{name || "—"}</div>
                           {t.w * 100 >= 5 && t.h * 100 >= 6 && (
                             <div className="text-[8px] opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
