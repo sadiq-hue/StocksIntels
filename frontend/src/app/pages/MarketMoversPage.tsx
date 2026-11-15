@@ -772,7 +772,7 @@ export function MarketMoversPage() {
       {isListTab && (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <div className="max-h-[620px] overflow-auto">
-            <Table className="min-w-[900px]">
+            <Table className="min-w-[900px]" containerClassName="overflow-visible">
               <TableHeader className="sticky top-0 z-20 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/90">
                 <TableRow className="border-b border-border bg-[#0D7490]/5 text-[10px] uppercase tracking-wider text-muted-foreground hover:bg-[#0D7490]/5">
                   <TableHead className="w-8">#</TableHead>
@@ -963,11 +963,11 @@ export function MarketMoversPage() {
                       }}
                     >
                       <div className="absolute inset-0 bg-black/10 transition-colors group-hover:bg-black/0" />
-                      {t.w * 100 >= 1.6 && t.h * 100 >= 1.8 && (
-                        <div className="relative z-10 p-1 text-[9px] font-bold leading-tight">
+                      {t.w * 100 >= 1.6 && t.h * 100 >= 1.9 && (
+                        <div className="relative z-10 p-1 text-[8px] font-bold leading-tight">
                           <div className="truncate">{name || "—"}</div>
                           {t.w * 100 >= 4 && t.h * 100 >= 4.5 && (
-                            <div className="text-[8.5px] font-semibold opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
+                            <div className="text-[7.5px] font-semibold opacity-90">{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</div>
                           )}
                         </div>
                       )}
