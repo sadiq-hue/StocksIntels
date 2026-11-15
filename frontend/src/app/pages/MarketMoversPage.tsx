@@ -201,13 +201,31 @@ function scaleSizes(nodes: any[], area: number): any[] {
 }
 
 function buildHeatmap(sectors: SectorRow[]): any[] {
-  const rawNodes = sectors
-    .map((s) => {
-      const children = (s.children || []).slice(0, 60);
-      const size = children.reduce((sum, c: any) => sum + (Number(c.marketCap) > 0 ? Number(c.marketCap) : 1), 0);
-      return { name: s.name, size: size > 0 ? size : 1, children };
-    })
-    .filter((n) => n.children.length > 0);
+  // Flatten every stock first, keep only the largest few, THEN group by sector.
+  // Slicing after layout (or capping per sector before layout) leaves uncovered
+  // holes in the rectangle — this way the treemap always fills the area exactly.
+  const flat: any[] = [];
+  for (const s of sectors) {
+    for (const c of (s.children || [])) {
+      const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
+      const act = parseCompact(c.volume);
+      flat.push({ ...c, sector: s.name, size: cap > 0 ? cap : act > 0 ? act : 1 });
+    }
+  }
+  if (!flat.length) return [];
+  flat.sort((a, b) => b.size - a.size);
+  const top = flat.slice(0, 220);
+
+  const groups = new Map<string, any[]>();
+  for (const t of top) {
+    if (!groups.has(t.sector)) groups.set(t.sector, []);
+    groups.get(t.sector)!.push(t);
+  }
+  const rawNodes = [...groups.entries()].map(([name, children]) => ({
+    name,
+    size: children.reduce((sum, c) => sum + c.size, 0),
+    children,
+  }));
   if (!rawNodes.length) return [];
 
   const nodes = scaleSizes(rawNodes, 1);
@@ -216,18 +234,13 @@ function buildHeatmap(sectors: SectorRow[]): any[] {
 
   const tiles: any[] = [];
   for (const region of regions) {
-    const rawKids = (region.children || []).map((c: any) => {
-      const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
-      const act = parseCompact(c.volume);
-      return { ...c, sector: region.name, size: cap > 0 ? cap : act > 0 ? act : 1 };
-    });
     const area = Math.max(1e-6, region.w * region.h);
-    const kids = scaleSizes(rawKids, area);
+    const kids = scaleSizes(region.children || [], area);
     const out: any[] = [];
     squarify(kids, region.x, region.y, region.w, region.h, out);
-    tiles.push(...out);
+    tiles.push(...out.map((t) => ({ ...t, region: { x: region.x, y: region.y, w: region.w, h: region.h } })));
   }
-  return tiles.slice(0, 300);
+  return tiles;
 }
 
 const TABS_CONFIG: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -516,6 +529,13 @@ export function MarketMoversPage() {
     return children.length ? [{ name: "Market", changePercent: 0, isPositive: true, children }] : [];
   }, [data]);
   const heatmapTiles = useMemo(() => buildHeatmap(heatmapSectors), [heatmapSectors]);
+  const heatmapSectorRegions = useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const t of heatmapTiles) {
+      if (t.sector && t.region && !seen.has(t.sector)) seen.set(t.sector, t.region);
+    }
+    return [...seen.entries()];
+  }, [heatmapTiles]);
   const globalIndices = indices.filter((i) => i.market === "Global").slice(0, 4);
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const isListTab = activeTab !== "heatmap";
@@ -802,6 +822,13 @@ export function MarketMoversPage() {
           ) : (
             <>
               <div className="relative w-full aspect-[16/9] min-h-[360px] border border-[#0D7490]/15 rounded-xl overflow-hidden bg-muted/20">
+                {heatmapSectorRegions.map(([name, r]) => (
+                  <div
+                    key={`sector-${name}`}
+                    className="absolute border border-white/30 pointer-events-none"
+                    style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` }}
+                  />
+                ))}
                 {heatmapTiles.map((t, i) => {
                   const pct = Number.isFinite(t.changePercent) ? t.changePercent : 0;
                   const name = normalizeTicker(t.name);
