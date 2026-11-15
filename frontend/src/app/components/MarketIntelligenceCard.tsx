@@ -298,6 +298,13 @@ export function MarketIntelligenceCard({
   }, [s.signal, s.type, positive, negative, insufficient, tech, insd, insNet, newsCount, newsBand, newsJudgment, macro, trendRead]);
 
   const rr = num(s.riskReward);
+  // Engine risk/reward is measured to the minimum target unless scenario
+  // targets are used (then it is measured to the average target).
+  const rrBasisLabel = s.targetMethod === "scenario" ? "average target" : "minimum target";
+  const avgScenarioRR =
+    entry != null && stop != null && entry > stop && t2 != null
+      ? (t2 - entry) / (entry - stop)
+      : null;
   const riskLevel = overall ? (num(overall.score)! >= 70 ? "Moderate" : "Elevated") : "Not assessed";
 
   const whatCouldChange = useMemo(() => {
@@ -816,7 +823,7 @@ export function MarketIntelligenceCard({
             )}
             {s.targets?.rewardRiskMinimum != null && (
               <Fact
-                label="Target R:R (min / avg)"
+                label="Engine Target R:R (min / avg)"
                 value={`${s.targets.rewardRiskMinimum} : 1 / ${s.targets.rewardRiskAverage ?? "—"} : 1`}
                 assess=""
               />
@@ -850,7 +857,11 @@ export function MarketIntelligenceCard({
         <div className="space-y-0.5 text-[12px]">
           <Fact label="Risk Level" value={<span className="font-sans">{riskLevel}</span>} assess="" />
           <Fact label="Model Allocation" value={<span className="font-sans">{s.positionSize || "—"}</span>} assess="" />
-          <Fact label="Risk/Reward" value={rr != null ? `${rr.toFixed(1)} : 1` : "—"} assess="" />
+          <Fact
+            label="Engine Risk/Reward"
+            value={rr != null ? `${rr.toFixed(1)} : 1` : "—"}
+            assess={rr != null ? <span className="text-[10.5px] text-muted-foreground">to the {rrBasisLabel}</span> : ""}
+          />
           {s.eventRisk && (
             <Fact
               label="Event Risk"
@@ -859,6 +870,18 @@ export function MarketIntelligenceCard({
             />
           )}
         </div>
+        {rr != null && rrBasisLabel === "minimum target" && avgScenarioRR != null && (
+          <p className="mt-1.5 text-[10.5px] leading-snug text-muted-foreground">
+            The engine ratio above is measured to the Minimum Target. For the Average Target ({money(t2)}), the implied
+            reward-to-risk is ~{avgScenarioRR.toFixed(2)}:1, derived from the supplied entry, stop and target — shown for
+            context only, not an engine output.
+          </p>
+        )}
+        {rr != null && rrBasisLabel === "average target" && (
+          <p className="mt-1.5 text-[10.5px] leading-snug text-muted-foreground">
+            The engine ratio above is measured to the Average Target.
+          </p>
+        )}
         <p className="mt-2 flex items-start gap-1.5 text-[11px] italic text-muted-foreground">
           <ShieldCheck className="mt-px size-3 shrink-0" />
           Model output — not personalized investment advice.

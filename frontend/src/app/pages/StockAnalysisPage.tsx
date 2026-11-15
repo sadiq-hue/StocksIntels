@@ -1129,8 +1129,9 @@ export function StockAnalysisPage() {
                         {[
                           ["Entry", stockSignal.entry],
                           ["Stop", stockSignal.stopLoss],
-                          ["Target 1", stockSignal.target1],
-                          ["Target 2", stockSignal.target2],
+                          ["Minimum Target", stockSignal.target1],
+                          ["Average Target", stockSignal.target2],
+                          ["Extended Target", stockSignal.target3],
                         ].filter(([, v]) => v != null).map(([label, v]) => (
                           <div key={String(label)} className="rounded-lg border border-border bg-muted/40 p-2">
                             <p className="uppercase tracking-wider text-muted-foreground">{label}</p>

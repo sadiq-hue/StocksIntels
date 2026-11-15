@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v8';
+const PROMPT_SCHEMA_VERSION = 'v9';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -664,6 +664,10 @@ CONSISTENCY RULES (critical — read before writing):
 - news_and_sentiment.sentiment_label is the OVERALL aggregate; news_and_sentiment.catalyst.direction is a SPECIFIC recorded event. If they differ (for example overall sentiment is positive while the recorded catalyst direction is negative, such as a Crisis), state both: overall coverage is positive, and the specific catalyst remains a risk. Never say there is "no negative catalyst" when catalyst.direction is negative.
 - levels.risk_reward is the engine's supplied reward-to-risk ratio (reward distance / risk distance), computed against the engine target basis in valuation_and_risk.risk_reward_basis (minimum_target or average_target). Do NOT recalculate it. A value below 1 means the potential reward is smaller than the risk distance. Do not describe it as attractive/acceptable asymmetry, and never imply that a Strong Buy recommendation, a high position score, or high confidence implies a good risk/reward. Where they diverge, explicitly acknowledge the tension between Strong Buy / score / confidence and a sub-1 risk/reward with a Moderate risk label.
 - Keep these metrics strictly distinct and never substitute one for another: position_score (weighted engine composite), confidence_score (engine conviction — NOT a probability of success), recommendation, position_type, risk_level, and risk_reward. Do not present confidence as a probability and do not present position_score as confidence.
+- Volume: when technicals.volume_signal is "Average Volume", describe it as context only. Do not claim it confirms a breakout or trend, and do not infer accumulation, distribution, or relative-volume behaviour unless the necessary historical comparison data is supplied. Keep technicals.volume distinct from market.volume.
+- Financial health: do not describe the overall assessment as uniformly strong. Reflect each factor's own classification (e.g., D/E strong, Current Ratio strong, ROE unavailable, Altman neutral) and the aggregate grade separately. Leverage/liquidity can be supportive without overriding a moderate overall grade.
+- Recommendation meaning: do not imply expected catalysts or future events unless they are explicitly present in the supplied data.
+- If you mention an average-target scenario ratio, explicitly label it as derived/illustrative and distinct from the engine-supplied risk_reward value and its stated basis.
 - recommendation, confidence_score, risk_level and holding_period are engine outputs. Preserve them exactly (including the stated holding period and "Moderate"/"Elevated" risk label) and never present expected upside as guaranteed.
 - Do not assert a company development as verified when it appears only as a headline — attribute it to the headline ("a headline reports…"). Do not invent price levels, thresholds, or engine invalidation rules.
 - Engine invalidation conditions come only from the supplied levels and engine fields. Your own monitoring suggestions are AI-generated and must be labelled as such.
@@ -685,6 +689,7 @@ FINAL SELF-CHECK (run before returning JSON):
 4. holding_period and risk_level are stated exactly as supplied.
 5. position_score, confidence_score, recommendation, position_type and risk_reward are used distinctly; confidence is never presented as a probability of success.
 6. No invented thresholds, price levels, or engine rules; any AI-generated monitoring threshold is explicitly labelled.
+7. Average volume is not presented as confirmation of a breakout; the overall financial-health assessment is not described as uniformly strong.
 
 OUTPUT FORMAT:
 Return valid JSON only — no markdown code fences, no preamble, no explanatory text outside the JSON. The JSON must conform to this schema:
