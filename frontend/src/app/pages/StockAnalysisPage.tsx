@@ -50,8 +50,6 @@ import { SignalContextExtras } from "../components/SignalContext";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
-import { AiPositionIntelligence as AiIntelligenceCard } from "../components/AiPositionIntelligence";
-import { requestAiAnalysis } from "../services/aiIntelligenceService";
 import { useAuth } from "../auth/AuthContext";
 import { authFetch } from "../auth/tokenStore";
 import { CompareButton } from "../components/CompareButton";
@@ -629,39 +627,10 @@ export function StockAnalysisPage() {
     return () => { cancelled = true; };
   }, [activeSelection.ticker, activeSelection.market, user?.id]);
 
-  // Fetch AI interpretation for the current ticker when signal data is available.
-  useEffect(() => {
-    const ticker = activeSelection.ticker;
-    let cancelled = false;
-    let controller: AbortController | null = null;
-
-    const fetchAi = async () => {
-      if (!stockSignal) return;
-      setAiLoading(true);
-      setAiError(null);
-      controller = new AbortController();
-      try {
-        const res = await requestAiAnalysis(ticker);
-        if (!cancelled) {
-          setAiAnalysis(res.analysis);
-          setAiLastAnalyzed(res.generated_at);
-          setAiModel(res.model);
-        }
-      } catch (err: any) {
-        if (!cancelled && err?.name !== "AbortError") {
-          setAiError(err.message || "AI analysis unavailable");
-        }
-      } finally {
-        if (!cancelled) setAiLoading(false);
-      }
-    };
-
-    fetchAi();
-    return () => {
-      cancelled = true;
-      controller?.abort();
-    };
-  }, [activeSelection.ticker, stockSignal]);
+  // AI interpretation fetch is disabled on the Stock Analysis page.
+  // The comprehensive assessment is now shown inside the Market Intelligence
+  // page (Open full analysis → position detail), so we don't make a second,
+  // duplicate AI request here.
 
   const displayPrice = regularPrice ?? 0;
   const displayChange = liveQuote?.changePercent ?? 0;
@@ -1180,32 +1149,10 @@ export function StockAnalysisPage() {
               </div>
             </Card>
 
-            {/* AI Position Intelligence — interpretive layer, separate from engine output */}
-            <AiIntelligenceCard
-              ticker={activeSelection.ticker}
-              analysis={aiAnalysis}
-              loading={aiLoading}
-              error={aiError}
-              lastAnalyzed={aiLastAnalyzed}
-              model={aiModel}
-              engineSignal={stockSignal?.signal || null}
-              engineConfidence={stockSignal?.confidence || null}
-              onRetry={() => {
-                setAiLoading(true);
-                setAiError(null);
-                void requestAiAnalysis(activeSelection.ticker)
-                  .then(res => {
-                    setAiAnalysis(res.analysis);
-                    setAiLastAnalyzed(res.generated_at);
-                    setAiModel(res.model);
-                    setAiLoading(false);
-                  })
-                  .catch(err => {
-                    setAiError(err.message || "AI analysis unavailable");
-                    setAiLoading(false);
-                  });
-              }}
-            />
+            {/* AI Investment Overview removed here on purpose: this page already
+                shows the "StocksIntels Analysis" summary above, and the full
+                detailed assessment lives on the Market Intelligence page
+                (Open full analysis). Keeping a second AI card duplicated it. */}
           </aside>
         </div>
       )}
