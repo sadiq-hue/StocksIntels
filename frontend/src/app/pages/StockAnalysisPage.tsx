@@ -64,7 +64,12 @@ const formatCurrency = (stock: StockListItem, liveCurrency?: string) => {
 
 function formatPrice(value?: number | null) {
   if (value == null || !Number.isFinite(value) || value === 0) return "—";
-  return value.toFixed(4);
+  const abs = Math.abs(value);
+  const maxDecimals = abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: maxDecimals,
+  });
 }
 
 function formatCompact(value?: number | null): string {
@@ -76,7 +81,7 @@ function formatCompact(value?: number | null): string {
   if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
   if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}M`;
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)}K`;
-  return `${n}`;
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 interface LiveQuote {
@@ -757,7 +762,7 @@ export function StockAnalysisPage() {
 
   const statStrip = [
     { label: "Sector", value: activeSelection.sector, icon: Layers },
-    { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : "-", icon: BarChart3 },
+    { label: "Volume", value: formatCompact(liveQuote?.volume), icon: BarChart3 },
     { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : "-"; })(), icon: PieChart },
     { label: "P/E Ratio", value: (() => {
       const pe = financialReport?.data?.quote?.pe || financialReport?.data?.keyMetrics?.peRatio || 0;
