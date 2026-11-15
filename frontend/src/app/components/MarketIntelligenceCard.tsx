@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "./ui/badge";
 import { AlertTriangle, ChevronDown, Radio, ShieldCheck } from "lucide-react";
 import { currencyPrefix } from "../utils/currency";
+import type { AiPositionIntelligence } from "../types/signals";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -134,6 +135,17 @@ function Fact({ label, value, assess }: { label: string; value: ReactNode; asses
   );
 }
 
+/** Narrative insight attached to a section. Text only — never alters a number. */
+function Note({ title, children }: { title?: string; children: ReactNode }) {
+  if (!children) return null;
+  return (
+    <div className="mt-2.5 rounded-lg border border-border/60 bg-muted/30 p-2.5 text-[12px] leading-relaxed text-foreground/90">
+      {title && <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">{title}</p>}
+      {children}
+    </div>
+  );
+}
+
 /**
  * Market Intelligence card, structured as a position brief.
  *
@@ -151,7 +163,19 @@ function Fact({ label, value, assess }: { label: string; value: ReactNode; asses
  *    where the model has no score (news sentiment) that is stated rather than
  *    filled in.
  */
-export function MarketIntelligenceCard({ signal }: { signal: any }) {
+export function MarketIntelligenceCard({
+  signal,
+  ai = null,
+  aiLoading = false,
+  aiError = null,
+  onRetryAi,
+}: {
+  signal: any;
+  ai?: AiPositionIntelligence | null;
+  aiLoading?: boolean;
+  aiError?: string | null;
+  onRetryAi?: () => void;
+}) {
   const s = signal || {};
   const a = s.analysis || {};
   const company = s.companyProfile || a.company || {};
@@ -464,7 +488,33 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
 
       {/* ── 2. why ── */}
       <Block title="Investment View">
-        <p className="text-[13px] leading-relaxed text-foreground">{view}</p>
+        {ai?.executive_summary ? (
+          <div className="space-y-2 text-[13px] leading-relaxed text-foreground">
+            <p className="font-semibold text-foreground">Overall Assessment</p>
+            <p>{ai.executive_summary}</p>
+            {ai.recommendation_context?.interpretation && (
+              <>
+                <p className="mt-2 font-semibold text-foreground">What the recommendation means</p>
+                <p>{ai.recommendation_context.interpretation}</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="text-[13px] leading-relaxed text-foreground">{view}</p>
+            {aiLoading && (
+              <p className="mt-1.5 text-[11.5px] text-muted-foreground">Preparing a detailed assessment…</p>
+            )}
+            {aiError && onRetryAi && (
+              <button
+                onClick={onRetryAi}
+                className="mt-1.5 text-[11px] font-medium text-[#0D7490] hover:underline"
+              >
+                Run detailed assessment
+              </button>
+            )}
+          </>
+        )}
       </Block>
 
       {/* ── 5. the evidence, dimension by dimension ── */}
@@ -497,6 +547,18 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
             </div>
           )}
         </div>
+        {ai?.factor_conflicts && ai.factor_conflicts.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground">How the factors interact</p>
+            {ai.factor_conflicts.map((c, i) => (
+              <div key={i} className="rounded-md border border-border/60 bg-muted/30 p-2 text-[11.5px] leading-relaxed">
+                <p className="font-semibold text-foreground">{c.factor_pair}</p>
+                <p className="text-muted-foreground">{c.conflict}</p>
+                <p className="mt-0.5 text-foreground/90">{c.assessment}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </Block>
 
       {/* ── fundamentals ── */}
@@ -529,6 +591,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
             )}
           </div>
         </details>
+        {ai?.factor_analysis?.fundamentals && (
+          <Note title="Interpretation">{ai.factor_analysis.fundamentals}</Note>
+        )}
       </Block>
 
       {/* ── financial health, previously buried inside fundamentals ── */}
@@ -536,6 +601,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
         {byGroup("Financial Health").length
           ? groupRows("Financial Health")
           : <p className="text-[12px] text-muted-foreground">No balance-sheet factors were scored for this stock.</p>}
+        {ai?.factor_analysis?.financial_health && (
+          <Note title="Interpretation">{ai.factor_analysis.financial_health}</Note>
+        )}
       </Block>
 
       {/* ── technicals ── */}
@@ -554,6 +622,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
           </table>
         </div>
         <TechnicalRead trend={trendRead} rsi={rsiRead} macd={String(ti.macdSignal || "")} />
+        {ai?.factor_analysis?.technical && (
+          <Note title="Interpretation">{ai.factor_analysis.technical}</Note>
+        )}
       </Block>
 
       {/* ── news, first class ── */}
@@ -598,6 +669,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
                 ))}
               </ul>
             </details>
+          )}
+          {ai?.factor_analysis?.news_and_sentiment && (
+            <Note title="Interpretation">{ai.factor_analysis.news_and_sentiment}</Note>
           )}
         </Block>
       )}
@@ -681,11 +755,14 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
               </div>
             </details>
           )}
+          {ai?.factor_analysis?.macro && (
+            <Note title="Interpretation">{ai.factor_analysis.macro}</Note>
+          )}
         </Block>
       )}
 
       {/* ── risk ── */}
-      {(s.valuation || s.intelligence || s.hybrid) && (
+      {((s.valuation || s.intelligence || s.hybrid) || ai?.factor_analysis?.valuation) && (
         <Block title="Integrated Valuation & Risk">
           <div className="space-y-0.5 text-[12px]">
             {s.valuation?.fairValue != null && (
@@ -751,6 +828,9 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
               Data verification: {s.intelligence.dataIntegrity.flags.join(" · ")}
             </p>
           )}
+          {ai?.factor_analysis?.valuation && (
+            <Note title="Valuation interpretation">{ai.factor_analysis.valuation}</Note>
+          )}
         </Block>
       )}
 
@@ -771,12 +851,24 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
           <ShieldCheck className="mt-px size-3 shrink-0" />
           Model output — not personalized investment advice.
         </p>
+        {ai?.factor_analysis?.risk && (
+          <Note title="Risk interpretation">{ai.factor_analysis.risk}</Note>
+        )}
       </Block>
       {/* ── 4. what would invalidate it ── */}
       <Block title="What Could Change This Position?">
         <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">
           {whatCouldChange.map((w, i) => <li key={i}>{w}</li>)}
+          {ai?.thesis_invalidation_conditions?.map((w, i) => <li key={"inv" + i}>{w}</li>)}
         </ul>
+        {ai?.monitoring_priorities && ai.monitoring_priorities.length > 0 && (
+          <div className="mt-2.5">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">What to monitor</p>
+            <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">
+              {ai.monitoring_priorities.map((w, i) => <li key={"mon" + i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
       </Block>
 
       {/* ── methodology, with a generated explanation that cannot drift ── */}
@@ -831,6 +923,16 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
             {mSup.length > 0 && <p className="mt-1">Macro supportive: {list(mSup)}.</p>}
             {mHead.length > 0 && <p className="mt-0.5">Macro headwinds: {list(mHead)}.</p>}
           </div>
+          {(ai?.data_quality_observations?.length || ai?.missing_information?.length || ai?.limitations?.length) ? (
+            <div>
+              <p className="font-medium text-foreground">Data quality &amp; limitations</p>
+              <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+                {ai?.data_quality_observations?.map((t, i) => <li key={"dq" + i}>{t}</li>)}
+                {ai?.missing_information?.map((t, i) => <li key={"mi" + i}>{t}</li>)}
+                {ai?.limitations?.map((t, i) => <li key={"lm" + i}>{t}</li>)}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </details>
     </div>

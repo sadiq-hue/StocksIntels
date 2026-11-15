@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "./ui/card";
@@ -98,7 +97,7 @@ function ConflictRow({ conflict }: { conflict: { factor_pair: string; conflict: 
 }
 
 export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
-  const { ticker, analysis, loading, error, lastAnalyzed, onRetry, model } = props;
+  const { ticker, analysis, loading, error, lastAnalyzed, onRetry } = props;
 
   if (loading) {
     return (
@@ -169,7 +168,7 @@ export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
             AI Investment Overview
           </CardTitle>
           <Badge variant="outline" className="h-6 text-[10px]">
-            AI Interpretation &bull; {model || "gpt-5-mini"}
+            Detailed Assessment
           </Badge>
         </div>
         <Badge variant="secondary" className="h-6 text-[10px]">
@@ -177,7 +176,7 @@ export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
         </Badge>
       </CardHeader>
       <CardDescription className="text-[10px] text-muted-foreground mb-2">
-        AI-generated interpretation of the existing StocksIntels quantitative
+        Detailed interpretation of the existing StocksIntels quantitative
         recommendation. Does not alter the engine’s signal, confidence, targets,
         or stop levels.
       </CardDescription>
@@ -328,19 +327,6 @@ export function AiPositionIntelligence(props: AiPositionIntelligenceProps) {
           </div>
         </TabsContent>
       </Tabs>
-
-      <CardFooter className="border-t border-border/40 pt-2">
-        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-          <span>
-            Model: {model}&nbsp;·&nbsp;Schema v1&nbsp;·&nbsp;
-            Generated {new Date(analysis.generated_at).toLocaleString()}
-          </span>
-          <span className="flex items-center gap-1">
-            <Info className="size-2.5" />
-            AI interpretation only — quantitative engine outputs unchanged
-          </span>
-        </div>
-      </CardFooter>
     </Card>
   );
 }

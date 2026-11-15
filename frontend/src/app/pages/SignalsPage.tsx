@@ -14,10 +14,11 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
-import type { Signal as StockSignal } from "../types/signals";
+import type { Signal as StockSignal, AiPositionIntelligence } from "../types/signals";
 import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
 import { MarketIntelligenceCard } from "../components/MarketIntelligenceCard";
 import { MarketUniversePanel } from "../components/MarketUniversePanel";
+import { requestAiAnalysis } from "../services/aiIntelligenceService";
 import { currencyPrefix } from "../utils/currency";
 
 // Apple-style stat tile: soft shadow, no border, tight typography.
@@ -324,6 +325,9 @@ export function SignalsPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selected, setSelected] = useState<StockSignal | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AiPositionIntelligence | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [view, setView] = useState<"signals" | "universe">("signals");
   const fullSignalCache = useRef<Map<string, StockSignal>>(new Map());
   const perPage = 15;
@@ -364,6 +368,36 @@ export function SignalsPage() {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  // Fetch the detailed interpretation for the opened position (cache-first on the server).
+  useEffect(() => {
+    const ticker = selected?.ticker;
+    if (!ticker) {
+      setAiAnalysis(null);
+      setAiError(null);
+      setAiLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setAiLoading(true);
+    setAiError(null);
+    requestAiAnalysis(ticker)
+      .then((res) => { if (!cancelled) setAiAnalysis(res.analysis); })
+      .catch((err) => { if (!cancelled) setAiError(err?.message || "Assessment unavailable"); })
+      .finally(() => { if (!cancelled) setAiLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected?.ticker]);
+
+  const retryAi = () => {
+    const ticker = selected?.ticker;
+    if (!ticker) return;
+    setAiLoading(true);
+    setAiError(null);
+    requestAiAnalysis(ticker)
+      .then((res) => setAiAnalysis(res.analysis))
+      .catch((err) => setAiError(err?.message || "Assessment unavailable"))
+      .finally(() => setAiLoading(false));
   };
 
   useEffect(() => { fetchSignals(); const i = setInterval(fetchSignals, 300000); return () => clearInterval(i); }, [user?.id]);
@@ -816,7 +850,13 @@ export function SignalsPage() {
               </div>
             )}
             <div className="p-6">
-              <MarketIntelligenceCard signal={selected} />
+              <MarketIntelligenceCard
+                signal={selected}
+                ai={aiAnalysis}
+                aiLoading={aiLoading}
+                aiError={aiError}
+                onRetryAi={retryAi}
+              />
             </div>
           </div>
         </div>
