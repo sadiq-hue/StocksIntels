@@ -2624,7 +2624,7 @@ async function fetchRealTopMovers() {
       ticker: x.ticker, symbol: x.ticker, name: x.name,
       price: Number(x.price) || 0, currency: 'USD',
       change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-      volume: fmt(Number(x.volume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
+      volume: fmt(Number(x.volume) || 0), rawVolume: Number(x.volume) || 0, marketCap: Number(x.marketCap) || 0, market: 'Global',
     };
   };
   try {
@@ -2652,7 +2652,7 @@ async function fetchRealTopMovers() {
         ticker: x.symbol, symbol: x.symbol, name: x.shortName || x.longName || x.symbol,
         price: Number(x.regularMarketPrice) || 0, currency: 'USD',
         change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-        volume: fmt(Number(x.regularMarketVolume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
+        volume: fmt(Number(x.regularMarketVolume) || 0), rawVolume: Number(x.regularMarketVolume) || 0, marketCap: Number(x.marketCap) || 0, market: 'Global',
       };
     };
     const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
@@ -2669,7 +2669,7 @@ async function fetchRealTopMovers() {
         ticker: r.ticker, symbol: (ex === 'NSE' ? 'NSE:' : ex + ':') + r.ticker, name: r.name,
         price: Number(r.price) || 0, currency: r.currency,
         change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-        volume: fmt(Number(r.volume) || 0), marketCap: 0, market: ex,
+        volume: fmt(Number(r.volume) || 0), rawVolume: Number(r.volume) || 0, marketCap: 0, market: ex,
       };
     };
     let gRows = [], lRows = [];

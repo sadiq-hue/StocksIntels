@@ -14,6 +14,9 @@ const NSE_LOOKBACK = {
   '1mo': 24,
   '3mo': 70,
   '1y': 260,
+  ytd: 260,
+  '3y': 780,
+  '5y': 1300,
 };
 
 // NSE only trades Monday-Friday. The bar store accumulates weekend bars (live
@@ -69,6 +72,9 @@ const PERIODS = {
   '1mo': { range: '1mo', interval: '1d', label: 'Monthly' },
   '3mo': { range: '3mo', interval: '1d', label: 'Quarterly' },
   '1y':  { range: '1y',  interval: '1d', label: 'Yearly' },
+  ytd:   { range: 'ytd', interval: '1d', label: 'YTD' },
+  '3y':  { range: '3y',  interval: '1wk', label: '3 Years' },
+  '5y':  { range: '5y',  interval: '1wk', label: '5 Years' },
 };
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 min
