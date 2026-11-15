@@ -576,7 +576,7 @@ export function MarketMoversPage() {
     return [...seen.entries()];
   }, [heatmapTiles]);
   const globalIndices = indices.filter((i) => i.market === "Global").slice(0, 4);
-  const AFRICAN_INDEX_ORDER = ["NSE:NSEASI", "NSE:NSE20", "NGX:ASI", "NGX:NGX30", "^J203.JO", "^J200.JO"];
+  const AFRICAN_INDEX_ORDER = ["NSE:NSEASI", "NSE:NSE20", "NGX:ASI", "^J203.JO"];
   const africanIndices = AFRICAN_INDEX_ORDER
     .map((sym) => indices.find((i) => i.symbol === sym))
     .filter((i): i is IndexRow => Boolean(i));
