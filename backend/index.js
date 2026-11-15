@@ -9986,6 +9986,47 @@ app.get('/api/market/sectors/tree', async (req, res) => {
       };
     });
 
+    // Append NGX and JSE universes from the existing MyStocks Africa service.
+    // The `stocks` table only carries Global + NSE, so without this the African
+    // heatmap would show NSE only.
+    try {
+      const { listAllStocks } = require('./mystocksAfricaApi');
+      const universes = await Promise.allSettled(
+        ['NGX', 'JSE'].map((ex) => listAllStocks(ex, { limit: 200, maxPages: 5 }).then((v) => ({ ex, v })))
+      );
+      const seen = new Set(entries.map((e) => `${e.market}:${e.ticker}`));
+      for (const res of universes) {
+        if (res.status !== 'fulfilled') continue;
+        const { ex, v } = res.value || {};
+        const rows = (v && v.data) || [];
+        for (const r of rows) {
+          if (!r || !r.ticker) continue;
+          const market = r.exchange || ex;
+          const key = `${market}:${r.ticker}`;
+          if (seen.has(key)) continue;
+          const price = Number(r.price) || 0;
+          const changePct = Number(r.changePct) || 0;
+          const volume = Number(r.volume) || 0;
+          if (price <= 0 && changePct === 0) continue;
+          seen.add(key);
+          entries.push({
+            ticker: r.ticker,
+            name: r.name || r.ticker,
+            sector: r.sector || `${market} Equities`,
+            market,
+            currency: r.currency || 'USD',
+            price,
+            change: 0,
+            changePercent: changePct,
+            volume,
+            marketCap: 0,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[sectors/tree] africa universe failed:', e.message);
+    }
+
     // Group by sector
     const sectorMap = new Map();
     for (const e of entries) {
