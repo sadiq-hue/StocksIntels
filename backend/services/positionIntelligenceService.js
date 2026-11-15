@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v3';
+const PROMPT_SCHEMA_VERSION = 'v4';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -345,6 +345,7 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       group: f.group,
       signal,
       rating,
+      assessed: true,
       numbers: _numsOf(rating != null ? rating : signal),
     };
   }).filter(Boolean);
@@ -548,6 +549,7 @@ CONSISTENCY RULES (critical — read before writing):
 - Different fields measure different things — never present them as contradictions:
   · market.volume (a market-level figure) and technicals.volume (the technical indicator volume) are separate measurements.
   · A missing metric (e.g., ROE or analyst estimates) does not mean the whole category is missing when a related factor is assessed (e.g., Margin Trend = "Margin stable").
+- A factor present in fundamentals.factors / financial_health.factors with a signal or rating is ASSESSED. Never describe Margin Trend as unspecified or missing when its rating is "Margin stable" — treat margin as assessed (stable/neutral). Only factors completely absent are unspecified.
 - news_and_sentiment.sentiment_label is the OVERALL aggregate; news_and_sentiment.catalyst.direction is a SPECIFIC recorded event. If they differ (for example overall sentiment is positive while the recorded catalyst direction is negative, such as a Crisis), state both: overall coverage is positive, and the specific catalyst remains a risk. Never say there is "no negative catalyst" when catalyst.direction is negative.
 - levels.risk_reward is the engine's supplied reward-to-risk ratio. Do not recalculate it. A value below 1 means the potential reward is smaller than the risk distance; do not describe it as attractive or acceptable asymmetry without evidence.
 - recommendation, confidence_score, risk_level and holding_period are engine outputs. Preserve them exactly (including the stated holding period and "Moderate"/"Elevated" risk label) and never present expected upside as guaranteed.
