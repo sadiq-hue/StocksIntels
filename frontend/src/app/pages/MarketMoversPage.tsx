@@ -191,24 +191,38 @@ function heatStyle(pct: number): string {
   return clamped > 0 ? `rgba(16,185,129,${alpha})` : `rgba(239,68,68,${alpha})`;
 }
 
+// Scale node sizes so their total equals the rectangle area. squarify expects
+// sizes in the same units as the area; without this, coordinates come out in
+// market-cap units (e.g. 3.9e12) and every tile renders off-screen.
+function scaleSizes(nodes: any[], area: number): any[] {
+  const total = nodes.reduce((s, n) => s + (n.size > 0 ? n.size : 1), 0) || 1;
+  const k = area / total;
+  return nodes.map((n) => ({ ...n, size: Math.max((n.size > 0 ? n.size : 1) * k, 1e-9) }));
+}
+
 function buildHeatmap(sectors: SectorRow[]): any[] {
-  const nodes = sectors
+  const rawNodes = sectors
     .map((s) => {
       const children = (s.children || []).slice(0, 60);
       const size = children.reduce((sum, c: any) => sum + (Number(c.marketCap) > 0 ? Number(c.marketCap) : 1), 0);
       return { name: s.name, size: size > 0 ? size : 1, children };
     })
     .filter((n) => n.children.length > 0);
-  if (!nodes.length) return [];
+  if (!rawNodes.length) return [];
+
+  const nodes = scaleSizes(rawNodes, 1);
   const regions: any[] = [];
   squarify(nodes, 0, 0, 1, 1, regions);
+
   const tiles: any[] = [];
   for (const region of regions) {
-    const kids = (region.children || []).map((c: any) => {
+    const rawKids = (region.children || []).map((c: any) => {
       const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
       const act = parseCompact(c.volume);
       return { ...c, sector: region.name, size: cap > 0 ? cap : act > 0 ? act : 1 };
     });
+    const area = Math.max(1e-6, region.w * region.h);
+    const kids = scaleSizes(rawKids, area);
     const out: any[] = [];
     squarify(kids, region.x, region.y, region.w, region.h, out);
     tiles.push(...out);
