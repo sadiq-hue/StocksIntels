@@ -9687,11 +9687,9 @@ app.get('/api/earnings/upcoming', async (req, res) => {
 
 app.get('/api/market/indices', async (req, res) => {
   try {
-    const [nse, global] = await Promise.all([
-      indicesService.getNseIndices(),
-      indicesService.getGlobalIndices(),
-    ]);
-    res.json([...nse, ...global]);
+    const all = await indicesService.getAllIndices();
+    const rank = { NSE: 0, Global: 1, NGX: 2, JSE: 3 };
+    res.json(Object.values(all).sort((a, b) => (rank[a.market] ?? 9) - (rank[b.market] ?? 9)));
   } catch (error) {
     console.error('Error fetching indices:', error);
     res.status(500).json({ error: 'Failed to fetch market indices' });
