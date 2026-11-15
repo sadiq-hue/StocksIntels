@@ -2635,8 +2635,10 @@ async function fetchRealTopMovers() {
     }
   } catch (e) { console.warn('[movers] stockanalysis global failed:', e.message); }
 
-  // Fallback: Yahoo predefined screeners if the scrape returned nothing.
-  if (!global.gainers.length && !global.losers.length) {
+  // Always supplement the scrape with Yahoo's predefined screeners (count=50)
+  // and de-duplicate. stockanalysis.com's page exposes only ~20 rows, which is
+  // not enough for the 20-per-page client pagination to ever move to page 2.
+  {
     const yahooScreener = async (scrId) => {
       try {
         const r = await axios.get(
@@ -2655,8 +2657,21 @@ async function fetchRealTopMovers() {
         volume: fmt(Number(x.regularMarketVolume) || 0), rawVolume: Number(x.regularMarketVolume) || 0, marketCap: Number(x.marketCap) || 0, market: 'Global',
       };
     };
+    const mergeUnique = (base, extra) => {
+      const seen = new Set(base.map((x) => x.ticker));
+      const out = [...base];
+      for (const x of extra) {
+        if (!seen.has(x.ticker)) { out.push(x); seen.add(x.ticker); }
+      }
+      return out;
+    };
     const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
-    global = { gainers: yG.map(mapYahoo).slice(0, 30), losers: yL.map(mapYahoo).slice(0, 30) };
+    const yGm = yG.map(mapYahoo);
+    const yLm = yL.map(mapYahoo);
+    global = {
+      gainers: mergeUnique(global.gainers, yGm).sort((a, b) => b.changePercent - a.changePercent).slice(0, 30),
+      losers: mergeUnique(global.losers, yLm).sort((a, b) => a.changePercent - b.changePercent).slice(0, 30),
+    };
   }
 
   const { listMovers } = require('./mystocksAfricaApi');
@@ -2747,7 +2762,7 @@ async function getMarketSnapshot() {
     const sorted = [...stockList].sort((a, b) => parseFloat(b.change) - parseFloat(a.change));
     return { gainers: sorted.filter(s => s.isPositive).slice(0, 30), losers: sorted.filter(s => !s.isPositive).reverse().slice(0, 30) };
   };
-  const getActive = (stockList) => [...stockList].sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume)).slice(0, 20);
+  const getActive = (stockList) => [...stockList].sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume)).slice(0, 40);
   let realMovers = null;
   try { realMovers = await fetchRealTopMovers(); } catch (e) { console.warn('[movers] real fetch failed:', e.message); }
   const hasReal = realMovers && (realMovers.combined.gainers.length || realMovers.combined.losers.length);
