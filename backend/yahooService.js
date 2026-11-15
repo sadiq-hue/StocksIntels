@@ -792,6 +792,32 @@ let yahooSessionCrumbAt = 0;
 const YAHOO_COOKIE_TTL = 6 * 60 * 60 * 1000;
 const YAHOO_CRUMB_TTL = 30 * 60 * 1000;
 const yahooV7Cache = new Map();
+// Last successful v7 quote per symbol. Yahoo intermittently rate-limits (429)
+// and returns an empty batch; without this the market heatmap loses every
+// Global tile even though we fetched real prices minutes earlier.
+const yahooV7LastGood = new Map();
+const V7_LAST_GOOD_TTL = 6 * 60 * 60 * 1000;
+
+function rememberV7Quotes(results) {
+  const now = Date.now();
+  for (const [sym, q] of Object.entries(results)) {
+    if (Number(q.regularMarketPrice) > 0) {
+      yahooV7LastGood.set(sym.toUpperCase(), { data: q, ts: now });
+    }
+  }
+}
+
+function fillV7FromLastGood(symbols, results) {
+  const now = Date.now();
+  for (const raw of symbols) {
+    const sym = String(raw).toUpperCase();
+    const live = results[sym];
+    if (live && Number(live.regularMarketPrice) > 0) continue;
+    const hit = yahooV7LastGood.get(sym);
+    if (hit && now - hit.ts < V7_LAST_GOOD_TTL) results[sym] = hit.data;
+  }
+  return results;
+}
 
 async function fetchYahooSessionToken() {
   const now = Date.now();
@@ -840,7 +866,7 @@ async function fetchV7Quotes(symbols) {
     const cached = yahooV7Cache.get(key);
     if (cached && Date.now() - cached.ts < 5000) return cached.data;
   const token = await fetchYahooSessionToken();
-  if (!token) return {};
+  if (!token) return fillV7FromLastGood(symbols, {});
   try {
     const { data } = await require('axios').get('https://query1.finance.yahoo.com/v7/finance/quote', {
       params: { symbols: symbols.join(','), crumb: token.crumb },
@@ -880,9 +906,10 @@ async function fetchV7Quotes(symbols) {
       };
     }
     yahooV7Cache.set(key, { data: results, ts: Date.now() });
-    return results;
+    rememberV7Quotes(results);
+    return fillV7FromLastGood(symbols, results);
   } catch {
-    return {};
+    return fillV7FromLastGood(symbols, {});
   }
 }
 
