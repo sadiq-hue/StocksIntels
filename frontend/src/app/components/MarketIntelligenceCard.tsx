@@ -645,11 +645,23 @@ export function MarketIntelligenceCard({
             {newsJudgment
               ? `Only ${newsCount} tracked ${newsCount === 1 ? "story" : "stories"}, which is too few to read a reliable tone from coverage of this stock. No sentiment is being assumed.`
               : net === "positive"
-                ? "Recent coverage leans positive, with no dominant negative catalyst identified."
+                ? (String(s.catalyst?.direction || "").toLowerCase() === "negative"
+                    ? "Recent coverage leans positive overall, but a specific negative catalyst is recorded — it remains a risk."
+                    : "Recent coverage leans positive, with no dominant negative catalyst identified.")
                 : net === "negative"
                   ? "Recent coverage leans negative. Treat this as an active risk to the current view."
                   : "Recent coverage is broadly neutral, with no major negative catalyst identified."}
           </p>
+          {s.catalyst && (
+            <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground">Recorded catalyst:</span>{" "}
+              {s.catalyst.type || "event"} ({s.catalyst.direction || "unspecified"})
+              {s.catalyst.headline ? ` — ${s.catalyst.headline}` : ""}
+              {String(s.catalyst.direction || "").toLowerCase() === "negative"
+                ? ` — this specific event is a risk even though overall coverage reads as ${String(newsBand).toLowerCase()}.`
+                : "."}
+            </p>
+          )}
           {news.length > 0 && (
             <details className="group mt-2">
               <summary className="cursor-pointer list-none text-[11px] font-medium text-[#0D7490] hover:underline">
@@ -857,13 +869,25 @@ export function MarketIntelligenceCard({
       </Block>
       {/* ── 4. what would invalidate it ── */}
       <Block title="What Could Change This Position?">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">Engine invalidation conditions</p>
         <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">
           {whatCouldChange.map((w, i) => <li key={i}>{w}</li>)}
-          {ai?.thesis_invalidation_conditions?.map((w, i) => <li key={"inv" + i}>{w}</li>)}
         </ul>
+        {ai?.thesis_invalidation_conditions && ai.thesis_invalidation_conditions.length > 0 && (
+          <div className="mt-2.5">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+              Additional considerations <span className="font-normal normal-case tracking-normal text-muted-foreground">(AI-generated)</span>
+            </p>
+            <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">
+              {ai.thesis_invalidation_conditions.map((w, i) => <li key={"inv" + i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
         {ai?.monitoring_priorities && ai.monitoring_priorities.length > 0 && (
           <div className="mt-2.5">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">What to monitor</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+              What to monitor <span className="font-normal normal-case tracking-normal text-muted-foreground">(AI-generated)</span>
+            </p>
             <ul className="list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-muted-foreground">
               {ai.monitoring_priorities.map((w, i) => <li key={"mon" + i}>{w}</li>)}
             </ul>

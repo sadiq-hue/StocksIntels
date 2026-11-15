@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v2';
+const PROMPT_SCHEMA_VERSION = 'v3';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -402,6 +402,7 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       daily_change: _num(payload.change),
       currency: payload.currency || null,
       volume: payload.volume || null,
+      volume_note: 'Market-level volume. Distinct from technicals.volume (the technical indicator volume); a difference is not a contradiction.',
     },
 
     fundamentals: {
@@ -452,6 +453,7 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       negative_count: newsSummary ? newsSummary.negative : null,
       total_count: newsSummary ? newsSummary.count : (news.length || null),
       interpretation_rule: 'Use sentiment_label as the overall sentiment. Do NOT recount headlines to override it; per-headline labels may differ.',
+      reconciliation: 'sentiment_label is the overall aggregate; catalyst.direction is a specific recorded event. If they differ (e.g., positive sentiment with a negative Crisis catalyst), report both and treat the catalyst as a specific risk.',
       headlines: news.slice(0, 8).map((n) => ({
         headline: n.headline || null,
         source: n.source || null,
@@ -483,6 +485,7 @@ function buildAuthoritativeContext(positionData, enrichment = {}) {
       risk_reward: rr,
       overall_score: overallScore,
       risk_level: riskLevelDisplay,
+      risk_reward_note: 'Engine-supplied reward-to-risk ratio; do not recalculate. A value below 1 means the potential reward is smaller than the risk distance.',
       cross_factor_risk_signal: payload.intelligence && payload.intelligence.riskLevel ? payload.intelligence.riskLevel : null,
       cross_factor_summary: payload.intelligence && payload.intelligence.summary ? payload.intelligence.summary : null,
     },
@@ -542,10 +545,20 @@ CONSISTENCY RULES (critical — read before writing):
 - Use valuation_and_risk.risk_level as the risk label shown to users. Do not replace it with cross_factor_risk_signal.
 - For each factor, rely on its "signal" and "rating" text and any numbers inside them. If a numeric value is absent, say "no numeric value provided" — do not invent one and do not describe it as present.
 - If two supplied fields appear inconsistent (for example a rating text implies a value that is otherwise missing, or a label conflicts with a headline mix), explicitly identify the inconsistency rather than silently picking one.
+- Different fields measure different things — never present them as contradictions:
+  · market.volume (a market-level figure) and technicals.volume (the technical indicator volume) are separate measurements.
+  · A missing metric (e.g., ROE or analyst estimates) does not mean the whole category is missing when a related factor is assessed (e.g., Margin Trend = "Margin stable").
+- news_and_sentiment.sentiment_label is the OVERALL aggregate; news_and_sentiment.catalyst.direction is a SPECIFIC recorded event. If they differ (for example overall sentiment is positive while the recorded catalyst direction is negative, such as a Crisis), state both: overall coverage is positive, and the specific catalyst remains a risk. Never say there is "no negative catalyst" when catalyst.direction is negative.
+- levels.risk_reward is the engine's supplied reward-to-risk ratio. Do not recalculate it. A value below 1 means the potential reward is smaller than the risk distance; do not describe it as attractive or acceptable asymmetry without evidence.
+- recommendation, confidence_score, risk_level and holding_period are engine outputs. Preserve them exactly (including the stated holding period and "Moderate"/"Elevated" risk label) and never present expected upside as guaranteed.
+- Do not assert a company development as verified when it appears only as a headline — attribute it to the headline ("a headline reports…"). Do not invent price levels, thresholds, or engine invalidation rules.
+- Engine invalidation conditions come only from the supplied levels and engine fields. Your own monitoring suggestions are AI-generated and must be labelled as such.
 
 STYLE RULES:
 - Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
 - Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
+- State each data limitation exactly once, in data_quality_observations. Do not repeat the same missing-field note inside factor sections.
+- In factor_analysis, address each factor on its own terms; never generalize one missing metric into a whole category.
 
 OUTPUT FORMAT:
 Return valid JSON only — no markdown code fences, no preamble, no explanatory text outside the JSON. The JSON must conform to this schema:
