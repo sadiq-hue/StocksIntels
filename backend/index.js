@@ -9410,6 +9410,28 @@ async function buildDailyMovers() {
 
 app.get('/api/market/movers', async (req, res) => {
   const period = req.query.period || '1d';
+  // Manual refresh: rebuild instead of serving the cached snapshot.
+  if (period === '1d' && req.query.refresh === '1') {
+    try {
+      if (!moversCache.inFlight) moversCache.inFlight = buildDailyMovers();
+      const data = await moversCache.inFlight;
+      moversCache.inFlight = null;
+      const ok = data.combined.gainers.length > 0 || data.combined.losers.length > 0;
+      if (ok) {
+        moversCache.data = data;
+        moversCache.at = Date.now();
+      }
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ...(ok ? data : (moversCache.data || data)), cached: !ok, refreshed: ok });
+    } catch (error) {
+      moversCache.inFlight = null;
+      if (moversCache.data) {
+        res.set('Cache-Control', 'no-store');
+        return res.json({ ...moversCache.data, cached: true, refreshFailed: true });
+      }
+      return res.status(500).json({ error: 'Failed to refresh movers' });
+    }
+  }
   // For non-daily periods, compute period returns from historical bars.
   if (period !== '1d') {
     try {
@@ -9430,7 +9452,7 @@ app.get('/api/market/movers', async (req, res) => {
   // Fresh cache — serve immediately.
   if (moversCache.data && now - moversCache.at < MOVERS_CACHE_TTL_MS) {
     res.set('Cache-Control', 'public, max-age=30');
-    return res.json({ ...moversCache.data, cached: true });
+    return res.json({ ...moversCache.data, cached: false });
   }
   // Stale cache — serve it and refresh in the background.
   if (moversCache.data && !moversCache.inFlight) {
@@ -9439,7 +9461,7 @@ app.get('/api/market/movers', async (req, res) => {
       .catch(() => {})
       .finally(() => { moversCache.inFlight = null; });
     res.set('Cache-Control', 'public, max-age=30');
-    return res.json({ ...moversCache.data, cached: true });
+    return res.json({ ...moversCache.data, cached: true, refreshing: true });
   }
   // Cold cache — build (collapsing concurrent callers onto one build).
   try {

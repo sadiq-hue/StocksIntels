@@ -328,18 +328,19 @@ export function MarketMoversPage() {
   const ROWS_PER_PAGE = 20;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchMovers = useCallback(async (attempt = 1): Promise<void> => {
+  const fetchMovers = useCallback(async (attempt = 1, force = false): Promise<void> => {
     const maxAttempts = 2;
     const effectivePeriod: PeriodId = activeTab === "gainers" || activeTab === "losers" ? period : "1d";
     try {
       setLoading(true);
-      const fetchJson = async (url: string) => {
-        const res = await fetch(`${API_BASE_URL}${url}`, { credentials: "include" });
+      const fetchJson = async (url: string, init?: RequestInit) => {
+        const res = await fetch(`${API_BASE_URL}${url}`, { credentials: "include", ...init });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       };
+      const moversUrl = `/market/movers?period=${effectivePeriod}${force ? "&refresh=1" : ""}`;
       const [moversRes, sectorsRes, indicesRes, statusRes] = await Promise.allSettled([
-        fetchJson(`/market/movers?period=${effectivePeriod}`),
+        fetchJson(moversUrl, force ? { cache: "no-store" } : undefined),
         fetchJson(`/market/sectors/tree`),
         fetchJson(`/market/indices`),
         fetchJson(`/market/status`),
@@ -439,7 +440,7 @@ export function MarketMoversPage() {
     } catch (e: any) {
       if (attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 2000));
-        return fetchMovers(attempt + 1);
+        return fetchMovers(attempt + 1, force);
       }
       setError(e.message || "Failed to load market movers");
     } finally {
@@ -642,7 +643,7 @@ export function MarketMoversPage() {
             <span className="inline-flex items-center rounded-full border border-border bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
               As of {asOfTime}{sessionSuffix}
             </span>
-            <Button onClick={() => fetchMovers()} size="sm" disabled={loading} className="flex h-8 items-center gap-1.5 text-xs">
+            <Button onClick={() => fetchMovers(1, true)} size="sm" disabled={loading} className="flex h-8 items-center gap-1.5 text-xs">
               {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCcw className="size-3.5" />}
               <span>Refresh</span>
             </Button>
