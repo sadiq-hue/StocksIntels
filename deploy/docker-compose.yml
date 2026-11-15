@@ -130,11 +130,9 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MODAL_URL: ${MODAL_URL:-}
-      # Azure AI Foundry (position intelligence)
-      AZURE_AI_ENABLED: ${AZURE_AI_ENABLED:-false}
-      AZURE_AI_ENDPOINT: ${AZURE_AI_ENDPOINT:-}
-      AZURE_AI_API_KEY: ${AZURE_AI_API_KEY:-}
-      AZURE_AI_MODEL: ${AZURE_AI_MODEL:-gpt-5-mini}
+      # Azure AI Foundry vars are provided by `env_file: .env` below. Do NOT add
+      # them to this environment block: an unresolved `${VAR:-}` here would
+      # override the env_file value with an empty string / false.
     volumes:
       # Uploads must survive container rebuilds.
       - uploads:/app/backend/uploads
