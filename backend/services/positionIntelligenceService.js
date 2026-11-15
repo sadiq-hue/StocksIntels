@@ -537,7 +537,7 @@ YOUR RESPONSIBILITIES:
 
 CONSISTENCY RULES (critical — read before writing):
 - The supplied context is authoritative. Never state that a value is missing when it appears anywhere in the context — including inside fundamentals.factors, financial_health.factors, technicals, levels, or the news counts.
-- Use news_and_sentiment.sentiment_label as the overall news sentiment. Do NOT enumerate or compare the positive/neutral/negative headline counts, and do NOT recount headlines to override that label. You may note that individual headlines vary, but the overall label stands.
+- Use news_and_sentiment.sentiment_label as the overall news sentiment. Do NOT mention, enumerate, or compare the positive/neutral/negative headline counts in any form — rely only on sentiment_label. You may say that individual headlines vary, but never state how many are positive/neutral/negative.
 - Use levels.analysis_price, levels.downside_level and levels.*target* for all level references. Never claim stops or targets are unavailable when they are present.
 - Use valuation_and_risk.risk_level as the risk label shown to users. Do not replace it with cross_factor_risk_signal.
 - For each factor, rely on its "signal" and "rating" text and any numbers inside them. If a numeric value is absent, say "no numeric value provided" — do not invent one and do not describe it as present.
