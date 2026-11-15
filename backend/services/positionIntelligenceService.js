@@ -11,7 +11,7 @@ const { pool } = require('../db');
 const azureAIClient = require('./azureAIClient');
 const logger = require('../logger');
 
-const PROMPT_SCHEMA_VERSION = 'v1';
+const PROMPT_SCHEMA_VERSION = 'v2';
 const MODEL = process.env.AZURE_AI_MODEL || 'gpt-5-mini';
 
 // Maximum characters for free-text fields sent to the model (input-size limit).
@@ -70,6 +70,30 @@ function _num(v) {
 function _pct(v) {
   const n = _num(v);
   return n == null ? null : Math.round(n * 100) / 100;
+}
+
+// Factor keys emitted by the quantitative engine (mirrors the UI FactorDef in
+// MarketIntelligenceCard.tsx). The AI context must use these SAME keys, because
+// the structured names (pe_ratio, current_ratio, …) are not populated.
+const FACTOR_META = [
+  { key: 'evSignal', ratingKey: 'evRating', name: 'EV/EBITDA', group: 'Valuation' },
+  { key: 'peSignal', ratingKey: 'peRating', name: 'P/E vs Sector', group: 'Valuation' },
+  { key: 'pbSignal', ratingKey: 'pbRating', name: 'Price/Book', group: 'Valuation' },
+  { key: 'divSignal', ratingKey: 'divRating', name: 'Dividend Yield', group: 'Valuation' },
+  { key: 'revSignal', ratingKey: 'revRating', name: 'Revenue Growth', group: 'Growth' },
+  { key: 'epsSignal', ratingKey: 'epsRating', name: 'Earnings Surprise', group: 'Earnings' },
+  { key: 'mgnSignal', ratingKey: 'mgnRating', name: 'Margin Trend', group: 'Margins' },
+  { key: 'fcfSignal', ratingKey: 'fcfRating', name: 'Free Cash Flow Yield', group: 'Cash Flow' },
+  { key: 'deSignal', ratingKey: 'debtRating', name: 'Debt/Equity', group: 'Financial Health' },
+  { key: 'crSignal', ratingKey: 'crRating', name: 'Current Ratio', group: 'Financial Health' },
+  { key: 'roeSignal', ratingKey: 'roeRating', name: 'Return on Equity', group: 'Financial Health' },
+  { key: 'altSignal', ratingKey: 'altRating', name: 'Altman Z-Score', group: 'Financial Health' },
+];
+
+function _numsOf(s) {
+  return (String(s == null ? '' : s).match(/-?\d+(?:\.\d+)?/g) || [])
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
 }
 
 /**
@@ -285,6 +309,190 @@ function buildPositionContext(positionData, enrichment = {}) {
 }
 
 /**
+ * Build an authoritative context that mirrors exactly what the Market
+ * Intelligence page renders. Values are pulled from the same keys the UI uses
+ * (fundamental.metrics.*Signal / *Rating, technical.indicators, newsSummary,
+ * and the signal_snapshots stop_loss column + payload levels). This prevents
+ * the model from claiming a value is missing when it is visible on screen.
+ */
+function buildAuthoritativeContext(positionData, enrichment = {}) {
+  const row = positionData || {};
+  const payloadRaw = row.payload;
+  const payload = typeof payloadRaw === 'string'
+    ? (() => { try { return JSON.parse(payloadRaw); } catch { return {}; } })()
+    : (payloadRaw || {});
+
+  const analysis = payload.analysis || {};
+  const fundamental = analysis.fundamental || {};
+  const technical = analysis.technical || {};
+  const financial = analysis.financial || {};
+  const metrics = fundamental.metrics || {};
+  const ti = technical.indicators || {};
+  const company = payload.companyProfile || {};
+
+  const news = Array.isArray(payload.news) ? payload.news : (Array.isArray(row.news) ? row.news : []);
+  const newsSummary = row.news_summary || payload.newsSummary || null;
+  const catalyst = row.catalyst || payload.catalyst || null;
+  const insider = payload.insider || null;
+  const macro = payload.macro || analysis.macro || {};
+
+  const factors = FACTOR_META.map((f) => {
+    const signal = metrics[f.key] != null ? metrics[f.key] : null;
+    const rating = metrics[f.ratingKey] != null ? metrics[f.ratingKey] : null;
+    if (signal == null && rating == null) return null;
+    return {
+      name: f.name,
+      group: f.group,
+      signal,
+      rating,
+      numbers: _numsOf(rating != null ? rating : signal),
+    };
+  }).filter(Boolean);
+
+  const firstNum = (name) => {
+    const f = factors.find((x) => x.name === name);
+    return f && f.numbers.length ? f.numbers[0] : null;
+  };
+
+  const entry = _num(row.entry) ?? _num(payload.entry);
+  const stop = _num(row.stop_loss) ?? _num(payload.stopLoss);
+  const t1 = _num(row.target1) ?? _num(payload.target1);
+  const t2 = _num(row.target2) ?? _num(payload.target2);
+  const t3 = _num(row.target3) ?? _num(payload.target3);
+  const rr = _num(row.risk_reward) ?? _num(payload.riskReward);
+  const alloc = row.position_size != null ? row.position_size : payload.positionSize;
+  const sentimentLabel = newsSummary && newsSummary.net ? String(newsSummary.net) : null;
+
+  return {
+    source_priority: 'AUTHORITATIVE: position, levels, factors, technicals and counts below are engine outputs. Interpret them; never contradict or override them. If a field is null, say "not provided" — do not guess.',
+
+    position: {
+      ticker: row.ticker || payload.ticker || null,
+      company_name: row.name || payload.name || null,
+      company_description: company.description || null,
+      industry: company.industry || row.sector || null,
+      sector: row.sector || company.industry || null,
+      country: company.country || payload.country || null,
+      employees: company.employees || null,
+      ceo: company.ceo || null,
+      website: company.website || null,
+      recommendation: row.signal || payload.signal || null,
+      confidence_score: _num(row.confidence != null ? row.confidence : payload.confidence),
+      position_type: payload.type || null,
+      holding_period: row.timeframe || payload.timeframe || null,
+      generated_at: payload.generatedAt || row.analyzed_at || null,
+    },
+
+    levels: {
+      analysis_price: entry,
+      downside_level: stop,
+      minimum_target: t1,
+      average_target: t2,
+      extended_target: t3,
+      risk_reward: rr,
+      model_allocation: alloc != null ? String(alloc) : null,
+      note: 'These levels are the source of truth. Never say stops or targets are unavailable when present.',
+    },
+
+    market: {
+      current_price: _num(row.price != null ? row.price : payload.price),
+      daily_change: _num(payload.change),
+      currency: payload.currency || null,
+      volume: payload.volume || null,
+    },
+
+    fundamentals: {
+      score: _num(fundamental.score),
+      grade: fundamental.grade || null,
+      factors,
+      sparse_data: metrics.dataQuality || null,
+    },
+
+    financial_health: {
+      score: _num(financial.score),
+      grade: financial.grade || null,
+      factors: factors.filter((f) => f.group === 'Financial Health'),
+      current_ratio: firstNum('Current Ratio'),
+      debt_to_equity: firstNum('Debt/Equity'),
+      roe: firstNum('Return on Equity'),
+      altman_z_score: firstNum('Altman Z-Score'),
+      engine_commentary: financial.analysis || null,
+    },
+
+    technicals: {
+      score: _num(technical.score),
+      grade: technical.grade || null,
+      trend: ti.trendSignal || null,
+      sma_fast: ti.smaFast || null,
+      sma_slow: ti.smaSlow || null,
+      macd_signal: ti.macdSignal || null,
+      macd_value: ti.macd || null,
+      rsi: ti.rsi || null,
+      rsi_signal: ti.rsiSignal || null,
+      momentum: ti.momentum || null,
+      bollinger_signal: ti.bbSignal || null,
+      volume_signal: ti.volumeSignal || null,
+      volume: ti.volume || null,
+    },
+
+    macro: {
+      score: _num(macro.score),
+      grade: macro.grade || null,
+      overall_signal: macro.signal || null,
+      conditions: macro.conditions || {},
+    },
+
+    news_and_sentiment: {
+      sentiment_label: sentimentLabel,
+      positive_count: newsSummary ? newsSummary.positive : null,
+      neutral_count: newsSummary ? newsSummary.neutral : null,
+      negative_count: newsSummary ? newsSummary.negative : null,
+      total_count: newsSummary ? newsSummary.count : (news.length || null),
+      interpretation_rule: 'Use sentiment_label as the overall sentiment. Do NOT recount headlines to override it; per-headline labels may differ.',
+      headlines: news.slice(0, 8).map((n) => ({
+        headline: n.headline || null,
+        source: n.source || null,
+        sentiment: n.sentiment || null,
+        published_at: n.publishedAt || n.published_at || null,
+      })),
+      catalyst: catalyst ? {
+        type: catalyst.type || null,
+        direction: catalyst.direction || null,
+        strength: _num(catalyst.strength),
+        headline: catalyst.headline || null,
+        source: catalyst.source || null,
+        published_at: catalyst.publishedAt || null,
+      } : null,
+      insider_activity: insider ? {
+        score: _num(insider.score),
+        has_activity: !!insider.hasActivity,
+        buys: insider.buyCount != null ? insider.buyCount : null,
+        sells: insider.sellCount != null ? insider.sellCount : null,
+        net_shares: _num(insider.netShares),
+        summary: insider.summary || null,
+      } : null,
+    },
+
+    valuation_and_risk: {
+      fair_value: _num(payload.fairValue),
+      existing_targets: [t1, t2, t3].filter((x) => x != null),
+      downside_level: stop,
+      risk_reward: rr,
+      cross_factor_risk: payload.intelligence && payload.intelligence.riskLevel ? payload.intelligence.riskLevel : null,
+      cross_factor_summary: payload.intelligence && payload.intelligence.summary ? payload.intelligence.summary : null,
+    },
+
+    data_quality: {
+      completeness: payload.dataCompleteness || null,
+      trust: payload.dataTrust || null,
+      flags: payload.intelligence && payload.intelligence.dataIntegrity
+        ? payload.intelligence.dataIntegrity.flags
+        : null,
+    },
+  };
+}
+
+/**
  * Strict system prompt for GPT-5-mini. The model acts as a professional equity
  * research analyst interpreting existing quantitative outputs — never overriding
  * them.
@@ -321,6 +529,17 @@ YOUR RESPONSIBILITIES:
 12. Explain the limitations of the analysis, including data quality issues.
 13. Avoid unsupported claims and fabricated catalysts.
 14. If information is insufficient, explicitly state what cannot be concluded.
+
+CONSISTENCY RULES (critical — read before writing):
+- The supplied context is authoritative. Never state that a value is missing when it appears anywhere in the context — including inside fundamentals.factors, financial_health.factors, technicals, levels, or the news counts.
+- Use news_and_sentiment.sentiment_label as the overall news sentiment. Do NOT recount the individual headlines to override or contradict that label. You may note that per-headline labels vary, but the overall label stands.
+- Use levels.analysis_price, levels.downside_level and levels.*target* for all level references. Never claim stops or targets are unavailable when they are present.
+- For each factor, rely on its "signal" and "rating" text and any numbers inside them. If a numeric value is absent, say "no numeric value provided" — do not invent one and do not describe it as present.
+- If two supplied fields appear inconsistent (for example a rating text implies a value that is otherwise missing, or a label conflicts with a headline mix), explicitly identify the inconsistency rather than silently picking one.
+
+STYLE RULES:
+- Do not restate metrics that are already visible in the UI. Each factor_analysis section must focus on implications, relationships and conflicts, not a numeric recap.
+- Avoid repeating the same figures across sections. Keep each section concise but substantive, with no generic filler.
 
 OUTPUT FORMAT:
 Return valid JSON only — no markdown code fences, no preamble, no explanatory text outside the JSON. The JSON must conform to this schema:
@@ -499,8 +718,8 @@ async function analyzePosition(positionData, enrichment = {}) {
     };
   }
 
-  // Build the complete position context.
-  const context = buildPositionContext(positionData, enrichment);
+  // Build the authoritative, UI-consistent position context.
+  const context = buildAuthoritativeContext(positionData, enrichment);
 
   // Build the user prompt — the full position context as JSON.
   const userPrompt = `Position context for analysis (StocksIntels quantitative engine output — do not modify any quantitative values):
@@ -591,6 +810,7 @@ Please provide a structured analytical interpretation of this position following
 module.exports = {
   analyzePosition,
   buildPositionContext,
+  buildAuthoritativeContext,
   validateAiOutput,
   SYSTEM_PROMPT,
   PROMPT_SCHEMA_VERSION,

@@ -443,9 +443,10 @@ app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res
     const cacheResult = await pool.query(
       `SELECT * FROM ai_position_intelligence
        WHERE ticker = $1 AND status = 'completed'
+         AND prompt_schema_version = $2
          AND created_at > NOW() - interval '30 minutes'
        ORDER BY created_at DESC LIMIT 1`,
-      [ticker.toUpperCase()]
+      [ticker.toUpperCase(), positionIntelligenceService.PROMPT_SCHEMA_VERSION]
     );
     if (cacheResult.rows.length > 0) {
       const row = cacheResult.rows[0];
