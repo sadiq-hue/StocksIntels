@@ -421,8 +421,67 @@ app.get('/api/ai/health', async (_req, res) => {
   }
 });
 
+// ── AI position intelligence: payload-parity helpers ─────────────────
+const AI_INFLIGHT = new Map();
+let _aiSnapshotColsReady = false;
+async function ensureAiSnapshotColumns() {
+  if (_aiSnapshotColsReady) return;
+  try {
+    await pool.query(`ALTER TABLE ai_position_intelligence ADD COLUMN IF NOT EXISTS snapshot_hash VARCHAR(64)`);
+    await pool.query(`ALTER TABLE ai_position_intelligence ADD COLUMN IF NOT EXISTS snapshot_payload JSONB`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_pos_snapshot ON ai_position_intelligence (ticker, prompt_schema_version, snapshot_hash)`);
+    _aiSnapshotColsReady = true;
+  } catch (e) {
+    logger.warn('[AzureAI] ensure snapshot columns failed', { message: e.message });
+  }
+}
+function canonicalStringify(value) {
+  const seen = new WeakSet();
+  const walk = (v) => {
+    if (v === null || typeof v !== 'object') return JSON.stringify(v);
+    if (seen.has(v)) return 'null';
+    seen.add(v);
+    if (Array.isArray(v)) return '[' + v.map(walk).join(',') + ']';
+    const keys = Object.keys(v).sort();
+    return '{' + keys.map((k) => JSON.stringify(k) + ':' + walk(v[k])).join(',') + '}';
+  };
+  return walk(value);
+}
+function hashSnapshot(snapshot) {
+  return crypto.createHash('sha256').update(canonicalStringify(snapshot)).digest('hex');
+}
+function normalizeTicker(t) {
+  return String(t || '').toUpperCase().replace(/^(NSE|NGX|JSE|US|GLOBAL):/, '').trim();
+}
+// Build a signal_snapshots-shaped row from a submitted signal object so the
+// existing buildAuthoritativeContext() consumes it unchanged.
+function rowFromSignalSnapshot(sig) {
+  return {
+    ticker: sig.ticker,
+    name: sig.name,
+    signal: sig.signal,
+    confidence: sig.confidence,
+    price: sig.price,
+    entry: sig.entry,
+    stop_loss: sig.stopLoss,
+    target1: sig.target1,
+    target2: sig.target2,
+    target3: sig.target3,
+    risk_reward: sig.riskReward,
+    position_size: sig.positionSize,
+    timeframe: sig.timeframe,
+    sector: sig.sector,
+    news_summary: sig.newsSummary,
+    catalyst: sig.catalyst,
+    analyzed_at: sig.generatedAt || new Date().toISOString(),
+    payload: sig,
+  };
+}
+
 // Request AI analysis for an existing position.
-// Cache-first: returns a recent analysis (<30 min) without calling Azure.
+// If the client submits the displayed recommendation snapshot it is interpreted
+// verbatim (payload parity); invalid submissions are rejected, never replaced
+// with an older DB snapshot.
 app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res) => {
   try {
     if (!azureAIClient.isEnabled()) {
@@ -432,21 +491,77 @@ app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res
       });
     }
 
-    const { ticker } = req.params;
-    if (!ticker || typeof ticker !== 'string') {
+    const routeTicker = normalizeTicker(req.params.ticker);
+    if (!routeTicker) {
       return res.status(400).json({ error: 'Ticker is required.', code: 'INVALID_TICKER' });
     }
 
+    // Identity comes only from the authenticated JWT — never from the client.
     const userId = req.user?.id;
+    if (userId == null) {
+      return res.status(401).json({ error: 'Authentication required.', code: 'UNAUTHORIZED' });
+    }
 
-    // Cache-first: check for a recent completed analysis (<30 minutes).
+    const submitted = req.body ? req.body.signal : undefined;
+    let positionData;
+    let snapshotForHash;
+
+    if (submitted !== undefined) {
+      if (!submitted || typeof submitted !== 'object' || Array.isArray(submitted)) {
+        return res.status(400).json({ error: 'signal payload must be an object.', code: 'INVALID_PAYLOAD' });
+      }
+      if (!submitted.analysis || typeof submitted.analysis !== 'object') {
+        return res.status(400).json({ error: 'signal.analysis is required.', code: 'INVALID_PAYLOAD' });
+      }
+      const payloadTicker = normalizeTicker(submitted.ticker);
+      if (!payloadTicker) {
+        return res.status(400).json({ error: 'signal.ticker is required.', code: 'INVALID_PAYLOAD' });
+      }
+      if (payloadTicker !== routeTicker) {
+        return res.status(400).json({ error: 'Ticker does not match payload.', code: 'TICKER_MISMATCH' });
+      }
+      positionData = rowFromSignalSnapshot(submitted);
+      snapshotForHash = submitted;
+    } else {
+      const snapResult = await pool.query(
+        `SELECT * FROM signal_snapshots WHERE ticker = $1 ORDER BY analyzed_at DESC LIMIT 1`,
+        [routeTicker]
+      );
+      if (snapResult.rows.length > 0) {
+        positionData = snapResult.rows[0];
+      } else {
+        const histResult = await pool.query(
+          `SELECT * FROM signal_history WHERE ticker = $1 ORDER BY generated_at DESC LIMIT 1`,
+          [routeTicker]
+        );
+        if (histResult.rows.length === 0) {
+          return res.status(404).json({ error: 'No signal data found for this ticker.', code: 'NO_SIGNAL_DATA' });
+        }
+        positionData = histResult.rows[0];
+      }
+      snapshotForHash = positionData.payload || positionData.analysis_data || {
+        ticker: positionData.ticker,
+        signal: positionData.signal,
+        confidence: positionData.confidence,
+        entry: positionData.entry,
+        stop_loss: positionData.stop_loss,
+        target1: positionData.target1,
+        target2: positionData.target2,
+        target3: positionData.target3,
+      };
+    }
+
+    const snapshotHash = hashSnapshot(snapshotForHash);
+    await ensureAiSnapshotColumns();
+
+    // Cache: must match ticker + prompt schema + exact snapshot hash.
     const cacheResult = await pool.query(
       `SELECT * FROM ai_position_intelligence
        WHERE ticker = $1 AND status = 'completed'
-         AND prompt_schema_version = $2
+         AND prompt_schema_version = $2 AND snapshot_hash = $3
          AND created_at > NOW() - interval '30 minutes'
        ORDER BY created_at DESC LIMIT 1`,
-      [ticker.toUpperCase(), positionIntelligenceService.PROMPT_SCHEMA_VERSION]
+      [routeTicker, positionIntelligenceService.PROMPT_SCHEMA_VERSION, snapshotHash]
     );
     if (cacheResult.rows.length > 0) {
       const row = cacheResult.rows[0];
@@ -455,36 +570,24 @@ app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res
         ticker: row.ticker,
         model: row.model,
         promptSchemaVersion: row.prompt_schema_version,
+        snapshotHash: row.snapshot_hash,
         analysis: typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload,
         generatedAt: row.completed_at,
         cached: true,
       });
     }
 
-    // Fetch the latest signal snapshot for this ticker.
-    let positionData = null;
-    const snapResult = await pool.query(
-      `SELECT * FROM signal_snapshots WHERE ticker = $1 ORDER BY analyzed_at DESC LIMIT 1`,
-      [ticker.toUpperCase()]
-    );
-
-    if (snapResult.rows.length > 0) {
-      positionData = snapResult.rows[0];
+    // Duplicate-request protection: coalesce concurrent identical requests.
+    const flightKey = `${routeTicker}:${positionIntelligenceService.PROMPT_SCHEMA_VERSION}:${snapshotHash}`;
+    let aiResult;
+    if (AI_INFLIGHT.has(flightKey)) {
+      aiResult = await AI_INFLIGHT.get(flightKey);
     } else {
-      // Fall back to signal_history for the most recent assessment.
-      const histResult = await pool.query(
-        `SELECT * FROM signal_history WHERE ticker = $1 ORDER BY generated_at DESC LIMIT 1`,
-        [ticker.toUpperCase()]
-      );
-      if (histResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No signal data found for this ticker.', code: 'NO_SIGNAL_DATA' });
-      }
-      positionData = histResult.rows[0];
+      const p = positionIntelligenceService.analyzePosition(positionData)
+        .finally(() => { AI_INFLIGHT.delete(flightKey); });
+      AI_INFLIGHT.set(flightKey, p);
+      aiResult = await p;
     }
-
-    // Delegate to the position intelligence service: builds context, calls
-    // Azure GPT-5-mini, validates structured JSON output.
-    const aiResult = await positionIntelligenceService.analyzePosition(positionData);
 
     if (!aiResult.ok) {
       const statusCode = aiResult.code === 'AZURE_AI_DISABLED' ? 503
@@ -498,8 +601,7 @@ app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res
       });
     }
 
-    // Quantitative integrity safeguard: ensure AI-reported recommendation
-    // matches the authoritative engine recommendation. Never let AI override.
+    // Quantitative integrity safeguard: AI must never override the engine.
     const engineRecommendation = positionData.signal || null;
     const aiReportedRecommendation = aiResult.data?.recommendation_context?.existing_recommendation || null;
     const recommendationMismatch = engineRecommendation && aiReportedRecommendation
@@ -507,38 +609,40 @@ app.post('/api/ai/positions/:ticker/analyze', authenticateToken, async (req, res
 
     if (recommendationMismatch) {
       logger.warn('[AzureAI] Recommendation mismatch detected', {
-        ticker,
+        ticker: routeTicker,
         engine: engineRecommendation,
         ai: aiReportedRecommendation,
       });
-      // Force the engine's recommendation into the output before storage/display.
       if (aiResult.data.recommendation_context) {
         aiResult.data.recommendation_context.existing_recommendation = engineRecommendation;
       }
     }
 
-    // Store the validated AI analysis (separate from signal engine data).
+    // Persist: exact submitted snapshot + hash for provenance.
     await pool.query(
       `INSERT INTO ai_position_intelligence
-        (position_id, ticker, user_id, model, prompt_schema_version, status, input_snapshot, output_payload, completed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+        (position_id, ticker, user_id, model, prompt_schema_version, status, input_snapshot, snapshot_hash, snapshot_payload, output_payload, completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
       [
-        `sig-${positionData.ticker}-${positionData.generated_at || Date.now()}`,
-        positionData.ticker.toUpperCase(),
-        userId || null,
+        `sig-${routeTicker}-${snapshotHash.slice(0, 12)}`,
+        routeTicker,
+        userId,
         aiResult.model,
         aiResult.promptSchemaVersion,
         'completed',
         JSON.stringify(aiResult.inputContext || {}),
+        snapshotHash,
+        JSON.stringify(snapshotForHash),
         JSON.stringify(aiResult.data),
       ]
     );
 
     return res.json({
       ok: true,
-      ticker: positionData.ticker,
+      ticker: routeTicker,
       model: aiResult.model,
       promptSchemaVersion: aiResult.promptSchemaVersion,
+      snapshotHash,
       analysis: aiResult.data,
       generatedAt: aiResult.data.generated_at,
       recommendationMismatch,
@@ -582,6 +686,8 @@ app.get('/api/ai/positions/:ticker', authenticateToken, async (req, res) => {
       model: row.model,
       promptSchemaVersion: row.prompt_schema_version,
       status: row.status,
+      snapshotHash: row.snapshot_hash || null,
+      snapshotPayload: row.snapshot_payload || null,
       outputPayload: row.output_payload ? (typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload) : null,
       errorMessage: row.error_message,
       createdAt: row.created_at,
@@ -618,7 +724,10 @@ app.get('/api/ai/positions/:ticker/history', authenticateToken, async (req, res)
       analyses: result.rows.map(row => ({
         id: row.id,
         model: row.model,
+        promptSchemaVersion: row.prompt_schema_version,
         status: row.status,
+        snapshotHash: row.snapshot_hash || null,
+        snapshotPayload: row.snapshot_payload || null,
         outputPayload: row.output_payload ? (typeof row.output_payload === 'string' ? JSON.parse(row.output_payload) : row.output_payload) : null,
         errorMessage: row.error_message,
         createdAt: row.created_at,

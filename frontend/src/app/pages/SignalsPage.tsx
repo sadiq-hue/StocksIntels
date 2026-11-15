@@ -346,12 +346,23 @@ export function SignalsPage() {
     } catch (e) { console.error("Signals fetch error:", e); } finally { setLoading(false); }
   };
 
+  const runAi = (snapshot: StockSignal | null) => {
+    if (!snapshot || !snapshot.ticker) return;
+    setAiLoading(true);
+    setAiError(null);
+    requestAiAnalysis(snapshot.ticker, snapshot)
+      .then((res) => setAiAnalysis(res.analysis))
+      .catch((err) => setAiError(err?.message || "Assessment unavailable"))
+      .finally(() => setAiLoading(false));
+  };
+
   const openSignal = async (signal: StockSignal) => {
     setSelected(signal);
     window.scrollTo({ top: 0, behavior: "smooth" });
     const cached = fullSignalCache.current.get(signal.ticker);
     if (cached) setSelected(cached);
     setDetailLoading(true);
+    let displayed: StockSignal = cached || signal;
     try {
       const res = await apiFetch(`/signal/${encodeURIComponent(signal.ticker)}?fresh=${Date.now()}`, { cache: "no-store" });
       const payload = await res.json();
@@ -362,43 +373,27 @@ export function SignalsPage() {
         const merged = { ...signal, ...full } as StockSignal;
         fullSignalCache.current.set(signal.ticker, merged);
         setSelected(merged);
+        displayed = merged;
       }
     } catch (e) {
       console.error("Signal detail fetch error:", e);
     } finally {
       setDetailLoading(false);
+      // Interpret exactly the snapshot that is now rendered.
+      runAi(displayed);
     }
   };
 
-  // Fetch the detailed interpretation for the opened position (cache-first on the server).
+  // Clear the interpretation when the detail view closes.
   useEffect(() => {
-    const ticker = selected?.ticker;
-    if (!ticker) {
+    if (!selected) {
       setAiAnalysis(null);
       setAiError(null);
       setAiLoading(false);
-      return;
     }
-    let cancelled = false;
-    setAiLoading(true);
-    setAiError(null);
-    requestAiAnalysis(ticker)
-      .then((res) => { if (!cancelled) setAiAnalysis(res.analysis); })
-      .catch((err) => { if (!cancelled) setAiError(err?.message || "Assessment unavailable"); })
-      .finally(() => { if (!cancelled) setAiLoading(false); });
-    return () => { cancelled = true; };
-  }, [selected?.ticker]);
+  }, [selected]);
 
-  const retryAi = () => {
-    const ticker = selected?.ticker;
-    if (!ticker) return;
-    setAiLoading(true);
-    setAiError(null);
-    requestAiAnalysis(ticker)
-      .then((res) => setAiAnalysis(res.analysis))
-      .catch((err) => setAiError(err?.message || "Assessment unavailable"))
-      .finally(() => setAiLoading(false));
-  };
+  const retryAi = () => runAi(selected);
 
   useEffect(() => { fetchSignals(); const i = setInterval(fetchSignals, 300000); return () => clearInterval(i); }, [user?.id]);
 

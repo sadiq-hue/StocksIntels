@@ -25,13 +25,21 @@ export interface AiHealthResponse {
   error?: string;
 }
 
-/** Request AI analysis for a position. */
+/** Request AI analysis for a position.
+ *  Pass the exact recommendation object currently displayed so the backend
+ *  interprets that snapshot (payload parity), not an older DB snapshot. */
 export async function requestAiAnalysis(
-  ticker: string
+  ticker: string,
+  snapshot?: unknown
 ): Promise<AnalyzeResponse> {
+  const init: RequestInit = { method: "POST" };
+  if (snapshot !== undefined) {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify({ signal: snapshot });
+  }
   const res = await authFetch(
     `${API_BASE}/ai/positions/${encodeURIComponent(ticker)}/analyze`,
-    { method: "POST" }
+    init
   );
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as {
