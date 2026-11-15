@@ -215,9 +215,8 @@ function scaleSizes(nodes: any[], area: number): any[] {
 
 function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
   const isAfrican = (m?: string) => ["NSE", "NGX", "JSE"].includes(String(m || "").toUpperCase());
-  // Activity-based sizing for stocks without market cap (NSE). Raw share volume
-  // spans 1..millions and produced ~65,000:1 slivers; log10 keeps ordering while
-  // compressing the range so tiles stay readable.
+  // Activity-based sizing for African stocks (no reliable market cap). Raw share
+  // volume spans 1..millions → ~65k:1 slivers; log10 compresses while preserving order.
   const activitySize = (v: number) => (v > 0 ? Math.log10(1 + v) : 1);
 
   const flat: any[] = [];
@@ -227,41 +226,44 @@ function buildHeatmap(sectors: SectorRow[], mode: HeatMarket = "all"): any[] {
       const group = isAfrican(market) ? "African" : "Global";
       if (mode === "global" && group === "African") continue;
       if (mode === "african" && group === "Global") continue;
+      // African: always log-activity (caps are mostly 0 and inconsistent).
+      // Global: market cap, falling back to log activity.
       const cap = Number(c.marketCap) > 0 ? Number(c.marketCap) : 0;
-      const size = cap > 0 ? cap : activitySize(parseCompact(c.volume));
+      const size = group === "African" ? activitySize(parseCompact(c.volume)) : (cap > 0 ? cap : activitySize(parseCompact(c.volume)));
       flat.push({ ...c, sector: s.name, market, group, size });
     }
   }
   if (!flat.length) return [];
   flat.sort((a, b) => b.size - a.size);
 
-  // One treemap per market group. Grouping by sector inside a small group caused
-  // extreme region skew (huge sector vs 1-stock sector) and dropped slivers, so
-  // each group is laid out flat; sector remains in the tooltip.
-  const groupNodes: any[] = [];
-  if (mode === "all") {
-    const global = flat.filter((c) => c.group === "Global").slice(0, 160);
-    const african = flat.filter((c) => c.group === "African").slice(0, 60);
-    const gSum = global.reduce((sum, c) => sum + c.size, 0);
-    const aSum = african.reduce((sum, c) => sum + c.size, 0);
-    if (global.length) groupNodes.push({ name: "Global", size: gSum, tiles: global });
-    if (african.length) groupNodes.push({ name: "African", size: Math.max(aSum, gSum * 0.18), tiles: african });
-  } else {
-    groupNodes.push({ name: mode === "african" ? "African" : "Global", size: 1, tiles: flat.slice(0, 200) });
-  }
-  if (!groupNodes.length) return [];
+  const global = flat.filter((c) => c.group === "Global").slice(0, 160);
+  const african = flat.filter((c) => c.group === "African").slice(0, 60);
 
-  const groupScaled = scaleSizes(groupNodes, 1);
-  const groupRegions: any[] = [];
-  squarify(groupScaled, 0, 0, 1, 1, groupRegions);
+  // Deterministic regions (no squarify on 2 thin groups, which can consume the
+  // full width and drop the remaining tiles).
+  const blocks: { name: string; rect: { x: number; y: number; w: number; h: number }; tiles: any[] }[] = [];
+  if (mode === "african") {
+    blocks.push({ name: "African", rect: { x: 0, y: 0, w: 1, h: 1 }, tiles: african });
+  } else if (mode === "global") {
+    blocks.push({ name: "Global", rect: { x: 0, y: 0, w: 1, h: 1 }, tiles: global });
+  } else if (global.length && african.length) {
+    blocks.push({ name: "Global", rect: { x: 0, y: 0, w: 1, h: 0.78 }, tiles: global });
+    blocks.push({ name: "African", rect: { x: 0, y: 0.78, w: 1, h: 0.22 }, tiles: african });
+  } else if (global.length) {
+    blocks.push({ name: "Global", rect: { x: 0, y: 0, w: 1, h: 1 }, tiles: global });
+  } else if (african.length) {
+    blocks.push({ name: "African", rect: { x: 0, y: 0, w: 1, h: 1 }, tiles: african });
+  }
+  if (!blocks.length) return [];
 
   const tiles: any[] = [];
-  for (const gr of groupRegions) {
-    const area = Math.max(1e-6, gr.w * gr.h);
-    const kids = scaleSizes(gr.tiles || [], area);
+  for (const b of blocks) {
+    const { x, y, w, h } = b.rect;
+    const area = Math.max(1e-6, w * h);
+    const kids = scaleSizes(b.tiles, area);
     const placed: any[] = [];
-    squarify(kids, gr.x, gr.y, gr.w, gr.h, placed);
-    tiles.push(...placed.map((t) => ({ ...t, group: gr.name, region: { x: gr.x, y: gr.y, w: gr.w, h: gr.h } })));
+    squarify(kids, x, y, w, h, placed);
+    tiles.push(...placed.map((t) => ({ ...t, group: b.name, region: { x, y, w, h } })));
   }
   return tiles;
 }
