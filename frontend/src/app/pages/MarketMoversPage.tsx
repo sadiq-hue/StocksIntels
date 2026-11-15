@@ -234,6 +234,7 @@ export function MarketMoversPage() {
 
   const fetchMovers = useCallback(async (attempt = 1): Promise<void> => {
     const maxAttempts = 2;
+    const effectivePeriod: PeriodId = activeTab === "gainers" || activeTab === "losers" ? period : "1d";
     try {
       setLoading(true);
       const fetchJson = async (url: string) => {
@@ -242,7 +243,7 @@ export function MarketMoversPage() {
         return res.json();
       };
       const [moversRes, sectorsRes, indicesRes] = await Promise.allSettled([
-        fetchJson(`/market/movers?period=${period}`),
+        fetchJson(`/market/movers?period=${effectivePeriod}`),
         fetchJson(`/market/sectors/tree`),
         fetchJson(`/market/indices`),
       ]);
@@ -328,7 +329,7 @@ export function MarketMoversPage() {
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, activeTab]);
 
   useEffect(() => {
     fetchMovers();
@@ -454,7 +455,7 @@ export function MarketMoversPage() {
   const globalIndices = indices.filter((i) => i.market === "Global").slice(0, 4);
   const changeColor = (pct: number) => (pct >= 0 ? "text-emerald-600" : "text-red-600");
   const isListTab = activeTab !== "heatmap";
-  const sectionTitle = activeTab === "gainers" || activeTab === "losers" || activeTab === "active"
+  const sectionTitle = activeTab === "gainers" || activeTab === "losers"
     ? `${TAB_TITLES[activeTab]} ${PERIOD_LABEL[period]}`
     : TAB_TITLES[activeTab];
 
@@ -493,7 +494,7 @@ export function MarketMoversPage() {
           })}
         </div>
 
-        {(activeTab === "gainers" || activeTab === "losers" || activeTab === "active") && (
+        {(activeTab === "gainers" || activeTab === "losers") && (
           <div className="mt-2 flex flex-wrap items-center gap-1">
             {PERIOD_TABS.map((p) => (
               <button
