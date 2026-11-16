@@ -694,15 +694,18 @@ export function StockAnalysisPage() {
     const fetchHistory = async () => {
       try {
         const bars = await fetchStockHistory(historySymbol, periodToRange(chartPeriod));
-        if (!cancelled && bars.length > 0) {
-          setChartHistory(bars);
+        // African listings via MyStocks return sparse data for short ranges
+        // (e.g. 6mo returns ~20 bars). Fall back to 1y which returns full history.
+        const effectiveBars = (!isAfricanMarket || bars.length >= 30) ? bars : await fetchStockHistory(historySymbol, "1y");
+        if (!cancelled && effectiveBars.length > 0) {
+          setChartHistory(effectiveBars);
         }
       } catch { /* ignore */ }
       if (!cancelled) setChartLoading(false);
     };
     fetchHistory();
     return () => { cancelled = true; };
-  }, [historySymbol, chartPeriod]);
+  }, [historySymbol, chartPeriod, isAfricanMarket]);
 
   // African listing feeds don't expose a 52-week range, so derive it once from
   // a year of closing/high/low history.
@@ -928,10 +931,10 @@ export function StockAnalysisPage() {
       </div>
 
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
-          <div className="space-y-4 min-w-0">
+        <div className="columns-1 gap-5 lg:columns-2 [column-fill:balance]">
+          <div className="contents">
             {/* Price chart */}
-            <Card id="price-chart" className="relative overflow-hidden border border-border shadow-sm">
+            <Card id="price-chart" className="relative mb-4 break-inside-avoid overflow-hidden border border-border shadow-sm lg:[column-span:all]">
               <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-4 bg-gradient-to-b from-[#0D7490]/[0.03] to-transparent">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -975,7 +978,7 @@ export function StockAnalysisPage() {
             </Card>
 
             {/* About */}
-            <Card className="border border-border shadow-sm">
+            <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
               <div className="p-4">
                 <h2 className="text-sm font-semibold text-foreground">About {activeSelection.ticker}</h2>
                 {stockProfile?.description ? (
@@ -1013,7 +1016,7 @@ export function StockAnalysisPage() {
 
             {/* Financial performance */}
             {financialSeries.length > 0 && (
-              <Card className="border border-border shadow-sm">
+              <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
                 <div className="p-4">
                   <h2 className="text-sm font-semibold text-foreground">Financial Performance</h2>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">Annual revenue and net income</p>
@@ -1036,7 +1039,7 @@ export function StockAnalysisPage() {
 
             {/* NSE insights */}
             {activeSelection.market === "nse" && nseInsights && (
-              <Card className="border border-border shadow-sm">
+              <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
                 <div className="p-4">
                   <h2 className="text-sm font-semibold text-foreground">NSE Insights</h2>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
@@ -1063,7 +1066,7 @@ export function StockAnalysisPage() {
 
             {/* Top holders */}
             {holders.length > 0 && (
-              <Card className="border border-border shadow-sm">
+              <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-sm font-semibold text-foreground">Top Holders</h2>
@@ -1084,8 +1087,8 @@ export function StockAnalysisPage() {
               </Card>
             )}
           </div>
-          <aside className="space-y-4">
-            <Card className="border border-border shadow-sm">
+          <aside className="contents">
+            <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
               <div className="p-4">
                 <h2 className="text-sm font-semibold text-foreground">Key Stats</h2>
                 <table className="mt-3 w-full text-[11px]">
@@ -1108,11 +1111,10 @@ export function StockAnalysisPage() {
               </div>
             </Card>
 
-            <Card className="border border-border shadow-sm">
-              <div className="p-4">
-                <h2 className="text-sm font-semibold text-foreground">Company Profile</h2>
+            {/* Company Profile */}
+            <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
                 <div className="mt-2 space-y-1.5 text-[11px]">
-                  <p className="font-medium text-foreground">{stockProfile?.companyName || displayName}</p>
+                  <h2 className="text-sm font-semibold text-foreground">{stockProfile?.companyName || displayName}</h2>
                   <p className="text-muted-foreground">{stockProfile?.sector || activeSelection.sector}{stockProfile?.industry ? ` · ${stockProfile.industry}` : ""}</p>
                   <p className="text-muted-foreground">{stockProfile?.address || stockProfile?.country || ""}</p>
                   {stockProfile?.phone && <p className="text-muted-foreground">{stockProfile.phone}</p>}
@@ -1121,11 +1123,10 @@ export function StockAnalysisPage() {
                   )}
                 </div>
                 <button onClick={() => setActiveTab("profile")} className="mt-3 text-xs font-medium text-[#0D7490] hover:underline">Full Company Profile →</button>
-              </div>
             </Card>
 
             {/* StocksIntels analysis */}
-            <Card className="relative overflow-hidden border border-border shadow-sm">
+            <Card className="mb-4 break-inside-avoid relative overflow-hidden border border-border shadow-sm">
               <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-4">
                 <h2 className="text-sm font-semibold text-foreground">StocksIntels Analysis</h2>
@@ -1170,7 +1171,7 @@ export function StockAnalysisPage() {
             </Card>
 
             {/* News */}
-            <Card className="border border-border shadow-sm">
+            <Card className="mb-4 break-inside-avoid border border-border shadow-sm">
               <div className="p-4">
                 <h2 className="text-sm font-semibold text-foreground">News</h2>
                 {stockSignal?.news && stockSignal.news.length > 0 ? (
