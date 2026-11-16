@@ -1030,6 +1030,16 @@ export function LandingPage() {
                     <p className="text-foreground font-semibold">Nairobi, Kenya</p>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
+                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-[#0D7490]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Location</p>
+                    <p className="text-foreground font-semibold">Mauritius</p>
+                  </div>
+                </div>
               </div>
             </div>
 
