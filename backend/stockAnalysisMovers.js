@@ -5,14 +5,25 @@
 // scans the whole US market unfiltered, matching what their site shows.
 //
 // Table columns: rank | symbol | name | change% | price | volume | market cap.
+//
+// Reliability: the page is intermittently behind Cloudflare (429). To guarantee
+// micro-cap coverage with no data break, keep the LAST GOOD micro-cap list on
+// disk and serve it when the live fetch is blocked, so a transient outage never
+// silently collapses the movers list to Yahoo-only large caps.
 
 const axios = require('axios');
 const cheerio = require('cheerio');
+const fs = require('fs');
+const path = require('path');
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   Accept: 'text/html,application/json,*/*',
 };
+
+// Persist inside the mounted `uploads` volume so it survives container
+// rebuilds (a plain /app/backend/.cache would be wiped on every deploy).
+const CACHE_FILE = path.join(__dirname, '..', 'backend', 'uploads', '.stockanalysis_movers.cache.json');
 
 function parseCap(s) {
   if (!s) return 0;
@@ -50,18 +61,40 @@ function parseRows(html) {
   return out;
 }
 
+// ------------------------------------------------ disk-backed last-good cache
+let lastGood = { gainers: [], losers: [], at: 0 };
+function loadCache() {
+  try {
+    const raw = fs.readFileSync(CACHE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.gainers) && Array.isArray(parsed.losers)) lastGood = parsed;
+  } catch { /* no cache yet */ }
+}
+function saveCache() {
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(lastGood));
+  } catch (e) { console.warn('[stockanalysis] cache write failed:', e.message); }
+}
+loadCache();
+
 async function fetchList(kind) {
   const url = `https://stockanalysis.com/markets/${kind}/`;
   let rows = [];
-  try {
-    const resp = await axios.get(url, { timeout: 20000, headers: HEADERS });
-    const body = String(resp.data || '');
-    if (!/Just a moment|cf-challenge|challenge-platform/i.test(body)) {
-      rows = parseRows(body);
+  // Try the plain HTTP scrape, retrying once ~1s apart (Cloudflare is flaky).
+  for (let attempt = 0; attempt < 2 && rows.length < 5; attempt++) {
+    try {
+      const resp = await axios.get(url, { timeout: 20000, headers: HEADERS });
+      const body = String(resp.data || '');
+      if (!/Just a moment|cf-challenge|challenge-platform/i.test(body)) {
+        rows = parseRows(body);
+      }
+    } catch (e) {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
     }
-  } catch { /* fall through to renderer */ }
-  // Cloudflare sometimes serves an interstitial to plain HTTP clients. The
-  // renderer container's Chromium can load the real page, so use it as backup.
+  }
+  // Cloudflare sometimes beats plain HTTP too; the renderer container's
+  // Chromium can load it. Fall back to that before the disk cache.
   if (rows.length < 5) {
     try {
       const { render } = require('./rendererClient');
@@ -71,10 +104,22 @@ async function fetchList(kind) {
       console.warn(`[stockanalysis] ${kind} renderer fallback failed: ${e.message}`);
     }
   }
+  // Persist the freshest successful set, then guarantee a non-empty answer.
+  if (rows.length >= 5) {
+    lastGood[kind] = rows;
+    lastGood.at = Date.now();
+    saveCache();
+    return rows;
+  }
+  // Live fetch blocked -> serve the last good micro-cap list (no data break).
+  if (lastGood[kind] && lastGood[kind].length) {
+    console.warn(`[stockanalysis] ${kind} live fetch blocked; serving last-good (${lastGood[kind].length} rows)`);
+    return lastGood[kind];
+  }
   return rows;
 }
 
 async function getGainers(limit = 15) { return (await fetchList('gainers')).slice(0, limit); }
 async function getLosers(limit = 15) { return (await fetchList('losers')).slice(0, limit); }
 
-module.exports = { getGainers, getLosers };
+module.exports = { getGainers, getLosers, _getLastGood: () => lastGood };
