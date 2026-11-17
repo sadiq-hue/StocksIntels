@@ -41,24 +41,50 @@ function num(s) {
   return isFinite(n) ? n : 0;
 }
 
-function parseRows(html) {
+// Parse every data table on the page. The /markets/gainers and /markets/losers
+// pages each have ONE table, but premarket and after-hours pages carry TWO (a
+// gainers table and a losers table). Grabbing `table tr` across all of them
+// merged positive and negative movers into one list, which is why the Premarket
+// tab showed +344% then -35% rows together. We parse per-table instead.
+function parseRowsAsTables(html) {
   const $ = cheerio.load(html);
-  const out = [];
-  $('table tr').each((_, tr) => {
-    const cells = $(tr).find('td').map((__, td) => $(td).text().trim()).get();
-    if (cells.length < 7) return;
-    const ticker = cells[1];
-    if (!ticker) return;
-    out.push({
-      ticker,
-      name: cells[2] || ticker,
-      changePercent: num(cells[3]),
-      price: num(cells[4]),
-      volume: num(cells[5]),
-      marketCap: parseCap(cells[6]),
+  const tables = [];
+  $('table').each((_, tbl) => {
+    const rows = [];
+    $(tbl).find('tbody tr').each((__, tr) => {
+      const cells = $(tr).find('td').map((___, td) => $(td).text().trim()).get();
+      if (cells.length < 7) return;
+      const ticker = cells[1];
+      if (!ticker) return;
+      rows.push({
+        ticker,
+        name: cells[2] || ticker,
+        changePercent: num(cells[3]),
+        price: num(cells[4]),
+        volume: cells[5],
+        marketCap: parseCap(cells[6]),
+      });
     });
+    tables.push(rows);
   });
-  return out;
+  return tables;
+}
+
+// stockanalysis pages:
+//  - gainers:     1 table (positive changes)
+//  - losers:      1 table (negative changes)
+//  - premarket:   2 tables (gainers then losers)
+//  - after-hours: 2 tables (gainers then losers)
+// Return rows of the matching polarity only.
+function pickTable(kind, tables) {
+  if (!Array.isArray(tables) || tables.length === 0) return [];
+  for (const rows of tables) {
+    if (rows.length === 0) continue;
+    const avgSign = rows.reduce((s, r) => s + Math.sign(r.changePercent || 0), 0) / rows.length;
+    if (kind === 'losers') { if (avgSign < 0) return rows; }
+    else { if (avgSign > 0) return rows; }
+  }
+  return tables[0] || [];
 }
 
 // ------------------------------------------------ disk-backed last-good cache
@@ -103,7 +129,7 @@ async function fetchList(kind) {
       const resp = await axios.get(url, { timeout: 20000, headers: HEADERS });
       const body = String(resp.data || '');
       if (!/Just a moment|cf-challenge|challenge-platform/i.test(body)) {
-        rows = parseRows(body);
+        rows = pickTable(kind, parseRowsAsTables(body));
       }
     } catch (e) {
       if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
@@ -115,7 +141,7 @@ async function fetchList(kind) {
     try {
       const { render } = require('./rendererClient');
       const rendered = await render(url, { html: true, selector: 'table tbody tr', timeout: 45000 });
-      rows = parseRows(rendered.html || '');
+      rows = pickTable(kind, parseRowsAsTables(rendered.html || ''));
     } catch (e) {
       console.warn(`[stockanalysis] ${kind} renderer fallback failed: ${e.message}`);
     }
