@@ -62,12 +62,21 @@ function parseRows(html) {
 }
 
 // ------------------------------------------------ disk-backed last-good cache
-let lastGood = { gainers: [], losers: [], at: 0 };
+let lastGood = { gainers: [], losers: [], premarket: [], afterhours: [], at: 0 };
 function loadCache() {
   try {
     const raw = fs.readFileSync(CACHE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.gainers) && Array.isArray(parsed.losers)) lastGood = parsed;
+    if (parsed && Array.isArray(parsed.gainers) && Array.isArray(parsed.losers)) {
+      // Backfill lists that may not exist in an older cache file.
+      lastGood = {
+        gainers: parsed.gainers || [],
+        losers: parsed.losers || [],
+        premarket: parsed.premarket || [],
+        afterhours: parsed.afterhours || [],
+        at: parsed.at || 0,
+      };
+    }
   } catch { /* no cache yet */ }
 }
 function saveCache() {
@@ -78,8 +87,15 @@ function saveCache() {
 }
 loadCache();
 
+const SECTION_URL = {
+  gainers: 'https://stockanalysis.com/markets/gainers/',
+  losers: 'https://stockanalysis.com/markets/losers/',
+  premarket: 'https://stockanalysis.com/markets/premarket/',
+  afterhours: 'https://stockanalysis.com/markets/after-hours/',
+};
+
 async function fetchList(kind) {
-  const url = `https://stockanalysis.com/markets/${kind}/`;
+  const url = SECTION_URL[kind] || `https://stockanalysis.com/markets/${kind}/`;
   let rows = [];
   // Try the plain HTTP scrape, retrying once ~1s apart (Cloudflare is flaky).
   for (let attempt = 0; attempt < 2 && rows.length < 5; attempt++) {
@@ -121,5 +137,7 @@ async function fetchList(kind) {
 
 async function getGainers(limit = 15) { return (await fetchList('gainers')).slice(0, limit); }
 async function getLosers(limit = 15) { return (await fetchList('losers')).slice(0, limit); }
+async function getPremarket(limit = 15) { return (await fetchList('premarket')).slice(0, limit); }
+async function getAfterHours(limit = 15) { return (await fetchList('afterhours')).slice(0, limit); }
 
-module.exports = { getGainers, getLosers, _getLastGood: () => lastGood };
+module.exports = { getGainers, getLosers, getPremarket, getAfterHours, _getLastGood: () => lastGood };

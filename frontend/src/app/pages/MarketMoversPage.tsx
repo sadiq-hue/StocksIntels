@@ -311,7 +311,7 @@ export function MarketMoversPage() {
 
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [period, setPeriod] = useState<PeriodId>("1d");
-  const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any> } | null>(null);
+  const [data, setData] = useState<{ gainers: MoverRow[]; losers: MoverRow[]; active: MoverRow[]; sectors: SectorRow[]; premarket: Record<string, any>; saPremarket: MoverRow[]; saAfterhours: MoverRow[] } | null>(null);
   const [indices, setIndices] = useState<IndexRow[]>([]);
   const [status, setStatus] = useState<any>(null);
   const [asOf, setAsOf] = useState<string>("");
@@ -430,7 +430,7 @@ export function MarketMoversPage() {
         } catch { /* silent */ }
       }
 
-      setData({ gainers, losers, active, sectors, premarket });
+      setData({ gainers, losers, active, sectors, premarket, saPremarket: Array.isArray(md.premarket) ? md.premarket : [], saAfterhours: Array.isArray(md.afterhours) ? md.afterhours : [] });
       setIndices(idx);
       setStatus(statusRes.status === "fulfilled" ? statusRes.value : null);
       setAsOf(md.updatedAt || new Date().toISOString());
@@ -475,6 +475,22 @@ export function MarketMoversPage() {
   // prints. We do NOT cross-substitute the other session's data, so a closed
   // premarket window shows the empty state rather than post-market results.
   const extendedRows = useMemo<{ pre: MoverRow[]; post: MoverRow[] }>(() => {
+    // Preferred: stockanalysis.com premkt / after-hours lists (unfiltered,
+    // micro-cap inclusive) shipped straight from the movers snapshot. Fall back
+    // to the v7 large-cap batch only when stockanalysis had nothing.
+    const saPre = data?.saPremarket || [];
+    const saAfter = data?.saAfterhours || [];
+    const fromSa = (rows: MoverRow[]) => rows
+      .filter((r) => Number(r.price) > 0)
+      .map((r) => ({
+        ...r,
+        ticker: normalizeTicker(r.ticker),
+        market: "Global",
+        updatedAt: r.updatedAt || null,
+      }));
+    const saPreRows = fromSa(saPre);
+    const saAfterRows = fromSa(saAfter);
+
     const entries = Object.entries(data?.premarket || {});
     const build = (session: "pre" | "post"): MoverRow[] => entries.map(([symbol, q]: [string, any]) => {
       const prefix = session === "pre" ? "preMarket" : "postMarket";
@@ -495,7 +511,10 @@ export function MarketMoversPage() {
         updatedAt: Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : null,
       };
     }).filter((r) => r.price > 0);
-    return { pre: build("pre"), post: build("post") };
+    return {
+      pre: saPreRows.length ? saPreRows : build("pre"),
+      post: saAfterRows.length ? saAfterRows : build("post"),
+    };
   }, [data]);
 
   const rows = useMemo<MoverRow[]>(() => {

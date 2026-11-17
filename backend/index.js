@@ -2721,7 +2721,25 @@ async function fetchRealTopMovers() {
     gainers: [...global.gainers, ...africaGainers].sort((a, b) => b.changePercent - a.changePercent).slice(0, 50),
     losers: [...global.losers, ...africaLosers].sort((a, b) => a.changePercent - b.changePercent).slice(0, 50),
   };
-  return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined };
+  // Premarket / after-hours come from stockanalysis.com the same way gainers/losers
+  // do (unfiltered, micro-cap inclusive), so the tabs match the reference site.
+  if (!global.premarket || !global.afterhours) {
+    try {
+      const saMovers = require('./stockAnalysisMovers');
+      const mapRow = (x) => {
+        const c = Number(x.changePercent) || 0;
+        return {
+          ticker: x.ticker, symbol: x.ticker, name: x.name,
+          price: Number(x.price) || 0, currency: 'USD',
+          change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
+          volume: fmt(Number(x.volume) || 0), rawVolume: Number(x.volume) || 0, marketCap: Number(x.marketCap) || 0, market: 'Global',
+        };
+      };
+      global.premarket = (await saMovers.getPremarket(30)).map(mapRow);
+      global.afterhours = (await saMovers.getAfterHours(30)).map(mapRow);
+    } catch (e) { console.warn('[movers] stockanalysis premarket/afterhours failed:', e.message); }
+  }
+  return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined, premarket: global.premarket || [], afterhours: global.afterhours || [] };
 }
 
 async function getMarketSnapshot() {
@@ -2775,7 +2793,7 @@ async function getMarketSnapshot() {
     nse: { active: getActive(nseStocks), movers: hasReal ? realMovers.nse : getMovers(nseStocks) },
     ngx: { movers: hasReal ? realMovers.ngx : { gainers: [], losers: [] } },
     jse: { movers: hasReal ? realMovers.jse : { gainers: [], losers: [] } },
-    global: { active: getActive(globalStocks), movers: hasReal ? realMovers.global : getMovers(globalStocks) },
+    global: { active: getActive(globalStocks), movers: hasReal ? realMovers.global : getMovers(globalStocks), premarket: realMovers?.premarket || [], afterhours: realMovers?.afterhours || [] },
     active: getActive(stocks),
     movers: hasReal ? realMovers.combined : getMovers(stocks),
     updatedAt: new Date().toISOString(),
@@ -9435,7 +9453,7 @@ let moversCache = { data: null, at: 0, inFlight: null };
 
 async function buildDailyMovers() {
   const snapshot = await getMarketSnapshot();
-  return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d', updatedAt: snapshot.updatedAt || new Date().toISOString() };
+  return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, premarket: snapshot.global.premarket || [], afterhours: snapshot.global.afterhours || [], active: snapshot.active, period: '1d', updatedAt: snapshot.updatedAt || new Date().toISOString() };
 }
 
 app.get('/api/market/movers', async (req, res) => {
