@@ -2676,7 +2676,19 @@ async function fetchRealTopMovers() {
 
   const { listMovers } = require('./mystocksAfricaApi');
   const africa = { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] } };
-  const keepStock = (r) => (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') && !/suspend/i.test(String(r.listingStatus || ''));
+  const keepStock = (r) => {
+    const okType = (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK');
+    const notSuspended = !/suspend/i.test(String(r.listingStatus || ''));
+    // MyStocks "movers" includes stale/penny rows with effectively no trading
+    // (e.g. a +30% "move" on 57 shares). Real movers need real liquidity: keep
+    // names with meaningful volume and a sane price. The cleanest junk was
+    // 57–5k shares and 0.03-currency listings; 10k shares is a low, safe floor
+    // that keeps genuine African small-cap movers (AEG ~18k, XPRS ~41k) while
+    // dropping the artifacts.
+    const price = Number(r.price) || 0;
+    const volume = Number(r.volume) || 0;
+    return okType && notSuspended && price >= 0.05 && volume >= 10000;
+  };
   for (const ex of ['NSE', 'NGX', 'JSE']) {
     const map = (r) => {
       const c = Number(r.changePct) || 0;
@@ -2701,21 +2713,13 @@ async function fetchRealTopMovers() {
   const africaLosers = [...africa.nse.losers, ...africa.ngx.losers, ...africa.jse.losers]
     .sort((a, b) => a.changePercent - b.changePercent);
 
-  // Interleave the two markets (Global, African, Global, African, …) so the top
-  // of the list always covers BOTH — otherwise Global micro-cap movers (+400%+)
-  // fill every slot and African names never appear.
-  const interleave = (g, a, total) => {
-    const out = [];
-    let gi = 0, ai = 0;
-    while (out.length < total && (gi < g.length || ai < a.length)) {
-      if (gi < g.length) out.push(g[gi++]);
-      if (out.length < total && ai < a.length) out.push(a[ai++]);
-    }
-    return out;
-  };
+  // The frontend re-sorts by changePercent on its own, so an interleaved list is
+  // contradictory (slot #2 could outrank slot #1). Merge every market and sort
+  // purely by move size; genuine African names still surface now that the junk
+  // micro-caps are filtered out above.
   const combined = {
-    gainers: interleave(global.gainers, africaGainers, 50),
-    losers: interleave(global.losers, africaLosers, 50),
+    gainers: [...global.gainers, ...africaGainers].sort((a, b) => b.changePercent - a.changePercent).slice(0, 50),
+    losers: [...global.losers, ...africaLosers].sort((a, b) => a.changePercent - b.changePercent).slice(0, 50),
   };
   return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined };
 }

@@ -471,8 +471,9 @@ export function MarketMoversPage() {
   };
 
   // Pre/post-market prints are separate from the regular-session movers table.
-  // Build both so the Premarket and After Hours tabs can fall back to the most
-  // recent extended session instead of showing an empty table on weekends.
+  // Premarket shows actual pre-market prints; After Hours shows post-market
+  // prints. We do NOT cross-substitute the other session's data, so a closed
+  // premarket window shows the empty state rather than post-market results.
   const extendedRows = useMemo<{ pre: MoverRow[]; post: MoverRow[] }>(() => {
     const entries = Object.entries(data?.premarket || {});
     const build = (session: "pre" | "post"): MoverRow[] => entries.map(([symbol, q]: [string, any]) => {
@@ -503,8 +504,8 @@ export function MarketMoversPage() {
       case "gainers": return data.gainers;
       case "losers": return data.losers;
       case "active": return data.active;
-      case "premarket": return extendedRows.pre.length ? extendedRows.pre : extendedRows.post;
-      case "afterhours": return extendedRows.post.length ? extendedRows.post : extendedRows.pre;
+      case "premarket": return extendedRows.pre;
+      case "afterhours": return extendedRows.post;
       default: return data.gainers;
     }
   }, [data, activeTab, extendedRows]);
@@ -609,12 +610,6 @@ export function MarketMoversPage() {
       : activeTab === "afterhours"
         ? `After-hours session is closed or no after-hours quotes are available for the tracked universe. Last checked ${lastUpdated || "-"}.`
         : `No ${sectionTitle.toLowerCase()} data available right now.`;
-  const extendedFallback: string | null =
-    activeTab === "premarket" && extendedRows.pre.length === 0 && extendedRows.post.length > 0
-      ? "after-hours"
-      : activeTab === "afterhours" && extendedRows.post.length === 0 && extendedRows.pre.length > 0
-        ? "pre-market"
-        : null;
 
   return (
     <div className="w-full max-w-none px-3 md:px-5 py-5 space-y-4">
@@ -786,13 +781,7 @@ export function MarketMoversPage() {
         </div>
       )}
 
-      {isListTab && extendedFallback && (
-        <div className="rounded-lg border border-[#0D7490]/25 bg-[#0D7490]/[0.06] px-3 py-2 text-[11px] text-muted-foreground">
-          {activeTab === "premarket" ? "Pre-market is closed" : "After-hours is closed"} — showing the most recent {extendedFallback} session.
-        </div>
-      )}
-
-      {/* Table */}
+{/* Table */}
       {isListTab && (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <div className="max-h-[620px] overflow-auto">
