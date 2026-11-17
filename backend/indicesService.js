@@ -129,14 +129,15 @@ async function fetchIndexFromYahoo(symbol) {
 }
 
 // NGX publishes index values through its public data widget endpoint, which is
-// flaky — transient timeouts happen. Retry once with a short backoff so a one-off
-// failure doesn't blank the card, and the caller keeps the last good value anyway.
+// flaky and slow — it has been observed needing ~30s on the first hit after a
+// page cache expires. Use an aggressive timeout + one retry so a slow response
+// doesn't blank the card, and the caller keeps the last good value anyway.
 async function fetchNgxIndexFromSite(code) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { data } = await axios.get('https://ngxgroup.com/wp-json/ngx-data-widgets/v1/home/indices-page', {
         params: { index: code, compare: 'NONE' },
-        timeout: 9000,
+        timeout: 35000,
         headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
       });
       const q = data?.primary?.quote;
