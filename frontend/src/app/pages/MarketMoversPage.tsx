@@ -594,10 +594,11 @@ export function MarketMoversPage() {
   const sessionWord = marketOpen ? "Today" : "Last Trading Session";
   const sessionSuffix = marketOpen ? "" : ` · ${lastSession}`;
   const asOfTime = fmtTzTime(asOf, SESSION_TZ);
+const isDelayed = cached && marketOpen;
   const freshness = error
     ? "Stale"
     : cached
-      ? (marketOpen ? "Delayed (cached)" : "Cached · last session")
+      ? (marketOpen ? "Delayed Price" : "Cached · last session")
       : marketOpen ? "Live" : "Last trading session";
 
   const periodWord = period === "1d" ? sessionWord : PERIOD_LABEL[period];
@@ -628,8 +629,8 @@ export function MarketMoversPage() {
                       : "border-border bg-muted/50 text-muted-foreground"
                 }`}
               >
-                <span className={`size-1.5 rounded-full ${error ? "bg-amber-500" : marketOpen ? "bg-emerald-500" : "bg-muted-foreground/60"}`} />
-                {freshness}
+<span className={`size-1.5 rounded-full ${error ? "bg-amber-500" : isDelayed ? "bg-amber-500" : marketOpen ? "bg-emerald-500" : "bg-muted-foreground/60"}`} />
+                  {freshness}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Global and African markets · NSE · NGX · JSE</p>
@@ -739,7 +740,7 @@ export function MarketMoversPage() {
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-[15px] font-bold text-foreground">{sectionTitle}</h2>
-            <p className="text-[11px] text-muted-foreground">{marketOpen ? "Live" : "Last trading session"}{sessionSuffix} · as of {asOfTime}</p>
+            <p className="text-[11px] text-muted-foreground">{isDelayed ? "Delayed Price" : marketOpen ? "Live" : "Last trading session"}{sessionSuffix} · as of {asOfTime}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
