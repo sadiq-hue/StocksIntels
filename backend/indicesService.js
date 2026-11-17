@@ -128,33 +128,38 @@ async function fetchIndexFromYahoo(symbol) {
   }
 }
 
-// NGX publishes index values through its public data widget endpoint.
+// NGX publishes index values through its public data widget endpoint, which is
+// flaky — transient timeouts happen. Retry once with a short backoff so a one-off
+// failure doesn't blank the card, and the caller keeps the last good value anyway.
 async function fetchNgxIndexFromSite(code) {
-  try {
-    const { data } = await axios.get('https://ngxgroup.com/wp-json/ngx-data-widgets/v1/home/indices-page', {
-      params: { index: code, compare: 'NONE' },
-      timeout: 9000,
-      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
-    });
-    const q = data?.primary?.quote;
-    const price = Number(q?.currentPrice);
-    if (!Number.isFinite(price) || price <= 0) return null;
-    // NGX returns changePercentage already in percent (e.g. -0.0387 = -0.04%).
-    const changePercent = Number(q.changePercentage) || 0;
-    const previousClose = changePercent !== 0 ? price / (1 + changePercent / 100) : price;
-    return {
-      price,
-      change: price - previousClose,
-      changePercent,
-      previousClose,
-      open: null,
-      dayHigh: null,
-      dayLow: null,
-      volume: 0,
-    };
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data } = await axios.get('https://ngxgroup.com/wp-json/ngx-data-widgets/v1/home/indices-page', {
+        params: { index: code, compare: 'NONE' },
+        timeout: 9000,
+        headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+      });
+      const q = data?.primary?.quote;
+      const price = Number(q?.currentPrice);
+      if (!Number.isFinite(price) || price <= 0) return null;
+      // NGX returns changePercentage already in percent (e.g. -0.0387 = -0.04%).
+      const changePercent = Number(q.changePercentage) || 0;
+      const previousClose = changePercent !== 0 ? price / (1 + changePercent / 100) : price;
+      return {
+        price,
+        change: price - previousClose,
+        changePercent,
+        previousClose,
+        open: null,
+        dayHigh: null,
+        dayLow: null,
+        volume: 0,
+      };
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 700));
+    }
   }
+  return null;
 }
 
 async function fetchIndexLive(symbol) {
@@ -217,7 +222,11 @@ async function getAllIndices() {
   const results = {};
   await Promise.all(symbols.map(async (sym) => {
     const data = await fetchIndexLive(sym);
-    results[sym] = formatIndexForResponse(sym, data);
+    // Keep the last known good value when an upstream (e.g. NGX widget, Yahoo)
+    // transiently fails, instead of replacing a real figure with "--".
+    results[sym] = data
+      ? formatIndexForResponse(sym, data)
+      : (cache.indices?.[sym] ?? formatIndexForResponse(sym, null));
   }));
 
   cache.indices = results;
@@ -230,7 +239,11 @@ async function refreshIndicesInBackground() {
   const results = {};
   await Promise.all(symbols.map(async (sym) => {
     const data = await fetchIndexLive(sym);
-    results[sym] = formatIndexForResponse(sym, data);
+    // Keep the last known good value when an upstream (e.g. NGX widget, Yahoo)
+    // transiently fails, instead of replacing a real figure with "--".
+    results[sym] = data
+      ? formatIndexForResponse(sym, data)
+      : (cache.indices?.[sym] ?? formatIndexForResponse(sym, null));
   }));
   cache.indices = results;
   cache.lastFetch = Date.now();
