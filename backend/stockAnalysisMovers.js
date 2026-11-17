@@ -61,7 +61,7 @@ function parseRowsAsTables(html) {
         name: cells[2] || ticker,
         changePercent: num(cells[3]),
         price: num(cells[4]),
-        volume: cells[5],
+        volume: num(cells[5]),
         marketCap: parseCap(cells[6]),
       });
     });
