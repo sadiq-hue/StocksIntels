@@ -2741,15 +2741,17 @@ async function fetchRealTopMovers() {
         const { fetchV7Quotes } = require('./yahooService');
         const universe = [...new Set([...combined.gainers, ...combined.losers].map(r => r.ticker))];
         const v7 = await fetchV7Quotes(universe);
-        const mapPost = (x) => {
-          const c = Number(x.postMarketChangePercent ?? x.preMarketChangePercent) || 0;
-          const price = Number(x.postMarketPrice ?? x.preMarketPrice) || 0;
+        const nameMap = Object.fromEntries([...combined.gainers, ...combined.losers].map(r => [r.ticker.toUpperCase(), r.name]));
+        const mapPost = (q) => {
+          const c = Number(q.postMarketChangePercent ?? q.preMarketChangePercent) || 0;
+          const price = Number(q.postMarketPrice ?? q.preMarketPrice) || 0;
           if (!price) return null;
+          const t = String(q.symbol || q.ticker || '').toUpperCase();
           return {
-            ticker: x.ticker, symbol: x.ticker, name: x.name,
+            ticker: t, symbol: t, name: nameMap[t] || t,
             price, currency: 'USD',
             change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-            volume: fmt(Number(x.volume) || 0), rawVolume: Number(x.volume) || 0, marketCap: Number(x.marketCap) || 0, market: 'Global',
+            volume: fmt(Number(q.volume) || 0), rawVolume: Number(q.volume) || 0, marketCap: Number(q.marketCap) || 0, market: 'Global',
           };
         };
         // Yahoo gives post-market prints only while the after-hours window is open.
