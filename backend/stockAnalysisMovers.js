@@ -166,4 +166,8 @@ async function getLosers(limit = 15) { return (await fetchList('losers')).slice(
 async function getPremarket(limit = 15) { return (await fetchList('premarket')).slice(0, limit); }
 async function getAfterHours(limit = 15) { return (await fetchList('afterhours')).slice(0, limit); }
 
-module.exports = { getGainers, getLosers, getPremarket, getAfterHours, _getLastGood: () => lastGood };
+module.exports = {
+  getGainers, getLosers, getPremarket, getAfterHours,
+  _getLastGood: () => lastGood,
+  _saveAfterHours(rows) { if (Array.isArray(rows) && rows.length) { lastGood.afterhours = rows; lastGood.at = Date.now(); saveCache(); } },
+};
