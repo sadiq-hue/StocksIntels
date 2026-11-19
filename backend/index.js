@@ -151,7 +151,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://s3.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:", "https://*.tradingview.com"],
       connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
       frameSrc: ["'self'", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
