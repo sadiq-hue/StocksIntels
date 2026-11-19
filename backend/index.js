@@ -9277,10 +9277,13 @@ app.get('/api/ipo/news', async (req, res) => {
 app.get('/api/ipo/recent', async (req, res) => {
   try {
     const all = await _loadIpoHub();
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(40, Math.max(1, requestedLimit)) : 40;
+    const now = Date.now();
     const recent = all
-      .filter((i) => i.listing_date)
+      .filter((i) => i.status === 'listed' && i.listing_date && new Date(i.listing_date).getTime() <= now)
       .sort((a, b) => new Date(b.listing_date) - new Date(a.listing_date))
-      .slice(0, 40);
+      .slice(0, limit);
     res.json({ ipos: recent });
   } catch (e) { res.status(500).json({ error: 'Failed to load recent IPOs' }); }
 });

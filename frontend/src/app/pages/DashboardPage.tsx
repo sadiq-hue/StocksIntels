@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight,
   DollarSign, PieChart, BarChart3, Newspaper, Star, Wallet,
   Globe2, ChevronRight, ArrowUp, Layers, X, Lightbulb,
-  LayoutGrid, Briefcase, Brain, Scale, Banknote
+  LayoutGrid, Briefcase, Brain, Scale, Banknote, Rocket
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -154,6 +154,22 @@ interface MarketPulseData {
   topSector: { name: string; change: string } | null;
 }
 
+interface RecentIpo {
+  id: number | string;
+  company_name: string;
+  ticker: string | null;
+  exchange?: string | null;
+  listing_date: string | null;
+  since_ipo_pct?: number | null;
+}
+
+function formatIpoDate(value: string | null) {
+  if (!value) return "Date unavailable";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 const fallbackNews: NewsArticle[] = [];
 
 export function DashboardPage() {
@@ -169,6 +185,8 @@ export function DashboardPage() {
   const [pulse, setPulse] = useState<MarketPulseData | null>(null);
   const [liveIndices, setLiveIndices] = useState<any[]>([]);
   const [liveSectors, setLiveSectors] = useState<any[]>([]);
+  const [recentIpos, setRecentIpos] = useState<RecentIpo[]>([]);
+  const [recentIposLoading, setRecentIposLoading] = useState(true);
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>(() => {
     try {
       const s = localStorage.getItem("dashboard_movers");
@@ -253,6 +271,18 @@ export function DashboardPage() {
     fetchPulse();
     const pulseInterval = setInterval(fetchPulse, 60000);
     return () => { cancelled = true; clearInterval(pulseInterval); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/ipo/recent?limit=6`)
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (!cancelled && Array.isArray(data?.ipos)) setRecentIpos(data.ipos);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setRecentIposLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -1161,69 +1191,122 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Watchlist & Today's Market Intelligence — side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border shadow-sm p-5 h-full flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
-                <Star className="size-4 text-[#0D7490]" />
+      {/* Watchlist, active names and new listings share one compact market surface. */}
+      <div className="space-y-6">
+        <Card className="gap-0 border p-5 shadow-sm">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <section aria-labelledby="dashboard-watchlist-heading">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#0D7490]/10">
+                    <Star className="size-4 text-[#0D7490]" />
+                  </div>
+                  <h3 id="dashboard-watchlist-heading" className="truncate text-sm font-semibold text-foreground">Watchlist / Most Active</h3>
+                </div>
+                <Link to="/app/watchlist" className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#0D7490] hover:underline">
+                  Manage <ChevronRight className="size-3.5" />
+                </Link>
               </div>
-              <h3 className="text-sm font-semibold text-foreground">Watchlist / Most Active</h3>
-            </div>
-            <Link to="/app/watchlist" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
-              Manage watchlist <ChevronRight className="size-3.5" />
-            </Link>
-          </div>
-          <div className="flex-1 flex flex-col gap-1 min-h-0">
-            {watchlist.length === 0 && (
-              <div className="flex-1 flex items-center justify-center p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
-            )}
-            {watchlist.map((stock) => {
-              const fullStock = allStocks.find(s => s.ticker === stock.ticker);
-              const sig = signals.find(s => s.ticker === stock.ticker);
-              return (
-                  <div key={stock.ticker} onClick={() => setSelectedStock({
-                    ticker: stock.ticker,
-                    name: stock.name || fullStock?.name || stock.ticker,
-                    price: parseFloat(stock.price),
-                    change: parseFloat(stock.change),
-                    volume: stock.volume || fullStock?.volume || '0',
-                    market: stock.market,
-                    currency: stock.currency || 'KES',
-                    signal: sig,
-                  })} className="flex-1 flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative shrink-0">
-                        <span className="text-[#0D7490] font-bold text-xs">{stock.ticker}</span>
-                        {stock.alert && (
-                          <span className="absolute -top-0.5 -right-0.5 size-2.5 bg-red-500 rounded-full border-2 border-card" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground truncate">{stock.name || stock.ticker}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {currencyPrefix(stock.currency)}{stock.price}
-                          {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
+              <div className="space-y-1">
+                {watchlist.length === 0 && (
+                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
+                )}
+                {watchlist.map((stock) => {
+                  const fullStock = allStocks.find(s => s.ticker === stock.ticker);
+                  const sig = signals.find(s => s.ticker === stock.ticker);
+                  return (
+                    <div key={stock.ticker} onClick={() => setSelectedStock({
+                      ticker: stock.ticker,
+                      name: stock.name || fullStock?.name || stock.ticker,
+                      price: parseFloat(stock.price),
+                      change: parseFloat(stock.change),
+                      volume: stock.volume || fullStock?.volume || '0',
+                      market: stock.market,
+                      currency: stock.currency || 'KES',
+                      signal: sig,
+                    })} className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10">
+                          <span className="text-xs font-bold text-[#0D7490]">{stock.ticker}</span>
+                          {stock.alert && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-card bg-red-500" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">{stock.name || stock.ticker}</div>
+                          <div className="truncate text-[11px] text-muted-foreground">
+                            {currencyPrefix(stock.currency)}{stock.price}
+                            {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
+                          </div>
                         </div>
                       </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400'}`}>
+                          {stock.change}
+                        </span>
+                        <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
+                          {stock.market === "nse" ? "NSE" : "Global"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400'}`}>
-                        {stock.change}
-                      </span>
-                      <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                        {stock.market === "nse" ? "NSE" : "Global"}
-                      </span>
-                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section aria-labelledby="dashboard-ipos-heading" className="border-t border-border pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                    <Rocket className="size-4 text-violet-600 dark:text-violet-400" />
                   </div>
-              );
-            })}
+                  <h3 id="dashboard-ipos-heading" className="truncate text-sm font-semibold text-foreground">Recent IPOs</h3>
+                </div>
+                <Link to="/app/ipos" className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#0D7490] hover:underline">
+                  View IPOs <ChevronRight className="size-3.5" />
+                </Link>
+              </div>
+              <div className="space-y-1" data-testid="recent-ipos-list">
+                {recentIposLoading && recentIpos.length === 0 && (
+                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">Loading recent IPOs...</div>
+                )}
+                {!recentIposLoading && recentIpos.length === 0 && (
+                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">No recent IPOs available</div>
+                )}
+                {recentIpos.map((ipo) => {
+                  const performance = typeof ipo.since_ipo_pct === "number" && Number.isFinite(ipo.since_ipo_pct) ? ipo.since_ipo_pct : null;
+                  const exchange = ipo.exchange || "Global";
+                  return (
+                    <Link key={ipo.id} to="/app/ipos" className="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 px-1">
+                          {ipo.ticker ? <span className="truncate text-[10px] font-bold text-violet-700 dark:text-violet-300">{ipo.ticker}</span> : <Rocket className="size-4 text-violet-600" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">{ipo.company_name}</div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-semibold uppercase">{exchange}</span>
+                            <span className="truncate">{formatIpoDate(ipo.listing_date)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {performance == null ? (
+                          <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Listed</span>
+                        ) : (
+                          <>
+                            <div className={`text-xs font-semibold ${performance >= 0 ? "text-emerald-600" : "text-red-500"}`}>{performance >= 0 ? "+" : ""}{performance.toFixed(1)}%</div>
+                            <div className="mt-0.5 text-[9px] text-muted-foreground">Since IPO</div>
+                          </>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
           </div>
         </Card>
 
-        {/* Today's Market Intelligence — the digest narrative that previously
-            existed only as an email, now readable on the dashboard. */}
+        {/* The digest narrative is full width so it no longer forces a sparse sibling card to its height. */}
         <DailyIntelligencePanel />
 
         {/*

@@ -40,7 +40,17 @@ const indices = [
 const sectors = ["Media", "Insurance", "Other", "Automobiles", "Consumer Goods", "Banking"]
   .map((sector, index) => ({ sector, avgChange: 3.5 - index * 0.4, count: index + 1 }));
 
-test("dashboard balances African, global and sector market cards", async ({ page }) => {
+const recentIpos = ["WWB", "VVVV", "JAN", "RACC", "BULL", "FIGR"].map((ticker, index) => ({
+  id: index + 1,
+  company_name: `${ticker} Holdings`,
+  ticker,
+  exchange: index % 2 ? "NASDAQ" : "NYSE",
+  listing_date: `2026-11-${String(16 - index).padStart(2, "0")}`,
+  status: "listed",
+  since_ipo_pct: index % 2 ? -4.5 - index : 8.5 + index,
+}));
+
+test("dashboard balances market cards and recent IPOs", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -48,6 +58,7 @@ test("dashboard balances African, global and sector market cards", async ({ page
     if (path === "/api/auth/refresh" || path === "/api/auth/me") body = { token: "test-token", user };
     else if (path === "/api/market/indices") body = indices;
     else if (path === "/api/market/sectors") body = sectors;
+    else if (path === "/api/ipo/recent") body = { ipos: recentIpos };
     else if (path === "/api/market/movers") body = { combined: { gainers: [], losers: [] }, active: [] };
     else if (path === "/api/market/pulse") body = {
       nse: { label: "Neutral", score: 50, idxPositive: 1, idxTotal: 2 },
@@ -75,6 +86,11 @@ test("dashboard balances African, global and sector market cards", async ({ page
   await expect(globalCard.locator(".min-h-14")).toHaveCount(6);
   await expect(sectorCard.locator(".min-h-14")).toHaveCount(6);
   await expect(page.getByRole("heading", { name: "NSE Indices" })).toHaveCount(0);
+
+  const combinedMarketCard = page.getByRole("heading", { name: "Watchlist / Most Active" }).locator("xpath=ancestor::div[@data-slot='card']");
+  await expect(combinedMarketCard.getByRole("heading", { name: "Recent IPOs" })).toBeVisible();
+  await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link")).toHaveCount(6);
+  expect((await combinedMarketCard.boundingBox())?.height || 0).toBeLessThan(650);
 
   const heights = await Promise.all([africanCard, globalCard, sectorCard].map(async card => (await card.boundingBox())?.height || 0));
   expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(24);
