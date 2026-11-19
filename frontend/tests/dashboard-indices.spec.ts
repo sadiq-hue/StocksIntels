@@ -40,14 +40,14 @@ const indices = [
 const sectors = ["Media", "Insurance", "Other", "Automobiles", "Consumer Goods", "Banking"]
   .map((sector, index) => ({ sector, avgChange: 3.5 - index * 0.4, count: index + 1 }));
 
-const recentIpos = ["WWB", "VVVV", "JAN", "RACC", "BULL", "FIGR"].map((ticker, index) => ({
+const recentIpos = ["ANT", "WWB", "VVVV", "JAN", "RACC", "BULL"].map((ticker, index) => ({
   id: index + 1,
-  company_name: `${ticker} Holdings`,
+  company_name: ticker === "ANT" ? "Anthropic, PBC" : `${ticker} Holdings`,
   ticker,
   exchange: index % 2 ? "NASDAQ" : "NYSE",
-  listing_date: `2026-11-${String(16 - index).padStart(2, "0")}`,
-  status: "listed",
-  since_ipo_pct: index % 2 ? -4.5 - index : 8.5 + index,
+  listing_date: index === 0 ? "2026-11-19" : `2026-11-${String(17 - index).padStart(2, "0")}`,
+  status: index === 0 ? "current" : "listed",
+  since_ipo_pct: index === 0 ? null : index % 2 ? -4.5 - index : 8.5 + index,
 }));
 
 test("dashboard balances market cards and recent IPOs", async ({ browser }) => {
@@ -92,6 +92,8 @@ test("dashboard balances market cards and recent IPOs", async ({ browser }) => {
   const intelligenceCard = page.getByRole("heading", { name: "Today's Market Intelligence" }).locator("xpath=ancestor::div[@data-slot='card']");
   await expect(combinedMarketCard.getByRole("heading", { name: "Recent IPOs" })).toBeVisible();
   await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link")).toHaveCount(6);
+  await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link").first()).toContainText("Anthropic, PBC");
+  await expect(combinedMarketCard.getByText("Current IPO")).toBeVisible();
   const marketBox = await combinedMarketCard.boundingBox();
   const intelligenceBox = await intelligenceCard.boundingBox();
   expect(marketBox?.x || 0).toBeLessThan(intelligenceBox?.x || 0);

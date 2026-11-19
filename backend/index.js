@@ -9281,7 +9281,7 @@ app.get('/api/ipo/recent', async (req, res) => {
     const limit = Number.isFinite(requestedLimit) ? Math.min(40, Math.max(1, requestedLimit)) : 40;
     const now = Date.now();
     const recent = all
-      .filter((i) => i.status === 'listed' && i.listing_date && new Date(i.listing_date).getTime() <= now)
+      .filter((i) => ['current', 'listed'].includes(i.status) && i.listing_date && new Date(i.listing_date).getTime() <= now)
       .sort((a, b) => new Date(b.listing_date) - new Date(a.listing_date))
       .slice(0, limit);
     res.json({ ipos: recent });
