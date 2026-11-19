@@ -91,6 +91,16 @@ async function findOverflows(page: Page) {
 }
 
 test.describe("Mobile horizontal overflow @375px", () => {
+  test("landing navigation opens cleanly at 320px", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Open navigation" }).click();
+    await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close navigation" })).toHaveAttribute("aria-expanded", "true");
+    const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
+    expect(width).toBeLessThanOrEqual(322);
+  });
+
   for (const route of PUBLIC_ROUTES) {
     test(`public ${route}`, async ({ page }) => {
       await page.goto(route, { waitUntil: "networkidle" }).catch(() => {});

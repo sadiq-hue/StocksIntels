@@ -1,0 +1,9 @@
+/* Landing-page typography only. The authenticated app retains its system stack. */
+.si-landing {
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.si-display {
+  font-family: "Newsreader", "Iowan Old Style", Baskerville, Georgia, serif;
+  font-optical-sizing: auto;
+}

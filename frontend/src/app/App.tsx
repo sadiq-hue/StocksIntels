@@ -3,6 +3,13 @@ import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet, useLocatio
 import { useAuth, getTrialInfo } from "./auth/AuthContext";
 import { trackPageView } from "./utils/metaPixel";
 import { trackXPageView } from "./utils/xPixel";
+import { RealtimeQuotesProvider } from "./contexts/RealtimeQuotesContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import { StockDataProvider } from "./contexts/StockDataContext";
+import { PortfolioDataProvider } from "./contexts/PortfolioDataContext";
+import { PaperTradingProvider } from "./contexts/PaperTradingContext";
+import { CompareProvider } from "./contexts/CompareContext";
+import { kenyanStocks, globalStocks } from "./data/stockUniverses";
 
 function MetaPixelPageViewTracker() {
   const location = useLocation();
@@ -114,6 +121,29 @@ function NotFoundPage() {
   );
 }
 
+const appQuoteSymbols = [
+  ...kenyanStocks.map((stock) => `NSE:${stock.ticker}`),
+  ...globalStocks.map((stock) => stock.ticker),
+];
+
+function RealtimeAppLayout() {
+  return (
+    <RealtimeQuotesProvider symbols={appQuoteSymbols}>
+      <NotificationProvider>
+        <StockDataProvider>
+          <PortfolioDataProvider>
+            <PaperTradingProvider>
+              <CompareProvider>
+                <MainLayout />
+              </CompareProvider>
+            </PaperTradingProvider>
+          </PortfolioDataProvider>
+        </StockDataProvider>
+      </NotificationProvider>
+    </RealtimeQuotesProvider>
+  );
+}
+
 const router = createBrowserRouter([
   {
     element: (
@@ -157,7 +187,7 @@ const router = createBrowserRouter([
     errorElement: <NotFoundPage />,
     children: [
       {
-        element: <MainLayout />,
+        element: <RealtimeAppLayout />,
         children: [
       { index: true, element: <DashboardPage /> },
       { path: "dashboard", element: <DashboardPage /> },

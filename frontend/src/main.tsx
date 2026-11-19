@@ -21,39 +21,15 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   return originalFetch(input, init);
 };
-import { RealtimeQuotesProvider } from "./app/contexts/RealtimeQuotesContext";
-import { NotificationProvider } from "./app/contexts/NotificationContext";
-import { StockDataProvider } from "./app/contexts/StockDataContext";
-import { PortfolioDataProvider } from "./app/contexts/PortfolioDataContext";
-import { PaperTradingProvider } from "./app/contexts/PaperTradingContext";
-import { CompareProvider } from "./app/contexts/CompareContext";
-import { kenyanStocks, globalStocks } from "./app/data/stockUniverses";
-  import App from "./app/App.tsx";
-  import "./styles/index.css";
-
-const nseSymbols = kenyanStocks.map(s => `NSE:${s.ticker}`);
-const globalSymbols = globalStocks.map(s => s.ticker);
-const allSymbols = [...nseSymbols, ...globalSymbols];
+import App from "./app/App.tsx";
+import "./styles/index.css";
 
 createRoot(document.getElementById("root")!).render(
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-      <AuthProvider>
-        <RealtimeQuotesProvider symbols={allSymbols}>
-          <NotificationProvider>
-            <StockDataProvider>
-              <PortfolioDataProvider>
-                <PaperTradingProvider>
-                  <CompareProvider>
-                    <ErrorBoundary>
-                      <App />
-                    </ErrorBoundary>
-                  </CompareProvider>
-                </PaperTradingProvider>
-              </PortfolioDataProvider>
-            </StockDataProvider>
-          </NotificationProvider>
-        </RealtimeQuotesProvider>
-      </AuthProvider>
-    </ThemeProvider>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+    <AuthProvider>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </AuthProvider>
+  </ThemeProvider>
 );
-  

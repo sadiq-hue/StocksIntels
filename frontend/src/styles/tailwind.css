@@ -82,3 +82,22 @@
 .animation-delay-2s {
   animation-delay: 2s;
 }
+
+.si-grid {
+  background-image:
+    linear-gradient(to right, rgb(37 99 166 / 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(37 99 166 / 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-landing *,
+  .si-landing *::before,
+  .si-landing *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

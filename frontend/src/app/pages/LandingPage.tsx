@@ -1,25 +1,84 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
-  ArrowRight, Menu, X, Star,
-  CheckCircle2, Phone, Mail, MapPin, Twitter, Linkedin, Github, ChevronUp,
-  ChevronRight, TrendingUp,
+  Activity,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  Cpu,
+  ExternalLink,
+  FileText,
+  Globe2,
+  Landmark,
+  LineChart,
+  Mail,
+  Menu,
+  Newspaper,
+  Phone,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Users,
+  X,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-
-import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
-import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
 
-const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
+const API_URL = import.meta.env.VITE_API_URL || "/api";
+const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "AAPL", "MSFT", "NVDA"];
 
-// Fetch only the hero symbols so the landing page shows live prices fast,
-// without waiting on the full ~280-symbol global batch.
+type Article = {
+  id: string;
+  title: string;
+  summary?: string;
+  source?: string;
+  publishedAt?: string;
+  slug?: string;
+  url?: string;
+};
+
+const navItems = [
+  { label: "Platform", href: "#platform" },
+  { label: "Market Intelligence", href: "#intelligence" },
+  { label: "Research & Analysts", href: "#human-expertise" },
+  { label: "For Businesses", href: "#audiences" },
+];
+
+const intelligenceLayers = [
+  { number: "01", title: "Computational", text: "Processes market, company and pricing information across the research workflow." },
+  { number: "02", title: "Fundamental", text: "Examines business quality, valuation context and company performance." },
+  { number: "03", title: "Technical", text: "Adds trend, momentum, volatility and market-structure evidence." },
+  { number: "04", title: "Financial", text: "Interprets statements, cash generation, leverage and operating history." },
+  { number: "05", title: "Macroeconomic", text: "Connects rates, inflation, currencies and growth conditions to markets." },
+  { number: "06", title: "Sentiment & news", text: "Tracks corporate developments and the information shaping market attention." },
+  { number: "07", title: "Human expertise", text: "Keeps research grounded in context, judgement and responsible interpretation." },
+];
+
+const capabilities = [
+  { icon: FileText, label: "Fundamental analysis", text: "Company quality, valuation and business drivers." },
+  { icon: LineChart, label: "Technical analysis", text: "Trend, momentum and volatility indicators." },
+  { icon: BarChart3, label: "Financial performance", text: "Statements, ratios and reported operating history." },
+  { icon: Globe2, label: "Macroeconomic context", text: "Rates, inflation, FX and economic conditions." },
+  { icon: Newspaper, label: "News intelligence", text: "Corporate developments and relevant market reporting." },
+  { icon: ShieldCheck, label: "Risk context", text: "Evidence quality, uncertainty and downside awareness." },
+];
+
+const exchanges = [
+  { code: "NSE", city: "Nairobi", market: "Kenya" },
+  { code: "NGX", city: "Lagos", market: "Nigeria" },
+  { code: "JSE", city: "Johannesburg", market: "South Africa" },
+  { code: "GSE", city: "Accra", market: "Ghana" },
+  { code: "GLOBAL", city: "International", market: "Global equities" },
+];
+
 function useHeroQuotes() {
   const [quotes, setQuotes] = useState<Record<string, RealtimeStockQuote>>({});
-  const [loading, setLoading] = useState(true);
-  const [heroError, setHeroError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -28,1211 +87,586 @@ function useHeroQuotes() {
         const data = await fetchRealtimeQuotesBatch(HERO_SYMBOLS);
         if (alive) {
           setQuotes(data);
-          setLoading(false);
+          setError(false);
         }
       } catch {
-        if (alive) {
-          setLoading(false);
-          setHeroError('Failed to load live prices');
-        }
+        if (alive) setError(true);
       }
     };
     load();
-    const id = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(id); };
+    const timer = window.setInterval(load, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
-  return { quotes, loading, error: heroError };
+  return { quotes, error };
 }
 
-function StockChartBg() {
-  const path = useMemo(() => {
-    const points = [
-      { x: 0, y: 70 }, { x: 5, y: 65 }, { x: 10, y: 68 }, { x: 15, y: 55 }, { x: 20, y: 58 },
-      { x: 25, y: 45 }, { x: 30, y: 50 }, { x: 35, y: 40 }, { x: 40, y: 35 }, { x: 45, y: 38 },
-      { x: 50, y: 30 }, { x: 55, y: 33 }, { x: 60, y: 28 }, { x: 65, y: 32 }, { x: 70, y: 25 },
-      { x: 75, y: 20 }, { x: 80, y: 22 }, { x: 85, y: 18 }, { x: 90, y: 15 }, { x: 95, y: 18 },
-      { x: 100, y: 12 },
-    ];
-    const d = points.map((p, i) => {
-      if (i === 0) return `M ${p.x} ${p.y}`;
-      const prev = points[i - 1];
-      const cx = (prev.x + p.x) / 2;
-      const cy = (prev.y + p.y) / 2;
-      return `Q ${cx} ${cy} ${p.x} ${p.y}`;
-    }).join(" ");
-    return d;
-  }, []);
+function findQuote(quotes: Record<string, RealtimeStockQuote>, symbol: string) {
+  return quotes[symbol] || quotes[symbol.replace(/^NSE:/, "")] || null;
+}
+
+function quoteText(quote: RealtimeStockQuote | null, currency: string) {
+  if (!quote || !Number.isFinite(Number(quote.price)) || Number(quote.price) <= 0) return `${currency} --`;
+  return `${currency} ${Number(quote.price).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function changeText(quote: RealtimeStockQuote | null) {
+  const change = Number(quote?.changePercent);
+  if (!Number.isFinite(change)) return "--";
+  return `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+}
+
+function QuoteRow({
+  symbol,
+  name,
+  currency,
+  quotes,
+}: {
+  symbol: string;
+  name: string;
+  currency: string;
+  quotes: Record<string, RealtimeStockQuote>;
+}) {
+  const quote = findQuote(quotes, symbol);
+  const change = Number(quote?.changePercent);
+  const up = Number.isFinite(change) && change >= 0;
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <svg
-        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.05]"
-        viewBox="0 0 100 80"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`${path} L 100 80 L 0 80 Z`} fill="url(#chart-gradient)" />
-        <path
-          d={path}
-          fill="none"
-          stroke="#0D7490"
-          strokeWidth="0.4"
-        />
-      </svg>
-      <svg
-        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.04]"
-        viewBox="0 0 100 80"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id="chart-gradient-2" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0" />
-            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`M 0 60 Q 20 50 40 55 T 80 30 T 100 25 L 100 80 L 0 80 Z`} fill="url(#chart-gradient-2)" />
-        <path d="M 0 60 Q 20 50 40 55 T 80 30 T 100 25" fill="none" stroke="#0EA5E9" strokeWidth="0.5" />
-      </svg>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-white/10 py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="font-mono text-[11px] font-semibold tracking-[0.12em] text-cyan-200">{symbol.replace("NSE:", "")}</p>
+        <p className="truncate text-xs text-slate-300">{name}</p>
+      </div>
+      <p className="font-mono text-xs tabular-nums text-white">{quoteText(quote, currency)}</p>
+      <p className={`min-w-14 text-right font-mono text-xs font-semibold tabular-nums ${up ? "text-emerald-300" : "text-rose-300"}`}>
+        {changeText(quote)}
+      </p>
     </div>
   );
 }
 
-const floatingShapes = [
-  { size: 60, top: "8%", left: "3%", delay: 0, depth: 1 },
-  { size: 40, top: "18%", right: "5%", delay: 1.2, depth: 3 },
-  { size: 90, top: "50%", left: "1%", delay: 0.7, depth: 2 },
-  { size: 35, top: "70%", right: "3%", delay: 1.8, depth: 1 },
-  { size: 50, top: "35%", left: "12%", delay: 0.3, depth: 3 },
-  { size: 30, top: "82%", left: "18%", delay: 2.2, depth: 2 },
-  { size: 45, top: "12%", left: "45%", delay: 0.5, depth: 3 },
-  { size: 35, top: "42%", right: "15%", delay: 1.5, depth: 2 },
-  { size: 55, top: "60%", left: "30%", delay: 0.9, depth: 1 },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3 },
-];
-
-const features = [
-  {
-    title: "Market Intelligence for African & Global Stocks",
-    description: "AI-powered buy, sell, and hold recommendations on Safaricom, Equity, KCB, EABL, plus JSE, NGX and NYSE/NASDAQ stocks. Updated throughout the trading day.",
-    stat: "15+ African + global",
-  },
-  {
-    title: "Real-Time Market Data",
-    description: "Live prices, bid-ask spreads, and volume data across NSE, JSE, NGX, NYSE, NASDAQ, and LSE. See the same data institutional traders use.",
-    stat: "< 1s refresh",
-  },
-  {
-    title: "Portfolio Analytics",
-    description: "Track your real and paper portfolios. See your P&L, sector allocation, and risk exposure across all your holdings in one place.",
-    stat: "Real-time P&L",
-  },
-  {
-    title: "Price Alerts",
-    description: "Set alerts for when Safaricom hits your target or when a US stock moves more than you expect. Get notified via email and in-app.",
-    stat: "Instant alerts",
-  },
-  {
-    title: "Paper Trading",
-    description: "Practice trading African and US stocks with $10,000 virtual cash. Test strategies before risking real money. No broker account needed.",
-    stat: "$10K virtual",
-  },
-  {
-    title: "Market Scanner",
-    description: "Screen NSE and US stocks by price, volume, sector, and technical indicators. Find opportunities you would otherwise miss scrolling through individual charts.",
-    stat: "10+ filters",
-  },
-];
-
-const steps = [
-  { step: "01", title: "Create Your Account", description: "Sign up with your email. Start your trial today." },
-  { step: "02", title: "Explore the Markets", description: "Browse NSE and US stocks, check AI insights, set up your watchlist. Start with paper trading if you are new." },
-  { step: "03", title: "Trade with Confidence", description: "Use AI market intelligence alongside your own research. Track your performance and refine your strategy over time." },
-];
-
-const testimonials = [
-  {
-    name: "Caleb Mwangi",
-    role: "Retail trader, Nairobi, Kenya",
-    content: "I was relying on tips from Twitter groups before. Now I get daily AI market intelligence on my watchlist stocks. It does not replace my own research but it saves hours of screen time.",
-    rating: 5,
-    initials: "CM",
-  },
-  {
-    name: "Joseph Okonkwo",
-    role: "Part-time investor, Lagos, Nigeria",
-    content: "The paper trading feature helped me learn without losing real money. After three months of practicing, I felt ready to open a live brokerage account.",
-    rating: 5,
-    initials: "JO",
-  },
-  {
-    name: "Palesa Dlamini",
-    role: "Freelancer, Johannesburg, South Africa",
-    content: "I check the insights on my phone during lunch breaks. The price alerts are what I use most — they ping me when Naspers or MTN hit my targets.",
-    rating: 4,
-    initials: "PD",
-  },
-];
-
-const whyChoose = [
-  { title: "Built for African & Global Traders", description: "We cover Nairobi Securities Exchange, Johannesburg (JSE) and Nigeria (NGX) alongside NYSE, NASDAQ, and LSE. One platform for African and international stocks." },
-  { title: "AI Trained on Both Markets", description: "Our models train on African and US market data. Kenyan, South African and global market patterns differ — our intelligence respects each." },
-  { title: "No Fancy Jargon", description: "We explain recommendations in plain English. Buy, sell, or hold — with a short reason why. You stay in control of your decisions." },
-  { title: "Local Support", description: "With teams across Nairobi, Lagos, and Johannesburg — plus global coverage — if something breaks or you have a question, you get a response from someone who understands your market, wherever you trade." },
-];
-
-const faqs = [
-  { q: "Which NSE stocks does StocksIntels cover?", a: "We cover all actively traded NSE stocks including Safaricom (SCOM), Equity Group (EQTY), KCB Group (KCB), EABL (EABL), Co-op Bank (COOP), Absa Kenya (ABSA), BAT Kenya (BAT), and 50+ more. Global stocks on NYSE and NASDAQ are also available." },
-  { q: "How accurate is the AI market intelligence?", a: "We publish our forward-test accuracy inside the app and update it as new outcomes resolve, so you can judge performance for yourself. No model is always right — accuracy varies with market conditions and we make no guarantee of any specific level. We show you the reasoning behind every rating and let you decide." },
-  { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day trial. You'll get full access to your chosen plan for 7 days." },
-  { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you $10,000 in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
-  { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
-];
-
-function LiveTickerItem({ sym, isNse, quotes }: { sym: string; isNse: boolean; quotes: Record<string, RealtimeStockQuote> }) {
-  const q = quotes[sym] || quotes[`NSE:${sym}`];
-  const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
-  const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : "—";
-  const up = q?.changePercent != null ? q.changePercent >= 0 : true;
-  const currency = isNse ? "KSh" : "$";
-
-  const prev = useRef<string>(price);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
-  useEffect(() => {
-    if (prev.current !== price) {
-      setFlash(up ? "up" : "down");
-      prev.current = price;
-      const t = setTimeout(() => setFlash(null), 700);
-      return () => clearTimeout(t);
-    }
-  }, [price, up]);
-
+function SectionLabel({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
   return (
-    <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm border border-gray-100 dark:border-white/[0.06] rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
-      flash === "up" ? "bg-emerald-100 border-emerald-200" : flash === "down" ? "bg-red-100 border-red-200" : ""
-    }`}>
-      <span className="font-bold text-xs text-foreground">{sym}</span>
-      <span className="text-xs text-muted-foreground">{currency}{price}</span>
-      <span className={`text-xs font-semibold ${up ? "text-emerald-600" : "text-red-500"}`}>{change}</span>
-    </div>
+    <p className={`mb-5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.24em] ${light ? "text-cyan-200" : "text-[#2563A6]"}`}>
+      <span className={`h-px w-9 ${light ? "bg-cyan-300/60" : "bg-[#2563A6]/45"}`} />
+      {children}
+    </p>
   );
 }
 
-function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
-  const scom = quotes["SCOM"] || quotes["NSE:SCOM"];
-  const price = scom?.price ?? null;
-  const chg = scom?.changePercent ?? null;
-  const isUp = (chg ?? 0) >= 0;
-
-  const prev = useRef<number | null>(price);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
-  useEffect(() => {
-    if (prev.current !== price) {
-      setFlash((price ?? 0) > (prev.current ?? 0) ? "up" : "down");
-      prev.current = price;
-      const t = setTimeout(() => setFlash(null), 700);
-      return () => clearTimeout(t);
-    }
-  }, [price]);
+function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStockQuote>; error: boolean }) {
+  const scom = findQuote(quotes, "NSE:SCOM");
 
   return (
-    <div className={`bg-card rounded-2xl border border-border shadow-2xl shadow-[#0D7490]/10 p-6 relative transition-colors duration-500 ${flash === "up" ? "ring-2 ring-emerald-300" : flash === "down" ? "ring-2 ring-red-300" : ""}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
-            <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
+    <div className="relative mx-auto w-full max-w-[720px]" aria-label="StocksIntels platform interface preview">
+      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#4386C8]/10 blur-3xl" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#102B50] shadow-[0_35px_80px_-36px_rgba(16,43,80,0.8)]">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-emerald-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">Research workspace</span>
           </div>
-          <div>
-            <p className="font-bold text-foreground">SCOM</p>
-            <p className="text-xs text-muted-foreground">Safaricom PLC</p>
-          </div>
+          <span className="font-mono text-[10px] text-slate-400">LIVE OR DELAYED BY EXCHANGE</span>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-foreground transition-colors duration-300">KES {price != null ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}</p>
-          <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}% today` : '—'}</p>
-        </div>
-      </div>
-      <svg className="w-full h-24" viewBox="0 0 400 80">
-        <defs>
-          <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20 L400 80 L0 80 Z" fill="url(#heroGrad)" />
-        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
-        <circle cx="400" cy="20" r="4" fill="#0D7490" />
-      </svg>
-        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-        <span>9:30 AM</span>
-        <span>10:15 AM</span>
-        <span>11:00 AM</span>
-        <span>12:30 PM</span>
-        <span>Now</span>
-      </div>
-    </div>
-  );
-}
 
-function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
-  const cards = [
-    { sym: "AAPL", fallback: "+3.2", iconBg: "bg-blue-100", iconColor: "text-blue-600", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
-    { sym: "NVDA", fallback: "+4.1", iconBg: "bg-purple-100", iconColor: "text-purple-600", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
-    { sym: "EQTY", fallback: "+1.1", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
-  ];
-  const MiniCard = ({ c }: { c: typeof cards[number] }) => {
-    const q = quotes[c.sym];
-    const chg = q?.changePercent ?? null;
-    const isUp = (chg ?? 0) >= 0;
-    return (
-        <div className="flex items-center gap-2 bg-card rounded-xl border border-border shadow-md p-2.5">
-          <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-            <TrendingUp className={`w-3.5 h-3.5 ${c.iconColor}`} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-foreground">{c.sym}</p>
-          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
-        </div>
-      </div>
-    );
-  };
-  return (
-    <>
-      {/* Desktop: floating absolute cards */}
-      <div className="hidden lg:block">
-        {cards.map(c => {
-          const q = quotes[c.sym];
-          const chg = q?.changePercent ?? null;
-          const isUp = (chg ?? 0) >= 0;
-          return (
-            <div key={c.sym} className={`absolute ${c.pos} bg-card rounded-xl border border-border shadow-xl p-3 ${c.anim}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-                  <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-foreground">{c.sym}</p>
-                  <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
-                </div>
+        <div className="grid lg:grid-cols-[1.15fr_.85fr]">
+          <div className="border-b border-white/10 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-200">NSE / SCOM</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">Safaricom PLC</h3>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="font-mono text-2xl font-semibold tabular-nums text-white">{quoteText(scom, "KES")}</p>
+                <p className={`font-mono text-xs ${Number(scom?.changePercent) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  {changeText(scom)} latest session
+                </p>
               </div>
             </div>
-          );
-        })}
+
+            <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10">
+              {[
+                ["Evidence", "Multi-factor"],
+                ["Coverage", "African + global"],
+                ["Context", "Risk-aware"],
+              ].map(([label, value]) => (
+                <div key={label} className="bg-[#102B50] px-3 py-4">
+                  <p className="text-[9px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-100">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-xs font-semibold text-white">Intelligence evidence</span>
+                <span className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Availability varies</span>
+              </div>
+              <div className="space-y-3">
+                {[
+                  ["Fundamental", 82],
+                  ["Financial", 70],
+                  ["Technical", 58],
+                  ["Macro & news", 66],
+                ].map(([label, width]) => (
+                  <div key={label as string}>
+                    <div className="mb-1 flex justify-between text-[10px] text-slate-300"><span>{label}</span><span>research layer</span></div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#4386C8] to-[#16A085]" style={{ width: `${width}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-7">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">Market desk</h3>
+              <Activity className="size-4 text-cyan-300" />
+            </div>
+            <QuoteRow symbol="NSE:EQTY" name="Equity Group" currency="KES" quotes={quotes} />
+            <QuoteRow symbol="AAPL" name="Apple Inc." currency="$" quotes={quotes} />
+            <QuoteRow symbol="NVDA" name="NVIDIA" currency="$" quotes={quotes} />
+            <QuoteRow symbol="MSFT" name="Microsoft" currency="$" quotes={quotes} />
+            <div className="mt-5 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.06] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200">Research principle</p>
+              <p className="mt-2 text-xs leading-5 text-slate-300">No single indicator explains a market. StocksIntels brings the evidence together.</p>
+            </div>
+            {error && <p className="mt-3 text-[10px] text-amber-200">Quote feed temporarily unavailable. Platform preview remains available.</p>}
+          </div>
+        </div>
       </div>
-      {/* Mobile/tablet: stacked row under the hero card */}
-      <div className="flex lg:hidden justify-center gap-2 mt-4">
-        {cards.map(c => <MiniCard key={c.sym} c={c} />)}
-      </div>
-    </>
+    </div>
   );
 }
 
 export function LandingPage() {
   useSEO({
-    title: "StocksIntels – AI Stock Market Intelligence for African & Global Markets",
-    description: "AI-powered stock market intelligence for NSE Kenya, JSE, NGX, NYSE, and NASDAQ. Real-time prices, buy/sell signals, portfolio tracking, and market analysis for African and global traders.",
+    title: "Financial Intelligence. Elevated.",
+    description: "StocksIntels brings together advanced technology, multi-dimensional financial analysis and human expertise for African and global markets.",
     canonical: "/",
-    keywords: "Nairobi Securities Exchange, NSE Kenya, Safaricom stock, Equity Group, KCB, African stock market, AI stock signals, stock trading Kenya, JSE stocks, NYSE, portfolio tracker",
+    keywords: "financial intelligence, African markets, NSE, NGX, JSE, market research, company analysis, StocksIntels",
   });
 
-  // JSON-LD structured data for search engines
-  useEffect(() => {
-    const orgSchema = {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: "StocksIntels",
-      url: "https://stocksintels.com",
-      logo: "https://stocksintels.com/logo1.jpg",
-      description: "AI-powered stock market intelligence for African and global equities.",
-      foundingDate: "2024",
-      contactPoint: { "@type": "ContactPoint", telephone: "+254-792-754-435", contactType: "customer service", email: "support@stocksintels.com", availableLanguage: ["English"] },
-      sameAs: ["https://twitter.com/stocksintels"],
-      address: { "@type": "PostalAddress", addressLocality: "Nairobi", addressCountry: "KE" },
-    };
-    const webSiteSchema = {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: "StocksIntels",
-      url: "https://stocksintels.com",
-      potentialAction: { "@type": "SearchAction", target: "https://stocksintels.com/app/stocks?q={search_term_string}", "query-input": "required name=search_term_string" },
-    };
-    const faqSchema = {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: faqs.map(f => ({
-        "@type": "Question",
-        name: f.q,
-        acceptedAnswer: { "@type": "Answer", text: f.a },
-      })),
-    };
-    const el1 = document.createElement("script"); el1.type = "application/ld+json"; el1.id = "ld-org"; el1.text = JSON.stringify(orgSchema);
-    const el2 = document.createElement("script"); el2.type = "application/ld+json"; el2.id = "ld-website"; el2.text = JSON.stringify(webSiteSchema);
-    const el3 = document.createElement("script"); el3.type = "application/ld+json"; el3.id = "ld-faq"; el3.text = JSON.stringify(faqSchema);
-    document.head.appendChild(el1); document.head.appendChild(el2); document.head.appendChild(el3);
-    return () => { el1.remove(); el2.remove(); el3.remove(); };
-  }, []);
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { quotes, error: quoteError } = useHeroQuotes();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [contactSending, setContactSending] = useState(false);
-  const [contactStatus, setContactStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [userTestimonials, setUserTestimonials] = useState<any[]>([]);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
-  const { getQuote } = useRealtimeQuotes();
-  const { quotes: heroQuotes, error: heroError } = useHeroQuotes();
-  const [tickerError, setTickerError] = useState<string | null>(null);
-  const [testimonialError, setTestimonialError] = useState<string | null>(null);
-  const [newsError, setNewsError] = useState<string | null>(null);
+  const [contactStatus, setContactStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    const handleMouse = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+    if (!mobileOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
     };
-    window.addEventListener("mousemove", handleMouse);
-    return () => window.removeEventListener("mousemove", handleMouse);
-  }, []);
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
-    const observers = sectionRefs.current.map((el, i) => {
-      if (!el) return;
-      const obs = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            setVisibleSections((prev) => new Set(prev).add(i));
-          }
-        },
-        { threshold: 0.1 }
-      );
-      obs.observe(el);
-      return obs;
-    });
-    return () => observers.forEach((obs) => obs?.disconnect());
+    fetch(`${API_URL}/market-intel?limit=3`)
+      .then((response) => response.ok ? response.json() : [])
+      .then((data) => setArticles(Array.isArray(data) ? data.slice(0, 3) : []))
+      .catch(() => setArticles([]));
   }, []);
 
-  useEffect(() => {
-    fetch('/api/testimonials')
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(data => { if (data.testimonials) setUserTestimonials(data.testimonials); })
-      .catch(e => { setTestimonialError(e.message || 'Failed to load testimonials'); });
-  }, []);
-
-  const [marketArticles, setMarketArticles] = useState<Array<{ id: string; title: string; summary?: string; source?: string; publishedAt?: string; slug?: string; url?: string }>>([]);
-
-  useEffect(() => {
-    fetch('/api/market-intel?limit=6')
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(data => { if (Array.isArray(data)) setMarketArticles(data.slice(0, 6)); })
-      .catch(e => { setNewsError(e.message || 'Failed to load market news'); });
-  }, []);
-
-  const allTestimonials = useMemo(() => [...testimonials, ...userTestimonials], [userTestimonials]);
-
-  const setSectionRef = (i: number) => (el: HTMLDivElement | null) => {
-    sectionRefs.current[i] = el;
+  const submitContact = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setContactStatus(null);
+    if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.message.trim()) {
+      setContactStatus({ type: "error", message: "Please complete your name, email and message." });
+      return;
+    }
+    setContactSending(true);
+    try {
+      const response = await fetch(`${API_URL}/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactForm),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to send message");
+      setContactStatus({ type: "success", message: "Message received. Our team will follow up." });
+      setContactForm({ name: "", email: "", subject: "", message: "" });
+    } catch (error) {
+      setContactStatus({ type: "error", message: error instanceof Error ? error.message : "Unable to send message" });
+    } finally {
+      setContactSending(false);
+    }
   };
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const renderFloatingShapes = () => floatingShapes.map((shape, i) => {
-    const depthFactor = shape.depth * 6;
-    const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
-    const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
-    return (
-      <div
-        key={i}
-        className="absolute rounded-full bg-[#0D7490]/[0.03]"
-        style={{
-          top: shape.top,
-          left: shape.left ?? undefined,
-          right: shape.right ?? undefined,
-          width: shape.size,
-          height: shape.size,
-          animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
-          animationDelay: `${shape.delay}s`,
-          transform: `translate3d(${tx}px, ${ty}px, 0)`,
-          willChange: "transform",
-        }}
-      />
-    );
-  });
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-[#0D7490]/20 relative">
-      {/* Full-page floating stock elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        {renderFloatingShapes()}
-      </div>
-
-      {/* HEADER */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${
-        scrolled ? "bg-white/70 dark:bg-black/40 backdrop-blur-2xl shadow-lg border-b border-white/20 dark:border-white/[0.04]" : "bg-transparent"
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="size-9 md:size-10 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-xl md:text-2xl font-bold text-foreground tracking-tight">StocksIntels</span>
-            </Link>
-
-            <nav className="hidden lg:flex items-center gap-6">
-              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
-                <a key={item} href={`#${item.toLowerCase()}`}
-                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
-                  {item}
-                </a>
-              ))}
-              <span className="h-4 w-px bg-border" />
-              {[
-                { label: "About Us", to: "/about" },
-                { label: "Stocks", to: "/app/stocks" },
-                { label: "Bonds", to: "/app/bonds" },
-                { label: "News", to: "/app/news" },
-              ].map((item) => (
-                <Link key={item.label} to={item.to}
-                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-
-            <div className="hidden md:flex items-center gap-3">
-              <Link to="/login">
-                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490] font-medium">Sign In</Button>
-              </Link>
-              <Link to="/login">
-                <Button className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg font-medium px-6">
-                  Get Started
-                </Button>
-              </Link>
+    <div className="si-landing min-h-screen overflow-x-hidden bg-[#F5F8FC] text-[#202B3A] selection:bg-[#4386C8]/25">
+      <header className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${scrolled || mobileOpen ? "border-[#DCE5F0] bg-[#F5F8FC]/95 backdrop-blur-xl" : "border-transparent bg-transparent"}`}>
+        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
+          <Link to="/" className="flex items-center gap-3" aria-label="StocksIntels home">
+            <img src="/logo1.jpg" alt="" className="size-9 rounded-lg object-cover" />
+            <div>
+              <span className="block text-sm font-extrabold tracking-[-0.02em] text-[#102B50]">StocksIntels</span>
+              <span className="block text-[8px] font-bold uppercase tracking-[0.24em] text-[#4386C8]">Financial Intelligence</span>
             </div>
+          </Link>
 
-            <button className="lg:hidden p-2.5 rounded-xl hover:bg-accent text-muted-foreground" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+          <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary navigation">
+            {navItems.map((item) => (
+              <a key={item.href} href={item.href} className="text-[13px] font-semibold text-[#405168] transition-colors hover:text-[#174A7E]">{item.label}</a>
+            ))}
+            <Link to="/about" className="text-[13px] font-semibold text-[#405168] transition-colors hover:text-[#174A7E]">About</Link>
+          </nav>
+
+          <div className="hidden items-center gap-3 lg:flex">
+            <Button asChild variant="ghost" className="text-sm text-[#174A7E]"><Link to="/login">Sign in</Link></Button>
+            <Button asChild className="rounded-full bg-[#2563A6] px-5 text-sm text-white hover:bg-[#174A7E]"><Link to="/login">Explore StocksIntels <ArrowRight className="size-4" /></Link></Button>
           </div>
+
+          <button
+            type="button"
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            aria-controls="landing-mobile-nav"
+            onClick={() => setMobileOpen((open) => !open)}
+            className="grid size-10 place-items-center rounded-full border border-[#D7E1EC] bg-white text-[#102B50] lg:hidden"
+          >
+            {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
         </div>
 
-        {mobileMenuOpen && (
-          <div className="lg:hidden bg-card border-b border-border shadow-xl">
-            <div className="px-4 py-6 space-y-1">
-              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
-                <a key={item} href={`#${item.toLowerCase()}`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
-                  {item}
-                </a>
+        {mobileOpen && (
+          <nav id="landing-mobile-nav" className="max-h-[calc(100vh-72px)] overflow-y-auto border-t border-[#DCE5F0] bg-[#F5F8FC] px-5 py-6 lg:hidden" aria-label="Mobile navigation">
+            <div className="mx-auto flex max-w-2xl flex-col gap-1">
+              {navItems.map((item) => (
+                <a key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 text-sm font-semibold text-[#24364C] hover:bg-white">{item.label}</a>
               ))}
-              <div className="pt-3 pb-1 px-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platform</span>
-              </div>
-              {[
-                { label: "About Us", to: "/about" },
-                { label: "Stocks", to: "/app/stocks" },
-                { label: "Bonds", to: "/app/bonds" },
-                { label: "News", to: "/app/news" },
-              ].map((item) => (
-                <Link key={item.label} to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
-                  {item.label}
-                </Link>
-              ))}
-              <div className="pt-4 border-t border-border space-y-3">
-                <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full">Sign In</Button>
-                </Link>
-                <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full bg-[#0D7490] text-white">Get Started</Button>
-                </Link>
+              <Link to="/about" onClick={() => setMobileOpen(false)} className="rounded-xl px-4 py-3 text-sm font-semibold text-[#24364C] hover:bg-white">About</Link>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Button asChild variant="outline" className="border-[#BFCFE1] bg-white text-[#174A7E]"><Link to="/login">Sign in</Link></Button>
+                <Button asChild className="bg-[#2563A6] text-white"><Link to="/login">Explore</Link></Button>
               </div>
             </div>
-          </div>
+          </nav>
         )}
       </header>
 
-      {/* HERO */}
-      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
-        <div className="absolute inset-0">
-          <StockChartBg />
-        </div>
-
-        {/* Stock Ticker Strip */}
-        <div className="relative z-10 mb-12 overflow-hidden">
-          <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
-            {(() => {
-              const tickerSymbols = [
-                { sym: "SCOM", isNse: true },
-                { sym: "EQTY", isNse: true },
-                { sym: "KCB", isNse: true },
-                { sym: "EABL", isNse: true },
-                { sym: "AAPL", isNse: false },
-                { sym: "TSLA", isNse: false },
-                { sym: "MSFT", isNse: false },
-                { sym: "GOOGL", isNse: false },
-                { sym: "NVDA", isNse: false },
-              ];
-              const items = [...tickerSymbols, ...tickerSymbols];
-              return items.map((t, i) => (
-                <LiveTickerItem key={i} sym={t.sym} isNse={t.isNse} quotes={heroQuotes} />
-              ));
-            })()}
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left: Text */}
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0D7490]/10 rounded-full mb-6">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-semibold text-[#0D7490]">Live market data</span>
+      <main>
+        <section className="relative overflow-hidden bg-[#F5F8FC] pb-20 pt-32 sm:pb-28 sm:pt-40">
+          <div className="si-grid absolute inset-0 opacity-55" />
+          <div className="absolute right-[-18%] top-[-20%] size-[700px] rounded-full bg-[#4386C8]/10 blur-[130px]" />
+          <div className="relative mx-auto grid max-w-[1440px] items-center gap-16 px-5 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:px-12">
+            <div className="max-w-[650px]">
+              <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-[#BFD1E6] bg-white/75 px-4 py-2">
+                <span className="grid size-6 place-items-center rounded-full bg-[#102B50] text-[9px] font-black tracking-wider text-white">SI</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#174A7E]">Introducing Super Intelligence</span>
               </div>
-
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-[1.1] tracking-tight">
-                Your edge in{" "}
-                <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">African and global</span>{" "}
-                markets.
+              <h1 className="si-display max-w-[720px] text-[3.5rem] font-medium leading-[0.93] tracking-[-0.045em] text-[#102B50] sm:text-[4.8rem] lg:text-[5.65rem]">
+                See the markets <span className="text-[#2563A6]">beyond</span> the numbers.
               </h1>
-
-              <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-xl leading-relaxed">
-                We track price, volume, fundamentals, sentiment, and macro conditions across African and global exchanges — turning data into market intelligence you can act on.
+              <p className="mt-8 max-w-[600px] text-base leading-7 text-[#52647A] sm:text-lg sm:leading-8">
+                StocksIntels combines Super Intelligence, multi-dimensional financial analysis and human expertise to bring greater clarity to African and global markets.
               </p>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/login" className="w-full sm:w-auto">
-                  <Button size="lg" className="w-full sm:w-auto bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                </Link>
-                <a href="#features" className="w-full sm:w-auto">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto border-border text-foreground hover:bg-muted px-8 py-6 text-base font-medium">
-                    See How It Works
-                  </Button>
-                </a>
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+                <Button asChild size="lg" className="h-12 rounded-full bg-[#2563A6] px-7 text-sm text-white hover:bg-[#174A7E]"><Link to="/login">Explore StocksIntels <ArrowRight className="size-4" /></Link></Button>
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-full border-[#B9CAE0] bg-white/65 px-7 text-sm text-[#174A7E] hover:bg-white"><a href="#intelligence">Discover our intelligence</a></Button>
               </div>
-
-              <div className="mt-8 flex flex-wrap items-center gap-6 text-muted-foreground">
-                {["Real-time data", "AI-powered insights", "Portfolio tracking"].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    <span>{item}</span>
-                  </div>
-                ))}
+              <div className="mt-10 grid max-w-[560px] grid-cols-1 gap-3 border-t border-[#D8E2ED] pt-6 text-xs text-[#52647A] sm:grid-cols-3">
+                <span className="flex items-center gap-2"><CheckCircle2 className="size-4 text-[#16A085]" /> African market depth</span>
+                <span className="flex items-center gap-2"><CheckCircle2 className="size-4 text-[#16A085]" /> Global exposure</span>
+                <span className="flex items-center gap-2"><CheckCircle2 className="size-4 text-[#16A085]" /> Evidence-led research</span>
               </div>
             </div>
-
-            {/* Right: Stock Cards */}
-            <div className="relative mt-10 lg:mt-0">
-              {heroError ? (
-                <div className="text-center text-xs text-red-500 mt-4">
-                  Failed to load live prices: {heroError}
-                </div>
-              ) : (
-                <HeroStockCard quotes={heroQuotes} />
-              )}
-              {/* Floating mini cards — absolute on desktop, stacked on mobile */}
-              <FloatingMiniCards quotes={heroQuotes} />
-            </div>
+            <ProductPreview quotes={quotes} error={quoteError} />
           </div>
+        </section>
 
-          {/* Quick stats */}
-          <div className="mt-16 grid grid-cols-3 gap-3 sm:gap-6 max-w-2xl mx-auto">
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-foreground">10,000+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">stocks across 15+ African & global exchanges</p>
+        <section id="intelligence" className="scroll-mt-24 bg-[#102B50] py-20 text-white sm:py-28">
+          <div className="mx-auto grid max-w-[1440px] gap-14 px-5 sm:px-8 lg:grid-cols-[.75fr_1.25fr] lg:px-12">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <SectionLabel light>Super Intelligence</SectionLabel>
+              <h2 className="si-display text-4xl leading-[1.02] tracking-[-0.035em] text-white sm:text-6xl">More than data. More than conventional analysis.</h2>
+              <p className="mt-7 max-w-lg text-base leading-7 text-slate-300">
+                SI is the StocksIntels philosophy: combine complementary forms of intelligence into one coherent research experience. It is not a claim of artificial superintelligence.
+              </p>
+              <div className="mt-10 flex items-center gap-5 border-t border-white/15 pt-6">
+                <div className="si-display text-6xl text-cyan-200">SI</div>
+                <p className="max-w-[240px] text-xs leading-5 text-slate-400">Technology, analysis and human judgement working in concert.</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-foreground">7</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">days trial</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">multi-currency support</p>
-            </div>
-          </div>
-
-          {/* Markets we cover */}
-          <div className="mt-12 pt-8 border-t border-border">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
-              {[
-                { label: "NSE", sub: "Nairobi Securities Exchange", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-                { label: "JSE", sub: "Johannesburg Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-                { label: "NGX", sub: "Nigerian Exchange Group", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-                { label: "GSE", sub: "Ghana Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-                { label: "NYSE", sub: "New York Stock Exchange", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "NASDAQ", sub: "Nasdaq Stock Market", color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200" },
-                { label: "LSE", sub: "London Stock Exchange", color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
-              ].map((m) => (
-                <div key={m.label} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${m.bg} ${m.border} border`}>
-                  <span className={`font-black text-lg tracking-tight ${m.color}`}>{m.label}</span>
-                  <span className="text-xs text-muted-foreground hidden sm:block">{m.sub}</span>
+            <div className="divide-y divide-white/10 border-y border-white/10">
+              {intelligenceLayers.map((layer) => (
+                <div key={layer.number} className="group grid gap-3 py-6 sm:grid-cols-[60px_210px_1fr] sm:items-start">
+                  <span className="font-mono text-[10px] tracking-[0.2em] text-cyan-300/70">{layer.number}</span>
+                  <h3 className="text-base font-semibold text-white transition-colors group-hover:text-cyan-200">{layer.title}</h3>
+                  <p className="text-sm leading-6 text-slate-300">{layer.text}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* FEATURES */}
-      <section id="features" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(2)}>
-        <div className="absolute inset-0 opacity-[0.02]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "40px 40px",
-        }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className={`text-center max-w-3xl mx-auto mb-14 transition-all duration-700 ${visibleSections.has(2) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Tools that help you trade African and global stocks better</h2>
-            <p className="text-lg text-muted-foreground">No fluff. Just practical features built for African markets.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, idx) => (
-              <div key={feature.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
-                style={{ animation: `fade-in-up 0.6s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-lg font-bold text-foreground group-hover:text-[#0D7490] transition-colors duration-300">{feature.title}</h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-[#0D7490]/10 text-[#0D7490] group-hover:bg-[#0D7490] group-hover:text-white transition-all duration-300">
-                    {feature.stat}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed group-hover:text-foreground transition-colors duration-300">{feature.description}</p>
+        <section id="platform" className="scroll-mt-24 bg-white py-20 sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
+              <div>
+                <SectionLabel>Multi-dimensional intelligence</SectionLabel>
+                <h2 className="si-display text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">One company. Multiple analytical perspectives.</h2>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <p className="max-w-2xl text-base leading-7 text-[#607187] lg:justify-self-end">
+                Financial markets do not resolve into a single score. StocksIntels helps users inspect the evidence across company fundamentals, statements, price behaviour, macro conditions and current developments.
+              </p>
+            </div>
 
-      {/* HOW IT WORKS */}
-      <section className="py-20 lg:py-28 bg-card" ref={setSectionRef(3)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(3) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Getting started takes five minutes</h2>
-            <p className="text-lg text-muted-foreground">Sign up, explore the markets, and start using AI market intelligence — no broker or credit card needed.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
-            {steps.map((item, idx) => (
-              <div key={item.step} className="text-center group"
-                style={{ animation: `fade-in-up 0.6s ease-out ${idx * 0.15}s forwards`, opacity: 0 }}>
-                <div className="w-14 h-14 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl group-hover:shadow-[#0D7490]/20 group-hover:scale-110 transition-all duration-300">
-                  <span className="text-white font-bold text-lg">{item.step}</span>
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h3>
-                <p className="text-muted-foreground max-w-xs mx-auto leading-relaxed">{item.description}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center mt-14">
-            <Link to="/login">
-              <Button size="lg" className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-10 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
-                Start Free Trial
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* WHY CHOOSE US */}
-      <section className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(4)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `linear-gradient(45deg, #0D7490 1px, transparent 1px)`,
-          backgroundSize: "50px 50px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(4) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Built for traders everywhere, starting with Africa</h2>
-            <p className="text-lg text-muted-foreground">Most trading platforms ignore African markets. We built StocksIntels to give traders across the continent — from Nairobi to Lagos to Johannesburg — and around the world better tools, whether you trade Safaricom, MTN, Dangote, or Apple.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-            {whyChoose.map((item, idx) => (
-                <div key={item.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-lg hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
-                style={{ animation: `fade-in-up 0.5s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
-                <h4 className="font-bold text-foreground mb-1.5 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h4>
-                <p className="text-muted-foreground text-sm leading-relaxed">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
-      <section id="testimonials" className="py-20 lg:py-28 bg-card" ref={setSectionRef(5)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(5) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">What users say</h2>
-            <p className="text-lg text-muted-foreground">People using StocksIntels to track and trade African and global stocks.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-          {allTestimonials.map((t, i) => (
-                <div key={i} className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.15}s forwards`, opacity: 0 }}>
-                <div className="flex gap-1 mb-4">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  ))}
-                </div>
-                <p className="text-muted-foreground mb-6 leading-relaxed text-sm group-hover:text-foreground transition-colors duration-300">{t.content}</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 font-bold text-sm">
-                    {t.initials}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground text-sm">{t.name}</p>
-                    <p className="text-muted-foreground text-xs">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {allTestimonials.length === 0 && testimonialError && (
-              <p className="text-center text-xs text-red-500 mt-4">Failed to load testimonials: {testimonialError}</p>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* MARKET INSIGHTS */}
-      <section id="insights" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "30px 30px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Latest market insights</h2>
-            <p className="text-lg text-muted-foreground">Curated editorial coverage from MyStocks across African exchanges — macro analysis, sector reports, and earnings commentary.</p>
-          </div>
-
-          {marketArticles.length > 0 && (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {marketArticles.map((article, i) => {
-                const href = article.url || (article.slug ? `https://mystocks.africa/market-intel/${article.slug}` : '#');
-                const dateLabel = article.publishedAt
-                  ? new Date(article.publishedAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })
-                  : '';
+            <div className="mt-14 grid border-y border-[#DCE5EF] md:grid-cols-2 lg:grid-cols-3">
+              {capabilities.map((item, index) => {
+                const Icon = item.icon;
                 return (
-                  <a key={article.id || i} href={href} target="_blank" rel="noopener noreferrer"
-                    className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/10 hover:-translate-y-1 transition-all duration-500 block"
-                    style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <TrendingUp className="w-4 h-4 text-[#0D7490]" />
-                      <span className="text-xs font-medium text-[#0D7490] uppercase tracking-wide">{article.source || 'Market Intel'}</span>
+                  <div key={item.label} className={`group min-h-56 border-[#DCE5EF] p-7 transition-colors hover:bg-[#F5F8FC] ${index % 3 !== 2 ? "lg:border-r" : ""} ${index < 3 ? "border-b" : ""} ${index % 2 === 0 ? "md:border-r lg:border-r" : ""}`}>
+                    <div className="flex items-start justify-between">
+                      <Icon className="size-5 text-[#2563A6]" />
+                      <span className="font-mono text-[10px] text-[#9AA9BA]">0{index + 1}</span>
                     </div>
-                    <h3 className="font-bold text-foreground mb-2 group-hover:text-[#0D7490] transition-colors duration-300 leading-snug">{article.title}</h3>
-                    {article.summary && (
-                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3">{article.summary}</p>
-                    )}
-                    {dateLabel && (
-                      <p className="text-muted-foreground text-xs mt-3">{dateLabel}</p>
-                    )}
-                  </a>
+                    <h3 className="mt-10 text-lg font-semibold text-[#102B50]">{item.label}</h3>
+                    <p className="mt-3 text-sm leading-6 text-[#607187]">{item.text}</p>
+                  </div>
                 );
               })}
             </div>
-          )}
+          </div>
+        </section>
 
-          {marketArticles.length > 0 && (
-            <div className="text-center mt-10">
-              <Link to="/blog"
-                className="inline-flex items-center gap-2 text-[#0D7490] font-medium hover:underline">
-                View all articles <ChevronRight className="w-4 h-4" />
-              </Link>
+        <section className="bg-[#EDF3F9] py-20 sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="grid items-center gap-16 lg:grid-cols-[.95fr_1.05fr]">
+              <div className="order-2 lg:order-1">
+                <ProductPreview quotes={quotes} error={quoteError} />
+              </div>
+              <div className="order-1 lg:order-2 lg:pl-8">
+                <SectionLabel>The actual platform</SectionLabel>
+                <h2 className="si-display text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">A research workspace, not a prediction feed.</h2>
+                <p className="mt-7 text-base leading-7 text-[#607187]">Move from market context to company detail without leaving the evidence behind.</p>
+                <div className="mt-8 divide-y divide-[#CEDAE7] border-y border-[#CEDAE7]">
+                  {[
+                    "Company analysis and financial statements",
+                    "Technical indicators and price history",
+                    "Market movers, heatmaps and intelligence briefs",
+                    "Watchlists, portfolio analytics and paper trading",
+                  ].map((text) => (
+                    <div key={text} className="flex items-center gap-4 py-4 text-sm font-medium text-[#334A64]">
+                      <ChevronRight className="size-4 text-[#2563A6]" /> {text}
+                    </div>
+                  ))}
+                </div>
+                <Button asChild variant="link" className="mt-5 px-0 text-[#174A7E]"><Link to="/login">Enter the platform <ArrowRight className="size-4" /></Link></Button>
+              </div>
             </div>
-          )}
-
-          {marketArticles.length === 0 && newsError ? (
-              <p className="text-center text-xs text-red-500">Failed to load market news: {newsError}</p>
-            ) : marketArticles.length === 0 && (
-              <p className="text-center text-xs text-muted-foreground">Market insights are refreshed throughout the trading day.</p>
-            )}
           </div>
-      </section>
+        </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(7)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "30px 30px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
-            <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days — every plan includes a {MONEY_BACK_GUARANTEE}.</p>
+        <section id="human-expertise" className="scroll-mt-24 bg-white py-20 sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <SectionLabel>Technology + human expertise</SectionLabel>
+            <h2 className="si-display max-w-4xl text-4xl leading-[1.04] tracking-[-0.035em] text-[#102B50] sm:text-6xl">Intelligence enhanced by technology. Strengthened by human expertise.</h2>
+            <div className="mt-14 grid overflow-hidden rounded-[1.5rem] border border-[#D7E1EC] lg:grid-cols-2">
+              <article className="bg-[#102B50] p-8 text-white sm:p-12">
+                <Cpu className="size-6 text-cyan-300" />
+                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">Advanced technology</p>
+                <h3 className="mt-4 text-2xl font-semibold">Built to process complexity.</h3>
+                <p className="mt-5 text-sm leading-7 text-slate-300">Technology helps organize financial information, identify analytical patterns and support research across multiple market factors.</p>
+              </article>
+              <article className="bg-[#F9F5EC] p-8 sm:p-12">
+                <Users className="size-6 text-[#B1822C]" />
+                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-[#9B732B]">Human judgement</p>
+                <h3 className="mt-4 text-2xl font-semibold text-[#3C3427]">Context still matters.</h3>
+                <p className="mt-5 text-sm leading-7 text-[#675B49]">Human expertise contributes qualitative context, market judgement and responsible interpretation. Not every automated output is manually reviewed.</p>
+              </article>
+            </div>
           </div>
+        </section>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {PLANS.map((plan, i) => {
-              const popular = plan.popular;
-              return (
-                <div
-                  key={plan.id}
-                  className={
-                    popular
-                      ? "bg-[#111827] dark:bg-[#1e293b] text-white rounded-xl p-6 border border-gray-800 dark:border-gray-700 shadow-xl lg:scale-[1.02] z-10 hover:shadow-2xl transition-all duration-500"
-                      : "bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                  }
-                  style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}
-                >
-                  {popular && (
-                    <div className="mb-2">
-                      <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-                  <h3 className={`text-xl font-bold mb-1 ${popular ? "" : "text-foreground"}`}>{plan.name}</h3>
-                  <p className={`text-sm mb-4 ${popular ? "text-white/50" : "text-muted-foreground"}`}>{plan.tagline}</p>
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-3xl font-bold ${popular ? "" : "text-foreground"}`}>${plan.monthlyPrice}</span>
-                      <span className={`text-sm ${popular ? "text-white/50" : "text-muted-foreground"}`}>/mo</span>
-                    </div>
-                    <p className={`text-xs mt-1 ${popular ? "text-white/50" : "text-muted-foreground/50"}`}>
-                      ≈ ${(plan.monthlyPrice / 30).toFixed(2)}/day &middot; {YEARLY_SAVINGS_LABEL} on yearly
-                    </p>
-                  </div>
-                  <Link to="/pricing">
-                    <Button
-                      variant={popular ? "default" : "outline"}
-                      className={
-                        popular
-                          ? "w-full mb-4 bg-[#0D7490] text-white hover:bg-[#0A5F7A] shadow-xl font-semibold cursor-pointer"
-                          : "w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer"
-                      }
-                    >
-                      Start Trial
-                      {popular && <ArrowRight className="ml-2 w-4 h-4" />}
-                    </Button>
-                  </Link>
-                  <div className="space-y-2">
-                    {plan.highlights.map((f) => (
-                      <div key={f} className="flex items-center gap-2">
-                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${popular ? "text-emerald-400" : "text-green-500"}`} />
-                        <span className={`text-xs ${popular ? "text-white/70" : "text-muted-foreground"}`}>{f}</span>
+        <section className="overflow-hidden bg-[#102B50] py-20 text-white sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
+              <div>
+                <SectionLabel light>African + global</SectionLabel>
+                <h2 className="si-display text-4xl leading-[1.03] tracking-[-0.035em] sm:text-6xl">African market intelligence. Global perspective.</h2>
+              </div>
+              <p className="max-w-2xl text-base leading-7 text-slate-300 lg:justify-self-end">A platform designed around African market relevance, with the international context investors and institutions use to understand capital, sectors and companies.</p>
+            </div>
+            <div className="mt-14 divide-y divide-white/10 border-y border-white/10">
+              {exchanges.map((exchange) => (
+                <div key={exchange.code} className="grid items-center gap-2 py-5 sm:grid-cols-[140px_1fr_auto]">
+                  <span className="font-mono text-sm font-bold tracking-[0.14em] text-cyan-200">{exchange.code}</span>
+                  <span className="text-sm text-slate-200">{exchange.city}</span>
+                  <span className="text-xs text-slate-400">{exchange.market}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="audiences" className="scroll-mt-24 bg-white py-20 sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <SectionLabel>Who we serve</SectionLabel>
+            <h2 className="si-display max-w-3xl text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">One intelligence foundation. Two paths forward.</h2>
+            <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-[#D5E0EB] bg-[#D5E0EB] lg:grid-cols-2">
+              <article className="bg-[#F8FAFD] p-8 sm:p-12">
+                <Search className="size-6 text-[#2563A6]" />
+                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-[#2563A6]">Investors & market participants</p>
+                <h3 className="mt-4 text-2xl font-semibold text-[#102B50]">Research with more context.</h3>
+                <ul className="mt-7 space-y-3 text-sm text-[#566A80]">
+                  {[
+                    "Company and financial analysis",
+                    "Fundamental and technical evidence",
+                    "Watchlists, portfolios and paper trading",
+                    "Market intelligence across regions",
+                  ].map((item) => <li key={item} className="flex gap-3"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#16A085]" />{item}</li>)}
+                </ul>
+                <Button asChild className="mt-9 rounded-full bg-[#2563A6] px-6 text-white"><Link to="/login">Explore the platform <ArrowRight className="size-4" /></Link></Button>
+              </article>
+              <article className="bg-[#F2F6FA] p-8 sm:p-12">
+                <Building2 className="size-6 text-[#174A7E]" />
+                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-[#174A7E]">Businesses & financial institutions</p>
+                <h3 className="mt-4 text-2xl font-semibold text-[#102B50]">Intelligence for research workflows.</h3>
+                <ul className="mt-7 space-y-3 text-sm text-[#566A80]">
+                  {[
+                    "Market and company intelligence",
+                    "Research and analytical support",
+                    "Financial information infrastructure",
+                    "Integration conversations where supported",
+                  ].map((item) => <li key={item} className="flex gap-3"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#16A085]" />{item}</li>)}
+                </ul>
+                <Button asChild variant="outline" className="mt-9 rounded-full border-[#AFC2D8] bg-white px-6 text-[#174A7E]"><a href="#contact">Discuss your needs <ArrowRight className="size-4" /></a></Button>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        {articles.length > 0 && (
+          <section className="bg-[#EDF3F9] py-20 sm:py-24">
+            <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+              <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+                <div>
+                  <SectionLabel>Current intelligence</SectionLabel>
+                  <h2 className="si-display text-4xl tracking-[-0.03em] text-[#102B50] sm:text-5xl">Developments shaping the market.</h2>
+                </div>
+                <Link to="/blog" className="inline-flex items-center gap-2 text-sm font-semibold text-[#174A7E]">View research & insights <ArrowRight className="size-4" /></Link>
+              </div>
+              <div className="mt-12 divide-y divide-[#CFDBE8] border-y border-[#CFDBE8]">
+                {articles.map((article, index) => {
+                  const href = article.url || (article.slug ? `https://mystocks.africa/market-intel/${article.slug}` : "/blog");
+                  return (
+                    <a key={article.id || index} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined} className="group grid gap-4 py-7 sm:grid-cols-[100px_1fr_auto] sm:items-center">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8192A6]">{article.source || "Market intelligence"}</span>
+                      <div>
+                        <h3 className="text-base font-semibold text-[#102B50] transition-colors group-hover:text-[#2563A6]">{article.title}</h3>
+                        {article.summary && <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#607187]">{article.summary}</p>}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="text-center mt-10">
-            <Link to="/pricing" className="inline-flex items-center gap-1 text-[#0D7490] font-semibold hover:text-[#0A5F7A] transition-colors text-sm">
-              View full comparison <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section id="faq" className="py-20 lg:py-28 bg-card" ref={setSectionRef(8)}>
-        <div className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(8) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Common questions</h2>
-            <p className="text-lg text-muted-foreground">Honest answers about what StocksIntels does and does not do.</p>
-          </div>
-
-          <div className="space-y-3">
-            {faqs.map((faq, i) => (
-                <div key={i} className="bg-card rounded-xl border border-border overflow-hidden hover:border-[#0D7490]/30 transition-all duration-300"
-                style={{ animation: `fade-in-up 0.4s ease-out ${i * 0.08}s forwards`, opacity: 0 }}>
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between gap-4 p-5 text-left cursor-pointer"
-                >
-                  <span className="font-semibold text-foreground text-sm">{faq.q}</span>
-                  <div className={`w-6 h-6 rounded-full bg-accent dark:bg-muted flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
-                    <ChevronRight className={`w-3.5 h-3.5 transition-colors duration-300 ${openFaq === i ? "text-white" : "text-muted-foreground"}`} />
-                  </div>
-                </button>
-                <div className={`overflow-hidden transition-all duration-300 ${openFaq === i ? "max-h-48" : "max-h-0"}`}>
-                  <p className="px-5 pb-5 text-muted-foreground text-sm leading-relaxed">{faq.a}</p>
-                </div>
+                      <ExternalLink className="size-4 text-[#8294A8] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    </a>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </div>
+          </section>
+        )}
 
-      {/* CONTACT */}
-      <section id="contact" className="py-20 lg:py-28 bg-muted" ref={setSectionRef(9)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(9) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+        <section id="contact" className="scroll-mt-24 bg-[#F5F8FC] py-20 sm:py-28">
+          <div className="mx-auto grid max-w-[1440px] gap-14 px-5 sm:px-8 lg:grid-cols-[.85fr_1.15fr] lg:px-12">
             <div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Get in touch</h2>
-              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                Questions about the platform? Found a bug? Want to suggest a feature? Reach out — we reply within 24 hours.
-              </p>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Phone</p>
-                    <a href="tel:+254792754435" className="text-foreground font-semibold hover:text-[#0D7490]">+254 792 754 435</a>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <Mail className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Email</p>
-                    <a href="mailto:support@stocksintels.com" className="text-foreground font-semibold hover:text-[#0D7490]">support@stocksintels.com</a>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Location</p>
-                    <p className="text-foreground font-semibold">Nairobi, Kenya</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Location</p>
-                    <p className="text-foreground font-semibold">Mauritius</p>
-                  </div>
-                </div>
+              <SectionLabel>Contact StocksIntels</SectionLabel>
+              <h2 className="si-display text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">Start a more intelligent market conversation.</h2>
+              <p className="mt-7 max-w-lg text-base leading-7 text-[#607187]">Talk to us about the platform, financial research workflows, business enquiries or supported integrations.</p>
+              <div className="mt-10 space-y-4 text-sm text-[#52647A]">
+                <a href="mailto:support@stocksintels.com" className="flex items-center gap-3 hover:text-[#174A7E]"><Mail className="size-4 text-[#2563A6]" /> support@stocksintels.com</a>
+                <a href="tel:+254792754435" className="flex items-center gap-3 hover:text-[#174A7E]"><Phone className="size-4 text-[#2563A6]" /> +254 792 754 435</a>
+                <p className="flex items-center gap-3"><Landmark className="size-4 text-[#2563A6]" /> Nairobi, Kenya</p>
               </div>
             </div>
 
-            <div className="bg-card rounded-xl p-6 lg:p-8 shadow-lg border border-border hover:shadow-xl transition-shadow duration-300">
-              <h3 className="text-xl font-bold text-foreground mb-2">Send us a message</h3>
-              <p className="text-muted-foreground text-sm mb-6">We will get back to you within 24 hours.</p>
-              {contactStatus && (
-                <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${contactStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                  {contactStatus.message}
-                </div>
-              )}
-              <form className="space-y-4" onSubmit={async (e) => {
-                e.preventDefault();
-                if (!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message) {
-                  setContactStatus({ type: 'error', message: 'Please fill in all fields.' });
-                  return;
-                }
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactForm.email)) {
-                  setContactStatus({ type: 'error', message: 'Please provide a valid email address.' });
-                  return;
-                }
-                setContactSending(true);
-                setContactStatus(null);
-                try {
-                  const res = await fetch('/api/contact', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(contactForm),
-                  });
-                  const data = await res.json();
-                  if (res.ok) {
-                    setContactStatus({ type: 'success', message: 'Message sent! We will get back to you soon.' });
-                    setContactForm({ name: '', email: '', subject: '', message: '' });
-                  } else {
-                    setContactStatus({ type: 'error', message: data.error || 'Something went wrong.' });
-                  }
-                } catch {
-                  setContactStatus({ type: 'error', message: 'Network error. Please try again.' });
-                }
-                setContactSending(false);
-              }}>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Your name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                  <input type="email" placeholder="Your email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                </div>
-                <input type="text" placeholder="Subject" value={contactForm.subject} onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                <textarea rows={4} placeholder="Tell us more..." value={contactForm.message} onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40 resize-none" />
-                <Button type="submit" disabled={contactSending}
-                  className="w-full py-3 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                  {contactSending ? 'Sending...' : 'Send Message'}
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </form>
+            <form onSubmit={submitContact} className="rounded-3xl border border-[#D7E1EC] bg-white p-6 shadow-[0_25px_60px_-48px_rgba(16,43,80,0.8)] sm:p-9">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-[#3A4C62]">Name
+                  <input value={contactForm.name} onChange={(event) => setContactForm((form) => ({ ...form, name: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-[#D4DFEA] bg-[#F8FAFC] px-4 text-sm outline-none focus:border-[#4386C8] focus:ring-2 focus:ring-[#4386C8]/15" autoComplete="name" />
+                </label>
+                <label className="text-xs font-semibold text-[#3A4C62]">Email
+                  <input type="email" value={contactForm.email} onChange={(event) => setContactForm((form) => ({ ...form, email: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-[#D4DFEA] bg-[#F8FAFC] px-4 text-sm outline-none focus:border-[#4386C8] focus:ring-2 focus:ring-[#4386C8]/15" autoComplete="email" />
+                </label>
+              </div>
+              <label className="mt-5 block text-xs font-semibold text-[#3A4C62]">Subject
+                <input value={contactForm.subject} onChange={(event) => setContactForm((form) => ({ ...form, subject: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-[#D4DFEA] bg-[#F8FAFC] px-4 text-sm outline-none focus:border-[#4386C8] focus:ring-2 focus:ring-[#4386C8]/15" />
+              </label>
+              <label className="mt-5 block text-xs font-semibold text-[#3A4C62]">Message
+                <textarea value={contactForm.message} onChange={(event) => setContactForm((form) => ({ ...form, message: event.target.value }))} className="mt-2 min-h-32 w-full resize-y rounded-xl border border-[#D4DFEA] bg-[#F8FAFC] px-4 py-3 text-sm outline-none focus:border-[#4386C8] focus:ring-2 focus:ring-[#4386C8]/15" />
+              </label>
+              {contactStatus && <p role="status" className={`mt-4 text-xs ${contactStatus.type === "success" ? "text-emerald-700" : "text-rose-600"}`}>{contactStatus.message}</p>}
+              <Button type="submit" disabled={contactSending} className="mt-6 h-11 w-full rounded-full bg-[#2563A6] text-white hover:bg-[#174A7E]">{contactSending ? "Sending..." : "Send enquiry"} <ArrowRight className="size-4" /></Button>
+            </form>
+          </div>
+        </section>
+
+        <section className="bg-[#174A7E] py-20 text-white sm:py-24">
+          <div className="mx-auto flex max-w-[1180px] flex-col items-start justify-between gap-9 px-5 sm:px-8 lg:flex-row lg:items-end">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-200">Financial intelligence. Elevated.</p>
+              <h2 className="si-display mt-5 max-w-3xl text-4xl leading-[1.02] tracking-[-0.035em] sm:text-6xl">Understand the market. Beyond the obvious.</h2>
+              <p className="mt-5 max-w-2xl text-sm leading-6 text-blue-100">Experience a more comprehensive approach to financial intelligence, bringing together technology, market analysis and human expertise.</p>
             </div>
+            <Button asChild size="lg" className="h-12 shrink-0 rounded-full bg-white px-7 text-[#174A7E] hover:bg-cyan-50"><Link to="/login">Explore StocksIntels <ArrowRight className="size-4" /></Link></Button>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* CTA BANNER */}
-      <section className="py-16 lg:py-20 bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5" style={{
-          backgroundImage: `radial-gradient(circle at 20px 20px, white 1px, transparent 1px)`,
-          backgroundSize: "40px 40px",
-        }} />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 tracking-tight">Start your trial today</h2>
-          <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Try any plan free for 7 days. Cancel anytime. Join other African traders using AI-powered market intelligence for African and global stocks.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
-                Start Trial
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
-            <a href="#contact" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto border-white/50 text-white bg-transparent hover:bg-white/10 px-10 py-6 text-base font-medium cursor-pointer">
-                Contact Us
-              </Button>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="bg-gray-950 dark:bg-[#0a0a0b] text-white pt-14 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12 mb-10">
-            <div className="col-span-2 md:col-span-1">
-              <Link to="/" className="flex items-center gap-2 mb-3 group">
-                <div className="size-8 overflow-hidden">
-                  <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-                </div>
-                <span className="text-base font-bold">StocksIntels</span>
+      <footer className="bg-[#0B203D] text-white">
+        <div className="mx-auto max-w-[1440px] px-5 py-14 sm:px-8 lg:px-12">
+          <div className="grid gap-10 border-b border-white/10 pb-12 sm:grid-cols-2 lg:grid-cols-[1.35fr_1fr_1fr_1fr_1fr]">
+            <div>
+              <Link to="/" className="flex items-center gap-3">
+                <img src="/logo1.jpg" alt="" className="size-9 rounded-lg object-cover" />
+                <span className="text-sm font-extrabold">StocksIntels</span>
               </Link>
-              <p className="text-gray-500 text-xs leading-relaxed mb-4">AI-powered market intelligence for African and global equities.</p>
-              <div className="flex items-center gap-2">
-                {[{ icon: Twitter, href: "#" }, { icon: Linkedin, href: "#" }, { icon: Github, href: "#" }].map(({ icon: Icon }) => (
-                  <a key={Icon.name} href="#" className="w-8 h-8 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110">
-                    <Icon className="w-4 h-4 text-gray-400" />
-                  </a>
-                ))}
-              </div>
+              <p className="mt-5 max-w-xs text-sm leading-6 text-slate-400">Super Intelligence. Financial Research. Human Expertise.</p>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Product</h4>
-              <ul className="space-y-3">
-                <li><Link to="/pricing" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Pricing</Link></li>
-                <li><a href="#features" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Features</a></li>
-                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Blog</Link></li>
-                <li><a href="#testimonials" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Testimonials</a></li>
-                <li><a href="#faq" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">FAQ</a></li>
-              </ul>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Platform</p>
+              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/app/stocks" className="block hover:text-white">Stocks</Link><Link to="/app/markets" className="block hover:text-white">Markets</Link><Link to="/app/market-movers" className="block hover:text-white">Market movers</Link><Link to="/app/portfolio" className="block hover:text-white">Portfolio</Link></div>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Markets</h4>
-              <ul className="space-y-3">
-                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Markets</Link></li>
-                <li><Link to="/app/stocks" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Stock Exchanges</Link></li>
-                <li><Link to="/app/bonds" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Bonds</Link></li>
-                <li><Link to="/app/ipos" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Upcoming IPOs</Link></li>
-                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Market Pulse</Link></li>
-                <li><Link to="/app/markets?exchange=NSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nairobi (NSE)</Link></li>
-                <li><Link to="/app/markets?exchange=JSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Johannesburg (JSE)</Link></li>
-                <li><Link to="/app/markets?exchange=NGX" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nigeria (NGX)</Link></li>
-              </ul>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Intelligence</p>
+              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/app/financials" className="block hover:text-white">Financials</Link><Link to="/app/news" className="block hover:text-white">News</Link><Link to="/blog" className="block hover:text-white">Research & insights</Link><Link to="/app/sectors" className="block hover:text-white">Sectors</Link></div>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Company</h4>
-              <ul className="space-y-3">
-                <li><Link to="/about" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">About</Link></li>
-                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Blog</Link></li>
-                <li><a href="#contact" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Contact</a></li>
-              </ul>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Company</p>
+              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/about" className="block hover:text-white">About</Link><Link to="/careers" className="block hover:text-white">Careers</Link><a href="#contact" className="block hover:text-white">Business enquiries</a><Link to="/pricing" className="block hover:text-white">Pricing</Link></div>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Legal</h4>
-              <ul className="space-y-3">
-                <li><Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Privacy Policy</Link></li>
-                <li><Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Terms of Service</Link></li>
-                <li><Link to="/disclaimer" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Disclaimer</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Contact</h4>
-              <ul className="space-y-3">
-                <li>
-                  <a href="tel:+254792754435" className="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center gap-2">
-                    <Phone className="w-3 h-3" /> +254 792 754 435
-                  </a>
-                </li>
-                <li>
-                  <a href="mailto:support@stocksintels.com" className="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center gap-2">
-                    <Mail className="w-3 h-3" /> support@stocksintels.com
-                  </a>
-                </li>
-                <li>
-                  <span className="text-sm text-gray-500 flex items-center gap-2">
-                    <MapPin className="w-3 h-3" /> Nairobi, Kenya
-                  </span>
-                </li>
-              </ul>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Legal</p>
+              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/privacy" className="block hover:text-white">Privacy</Link><Link to="/terms" className="block hover:text-white">Terms</Link><Link to="/security" className="block hover:text-white">Security</Link><Link to="/disclaimer" className="block hover:text-white">Risk disclaimer</Link></div>
             </div>
           </div>
-
-          <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for African & global traders.</p>
-            <button onClick={scrollToTop} className="w-7 h-7 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer">
-              <ChevronUp className="w-3 h-3 text-gray-400" />
-            </button>
+          <div className="flex flex-col gap-4 pt-7 text-[11px] leading-5 text-slate-500 sm:flex-row sm:items-start sm:justify-between">
+            <p>Copyright {new Date().getFullYear()} StocksIntels. All rights reserved.</p>
+            <p className="max-w-3xl sm:text-right">StocksIntels provides data, analytics and research tools for informational purposes. It is not a broker or financial adviser. Market data may be delayed. Investing involves risk.</p>
           </div>
         </div>
       </footer>
-
-      {/* DISCLAIMER */}
-      <div className="bg-gray-950 dark:bg-[#0a0a0b] border-t border-gray-800/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <p className="text-[11px] text-gray-600 leading-relaxed">
-            <strong className="text-gray-500">Risk Disclaimer:</strong> Trading stocks and other financial instruments involves substantial risk of loss. AI recommendations are for informational and educational purposes only and do not constitute financial advice. Past performance does not guarantee future results. StocksIntels is not a licensed broker or financial advisor. By using this platform, you acknowledge and accept these risks.{' '}
-            <Link to="/disclaimer" className="text-gray-500 hover:text-gray-400 underline">Read full disclaimer</Link>
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
