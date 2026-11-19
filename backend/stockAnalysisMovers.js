@@ -50,6 +50,10 @@ function parseRowsAsTables(html) {
   const $ = cheerio.load(html);
   const tables = [];
   $('table').each((_, tbl) => {
+    const headers = $(tbl).find('thead th').map((__, th) => $(th).text().trim()).get();
+    const priceIndex = headers.findIndex((h) => /price/i.test(h));
+    const volumeIndex = headers.findIndex((h) => /volume/i.test(h));
+    const marketCapIndex = headers.findIndex((h) => /market cap/i.test(h));
     const rows = [];
     $(tbl).find('tbody tr').each((__, tr) => {
       const cells = $(tr).find('td').map((___, td) => $(td).text().trim()).get();
@@ -60,9 +64,10 @@ function parseRowsAsTables(html) {
         ticker,
         name: cells[2] || ticker,
         changePercent: num(cells[3]),
-        price: num(cells[4]),
-        volume: num(cells[5]),
-        marketCap: parseCap(cells[6]),
+        price: num(cells[priceIndex >= 0 ? priceIndex : 4]),
+        // After-hours tables have Regular Close in column 5, not volume.
+        volume: volumeIndex >= 0 ? num(cells[volumeIndex]) : 0,
+        marketCap: parseCap(cells[marketCapIndex >= 0 ? marketCapIndex : 6]),
       });
     });
     tables.push(rows);

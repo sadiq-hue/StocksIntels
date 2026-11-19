@@ -103,6 +103,24 @@ function tradingDateLabel(tz: string): string {
   return "";
 }
 
+function isUsExtendedSession(kind: "premarket" | "afterhours"): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const weekday = parts.find((p) => p.type === "weekday")?.value;
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+  const total = hour * 60 + minute;
+  return kind === "premarket"
+    ? total >= 4 * 60 && total < 9 * 60 + 30
+    : total >= 16 * 60 && total < 20 * 60;
+}
+
 function fmtTzTime(iso: string | number | null | undefined, tz: string): string {
   if (iso == null) return "—";
   const d = new Date(iso as any);
@@ -613,7 +631,9 @@ export function MarketMoversPage() {
   const sessionWord = marketOpen ? "Today" : "Last Trading Session";
   const sessionSuffix = marketOpen ? "" : ` · ${lastSession}`;
   const asOfTime = fmtTzTime(asOf, SESSION_TZ);
-const isDelayed = cached && marketOpen;
+  const isDelayed = cached && marketOpen;
+  const premarketOpen = isUsExtendedSession("premarket");
+  const afterHoursOpen = isUsExtendedSession("afterhours");
   const freshness = error
     ? "Stale"
     : cached
@@ -624,6 +644,11 @@ const isDelayed = cached && marketOpen;
   const sectionTitle = activeTab === "gainers" || activeTab === "losers"
     ? `${TAB_TITLES[activeTab]} ${periodWord}`
     : TAB_TITLES[activeTab];
+  const sectionSessionLabel = activeTab === "premarket"
+    ? (premarketOpen ? (cached ? "Delayed Premarket" : "Live Premarket") : "Last premarket session")
+    : activeTab === "afterhours"
+      ? (afterHoursOpen ? (cached ? "Delayed After Hours" : "Live After Hours") : "Last after-hours session")
+      : isDelayed ? "Delayed Price" : marketOpen ? "Live" : "Last trading session";
   const emptyMessage =
     activeTab === "premarket"
       ? `Premarket session is closed or no premarket quotes are available for the tracked universe. Last checked ${lastUpdated || "-"}.`
@@ -759,7 +784,7 @@ const isDelayed = cached && marketOpen;
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-[15px] font-bold text-foreground">{sectionTitle}</h2>
-            <p className="text-[11px] text-muted-foreground">{isDelayed ? "Delayed Price" : marketOpen ? "Live" : "Last trading session"}{sessionSuffix} · as of {asOfTime}</p>
+            <p className="text-[11px] text-muted-foreground">{sectionSessionLabel}{sessionSuffix} · as of {asOfTime}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
