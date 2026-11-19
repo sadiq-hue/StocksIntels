@@ -45,7 +45,7 @@ const sections = [
 export function TermsPage() {
   useSEO({
     title: "Terms of Service",
-    description: "StocksIntels terms of service. Review the conditions governing your use of our AI-powered market intelligence platform.",
+    description: "StocksIntels terms of service. Review the conditions governing your use of our financial intelligence, research and analytics platform.",
     canonical: "/terms",
     keywords: "terms of service, user agreement, platform terms",
   });

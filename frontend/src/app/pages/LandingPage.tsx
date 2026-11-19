@@ -28,6 +28,7 @@ import {
 import { Button } from "../components/ui/button";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
+import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "AAPL", "MSFT", "NVDA"];
@@ -47,6 +48,7 @@ const navItems = [
   { label: "Market Intelligence", href: "#intelligence" },
   { label: "Research & Analysts", href: "#human-expertise" },
   { label: "For Businesses", href: "#audiences" },
+  { label: "Pricing", href: "#pricing" },
 ];
 
 const intelligenceLayers = [
@@ -162,6 +164,7 @@ function SectionLabel({ children, light = false }: { children: React.ReactNode; 
 
 function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStockQuote>; error: boolean }) {
   const scom = findQuote(quotes, "NSE:SCOM");
+  const scomStatus = scom?.marketState === "REGULAR" ? "Current session quote" : "Latest reported quote";
 
   return (
     <div className="relative mx-auto w-full max-w-[720px]" aria-label="StocksIntels platform interface preview">
@@ -185,7 +188,7 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
               <div className="text-left sm:text-right">
                 <p className="font-mono text-2xl font-semibold tabular-nums text-white">{quoteText(scom, "KES")}</p>
                 <p className={`font-mono text-xs ${Number(scom?.changePercent) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                  {changeText(scom)} latest session
+                  {changeText(scom)} {scomStatus.toLowerCase()}
                 </p>
               </div>
             </div>
@@ -235,8 +238,8 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
             <QuoteRow symbol="AAPL" name="Apple Inc." currency="$" quotes={quotes} />
             <QuoteRow symbol="NVDA" name="NVIDIA" currency="$" quotes={quotes} />
             <QuoteRow symbol="MSFT" name="Microsoft" currency="$" quotes={quotes} />
-            <div className="mt-5 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.06] p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200">Research principle</p>
+            <div className="mt-5 rounded-xl border border-[#D5A64A]/30 bg-[#D5A64A]/[0.08] p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#E1BE72]">Research principle</p>
               <p className="mt-2 text-xs leading-5 text-slate-300">No single indicator explains a market. StocksIntels brings the evidence together.</p>
             </div>
             {error && <p className="mt-3 text-[10px] text-amber-200">Quote feed temporarily unavailable. Platform preview remains available.</p>}
@@ -258,6 +261,7 @@ export function LandingPage() {
   const { quotes, error: quoteError } = useHeroQuotes();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [yearlyPricing, setYearlyPricing] = useState(true);
   const [articles, setArticles] = useState<Article[]>([]);
   const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [contactSending, setContactSending] = useState(false);
@@ -559,6 +563,57 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section id="pricing" className="scroll-mt-24 bg-[#F5F8FC] py-20 sm:py-28">
+          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+              <div>
+                <SectionLabel>Access StocksIntels</SectionLabel>
+                <h2 className="si-display max-w-3xl text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">Choose the depth of intelligence you need.</h2>
+                <p className="mt-6 max-w-2xl text-sm leading-6 text-[#607187]">One platform, three levels of research depth. Trial access begins after the $1 commitment fee.</p>
+              </div>
+              <div className="inline-flex w-fit rounded-full border border-[#C8D6E5] bg-white p-1" aria-label="Pricing period">
+                <button type="button" onClick={() => setYearlyPricing(false)} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors ${!yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Monthly</button>
+                <button type="button" onClick={() => setYearlyPricing(true)} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors ${yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Yearly <span className="ml-1 text-[#D5A64A]">{YEARLY_SAVINGS_LABEL}</span></button>
+              </div>
+            </div>
+
+            <div className="mt-14 grid gap-5 lg:grid-cols-3">
+              {PLANS.map((plan) => {
+                const featured = plan.popular;
+                const premium = plan.id === "premium";
+                const price = yearlyPricing ? plan.yearlyPrice : plan.monthlyPrice;
+                return (
+                  <article key={plan.id} className={`relative flex min-h-[520px] flex-col overflow-hidden rounded-[1.5rem] border p-7 sm:p-8 ${featured ? "border-[#174A7E] bg-[#102B50] text-white shadow-[0_30px_65px_-45px_rgba(16,43,80,0.9)]" : "border-[#D5E0EB] bg-white text-[#102B50]"}`}>
+                    <div className={`absolute inset-x-0 top-0 h-1 ${premium ? "bg-[#D5A64A]" : featured ? "bg-[#56A6C8]" : "bg-[#4386C8]"}`} />
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className={`text-[10px] font-bold uppercase tracking-[0.22em] ${featured ? "text-cyan-200" : premium ? "text-[#A67A2D]" : "text-[#2563A6]"}`}>{featured ? "Most selected" : "StocksIntels"}</p>
+                        <h3 className="mt-4 text-2xl font-bold">{plan.name}</h3>
+                        <p className={`mt-2 text-sm ${featured ? "text-slate-300" : "text-[#607187]"}`}>{plan.tagline}</p>
+                      </div>
+                      <span className={`grid size-10 place-items-center rounded-full font-mono text-[10px] font-bold ${featured ? "bg-white/10 text-cyan-200" : premium ? "bg-[#D5A64A]/15 text-[#9B732B]" : "bg-[#2563A6]/10 text-[#2563A6]"}`}>{plan.name.slice(0, 2).toUpperCase()}</span>
+                    </div>
+                    <div className="mt-9 border-b border-current/10 pb-7">
+                      <div className="flex items-end gap-2">
+                        <span className="font-mono text-4xl font-semibold tabular-nums">${yearlyPricing ? price.toFixed(0) : price.toFixed(2)}</span>
+                        <span className={`pb-1 text-xs ${featured ? "text-slate-400" : "text-[#718196]"}`}>/{yearlyPricing ? "year" : "month"}</span>
+                      </div>
+                      <p className={`mt-3 text-[10px] ${featured ? "text-slate-400" : "text-[#8190A2]"}`}>{MONEY_BACK_GUARANTEE}</p>
+                    </div>
+                    <ul className="mt-7 flex-1 space-y-3">
+                      {plan.highlights.map((highlight) => (
+                        <li key={highlight} className={`flex gap-3 text-sm ${featured ? "text-slate-200" : "text-[#52647A]"}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? "text-[#D5A64A]" : "text-[#16A085]"}`} />{highlight}</li>
+                      ))}
+                    </ul>
+                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? "bg-white text-[#102B50] hover:bg-cyan-50" : premium ? "bg-[#D5A64A] text-[#2F291F] hover:bg-[#C69941]" : "bg-[#2563A6] text-white hover:bg-[#174A7E]"}`}><Link to="/pricing">View {plan.name} <ArrowRight className="size-4" /></Link></Button>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="mt-7 flex flex-col justify-between gap-3 text-xs text-[#718196] sm:flex-row"><span>All prices are billed in USD.</span><Link to="/pricing" className="font-semibold text-[#174A7E]">Compare every feature <ArrowRight className="ml-1 inline size-3" /></Link></div>
+          </div>
+        </section>
+
         {articles.length > 0 && (
           <section className="bg-[#EDF3F9] py-20 sm:py-24">
             <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
@@ -598,6 +653,7 @@ export function LandingPage() {
                 <a href="mailto:support@stocksintels.com" className="flex items-center gap-3 hover:text-[#174A7E]"><Mail className="size-4 text-[#2563A6]" /> support@stocksintels.com</a>
                 <a href="tel:+254792754435" className="flex items-center gap-3 hover:text-[#174A7E]"><Phone className="size-4 text-[#2563A6]" /> +254 792 754 435</a>
                 <p className="flex items-center gap-3"><Landmark className="size-4 text-[#2563A6]" /> Nairobi, Kenya</p>
+                <p className="flex items-center gap-3"><Landmark className="size-4 text-[#D5A64A]" /> Delaware, United States</p>
               </div>
             </div>
 

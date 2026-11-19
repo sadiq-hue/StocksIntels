@@ -8,22 +8,22 @@ const sections = [
   {
     icon: Lock,
     title: "Encryption",
-    content: "All data transmitted between your device and StocksIntels is encrypted using TLS 1.3. All stored personal and financial data is encrypted at rest using AES-256.",
+    content: "StocksIntels uses HTTPS/TLS for data transmitted between your device and the platform. Infrastructure and database access is restricted to authorized services and personnel.",
   },
   {
     icon: Shield,
     title: "Authentication",
-    content: "We support two-factor authentication (2FA) via authenticator app or SMS. We strongly recommend all users enable 2FA. Passwords are hashed using bcrypt and never stored in plaintext.",
+    content: "Passwords are hashed using bcrypt and never stored in plaintext. Sensitive login and account workflows use time-limited email verification codes.",
   },
   {
     icon: Server,
     title: "Infrastructure",
-    content: "Our platform runs on enterprise-grade cloud infrastructure with 99% uptime SLA. We conduct regular penetration testing and security audits. Access to production systems is restricted to authorized personnel with logged, audited access.",
+    content: "The platform runs on containerized cloud infrastructure with health monitoring, restricted production access, database backups and operational logging.",
   },
   {
     icon: Bell,
     title: "Incident Response",
-    content: "In the event of a security incident affecting your data, we will notify you within 72 hours in accordance with applicable data protection regulations.",
+    content: "We investigate suspected security incidents and provide notifications where required by applicable data-protection law.",
   },
   {
     icon: Search,

@@ -12,7 +12,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { PublicBrandHeader, PublicBrandFooter } from "../components/PublicBrandChrome";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 import { useSEO } from "../hooks/useSEO";
@@ -27,7 +27,7 @@ const plans = PLANS.map((p) => ({
   ...p,
   description: p.tagline,
   icon: PLAN_ICONS[p.id],
-  cta: "Start 7-Day Trial",
+  cta: "Start 7-Day Access",
   ctaVariant: (p.id === "premium" ? "outline" : "default") as "default" | "outline",
 }));
 
@@ -37,8 +37,8 @@ const faqs = [
     answer: "Yes, you can upgrade or downgrade your plan at any time. Changes take effect at the start of your next billing cycle.",
   },
   {
-    question: "Is there a free trial for paid plans?",
-    answer: "Yes! Start your 7-day trial — you'll get full access to your chosen plan for 7 days.",
+    question: "How does trial access work?",
+    answer: "Pay the $1 commitment fee to begin 7-day access to your selected plan. The commitment fee helps prevent automated abuse of the research platform.",
   },
   {
     question: "What payment methods do you accept?",
@@ -50,11 +50,11 @@ const faqs = [
   },
   {
     question: "What's the difference between Premium and Pro?",
-    answer: "Premium includes all Pro features plus AI multi-market stock screening, cross-market intelligence, human analyst insights and research, analyst market commentary, and priority analyst Q&A support. Pro is designed for active researchers while Premium is for serious investors who need institutional-grade tools.",
+    answer: "Premium includes all Pro features plus multi-market stock screening, cross-market intelligence, human analyst insights and research, analyst market commentary, and priority analyst Q&A support. Pro is designed for active researchers while Premium offers the greatest research depth.",
   },
   {
     question: "What's the difference between Pro and Core?",
-    answer: "Pro includes all Core features plus advanced fundamentals and technical analysis, insider activity intelligence, AI stock comparison, advanced stock screening, investment thesis and bull/bear case analysis, and portfolio risk analysis. Core is ideal for beginners while Pro is for active researchers.",
+    answer: "Pro includes all Core features plus advanced fundamentals and technical analysis, insider activity intelligence, company comparison, advanced screening, investment thesis and bull/bear case analysis, and portfolio risk analysis. Core provides essential intelligence while Pro is built for active research.",
   },
   {
     question: "Can I cancel my subscription?",
@@ -69,7 +69,7 @@ const faqs = [
 export function PricingPage() {
   useSEO({
     title: "Pricing – StocksIntels Investment Plans",
-    description: "Choose from Core, Pro, or Premium plans. Get AI-powered market intelligence, advanced analytics, and expert insights. Starting at $79/year with a 7-day free trial.",
+    description: "Choose Core, Pro, or Premium access to StocksIntels financial intelligence, multi-dimensional analysis and research tools. Starting at $79/year.",
     canonical: "/pricing",
     keywords: "stock market intelligence pricing, investment research plans, AI stock analysis, portfolio management tools, stock screening software",
   });
@@ -79,7 +79,7 @@ export function PricingPage() {
       "@context": "https://schema.org",
       "@type": "Product",
       name: `StocksIntels ${plan.name}`,
-      description: `AI-powered stock market intelligence plan for ${plan.description.toLowerCase()}. ${plan.features.filter(f => f.included).map(f => f.text).join(', ')}.`,
+      description: `StocksIntels financial intelligence plan for ${plan.description.toLowerCase()}. ${plan.features.filter(f => f.included).map(f => f.text).join(', ')}.`,
       brand: { "@type": "Brand", name: "StocksIntels" },
       offers: {
         "@type": "AggregateOffer",
@@ -193,48 +193,28 @@ export function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="size-9 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Link to="/login">
-                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">
-                  Sign In
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="si-landing min-h-screen bg-[#F5F8FC] text-[#202B3A]">
+      <PublicBrandHeader />
 
        {/* Hero */}
-       <section className="pt-32 pb-16">
+       <section className="si-grid pt-32 pb-16">
          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Pricing</p>
-           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
-             Investment plans for every level
-           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-            Choose the plan that matches your investment journey. All plans include a 7-day free trial
-            and a {MONEY_BACK_GUARANTEE}.
-          </p>
+           <p className="text-[#2563A6] font-semibold text-xs uppercase tracking-[0.22em] mb-3">Access StocksIntels</p>
+           <h1 className="si-display text-4xl sm:text-6xl font-medium tracking-[-0.035em] text-[#102B50] mb-4">
+              Choose your research depth.
+            </h1>
+           <p className="text-base leading-7 text-[#607187] max-w-2xl mx-auto mb-5">
+             Core, Pro and Premium provide progressively deeper market intelligence, company research and portfolio tools.
+           </p>
+           <p className="mb-10 text-xs font-medium text-[#8A6A2D]">7-day access begins after the $1 commitment fee. {MONEY_BACK_GUARANTEE}.</p>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 bg-muted rounded-full p-1.5">
+           <div className="inline-flex items-center gap-3 border border-[#CCD9E7] bg-white rounded-full p-1.5">
             <button
               onClick={() => setIsYearly(false)}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                 !isYearly
-                  ? "bg-card text-foreground shadow-sm"
+                   ? "bg-[#102B50] text-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -244,7 +224,7 @@ export function PricingPage() {
               onClick={() => setIsYearly(true)}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
                 isYearly
-                  ? "bg-card text-foreground shadow-sm"
+                   ? "bg-[#102B50] text-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -270,14 +250,14 @@ export function PricingPage() {
                   key={plan.name}
                   className={`relative rounded-2xl p-6 sm:p-8 transition-all duration-300 ${
                     plan.popular
-                      ? "bg-gray-900 dark:bg-[#0a0a0b] text-white shadow-2xl shadow-gray-900/20 scale-105 z-10"
-                      : "bg-card border border-border hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5"
+                       ? "bg-[#102B50] text-white border border-[#174A7E] shadow-2xl shadow-[#102B50]/20 lg:scale-[1.02] z-10"
+                       : `bg-white border ${plan.id === "premium" ? "border-[#D5A64A]/60" : "border-[#D5E0EB]"} hover:shadow-xl`
                   }`}
                 >
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                       <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
-                        Most Popular
+                        Most selected
                       </span>
                     </div>
                   )}
@@ -313,9 +293,9 @@ export function PricingPage() {
                     disabled={plan.name !== "Free" && startingTrial === plan.name}
                     className={`w-full py-6 text-base font-semibold mb-2 transition-all hover:-translate-y-0.5 ${
                       plan.popular
-                        ? "bg-white dark:bg-white/[0.04] text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:bg-white/10 shadow-xl"
+                         ? "bg-white text-[#102B50] hover:bg-cyan-50 shadow-xl"
                         : plan.ctaVariant === "default"
-                        ? "bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg shadow-[#0D7490]/25"
+                         ? plan.id === "premium" ? "bg-[#D5A64A] hover:bg-[#C69941] text-[#2F291F]" : "bg-[#2563A6] hover:bg-[#174A7E] text-white shadow-lg shadow-[#2563A6]/20"
                         : "border-border text-muted-foreground hover:bg-muted"
                     } ${plan.name !== "Free" && startingTrial === plan.name ? "opacity-70 cursor-not-allowed" : ""}`}
                     variant={plan.popular ? "default" : plan.ctaVariant}
@@ -398,8 +378,8 @@ export function PricingPage() {
                  <tbody>
                    {[
                      { name: "Core promise", starter: "Understand the market", pro: "Research better", premium: "Operate like a serious investor" },
-                     { name: "AI Analyst Chat", starter: "Basic", pro: "Advanced / Unlimited", premium: "Advanced research chat" },
-                     { name: "AI market intelligence", starter: "Essential", pro: "Advanced", premium: "Advanced" },
+                      { name: "Research assistant", starter: "Basic", pro: "Advanced / Unlimited", premium: "Advanced research chat" },
+                      { name: "Market intelligence", starter: "Essential", pro: "Advanced", premium: "Advanced" },
                      { name: "Market coverage", starter: "African + Global", pro: "African + Global", premium: "African + Global + Cross-market" },
                      { name: "Fundamentals", starter: "Basic", pro: "Advanced", premium: "Advanced" },
                      { name: "Financials & Financial Health", starter: "Basic", pro: "Advanced", premium: "Advanced" },
@@ -407,7 +387,7 @@ export function PricingPage() {
                      { name: "Technical intelligence", starter: "Basic", pro: "Advanced", premium: "Advanced" },
                      { name: "News & sentiment", starter: "Basic", pro: "Advanced", premium: "Advanced" },
                      { name: "Insider activity", starter: "Basic", pro: "Advanced", premium: "Advanced" },
-                     { name: "AI stock comparison", starter: "—", pro: "Yes", premium: "Advanced" },
+                      { name: "Company comparison", starter: "—", pro: "Yes", premium: "Advanced" },
                      { name: "Stock screening", starter: "Basic", pro: "Advanced", premium: "AI multi-market" },
                      { name: "Investment thesis", starter: "—", pro: "Yes", premium: "Advanced" },
                      { name: "Bull / Bear case analysis", starter: "—", pro: "Yes", premium: "Advanced" },
@@ -416,8 +396,8 @@ export function PricingPage() {
                      { name: "Portfolio intelligence", starter: "Basic", pro: "Advanced", premium: "Advanced" },
                      { name: "Portfolio risk analysis", starter: "—", pro: "Basic", premium: "Advanced" },
                      { name: "Alerts", starter: "Basic", pro: "Advanced", premium: "Priority" },
-                     { name: "AI research", starter: "Limited", pro: "Unlimited", premium: "Advanced" },
-                     { name: "AI-powered opportunity discovery", starter: "Basic", pro: "Advanced", premium: "Advanced multi-market" },
+                      { name: "Intelligent research", starter: "Limited", pro: "Unlimited", premium: "Advanced" },
+                      { name: "Opportunity discovery", starter: "Basic", pro: "Advanced", premium: "Advanced multi-market" },
                      { name: "Cross-market intelligence", starter: "—", pro: "Limited", premium: "Core" },
                      { name: "Human analyst insights", starter: "—", pro: "—", premium: "Yes" },
                      { name: "Analyst research", starter: "—", pro: "—", premium: "Yes" },
@@ -474,7 +454,7 @@ export function PricingPage() {
       {/* CTA */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] rounded-3xl p-12 lg:p-16 text-center overflow-hidden">
+           <div className="relative bg-[#174A7E] rounded-3xl p-12 lg:p-16 text-center overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl" />
               <div className="absolute bottom-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl" />
@@ -482,7 +462,7 @@ export function PricingPage() {
             <div className="relative z-10 max-w-2xl mx-auto">
               <h2 className="text-3xl font-bold text-white mb-4">Still have questions?</h2>
               <p className="text-lg text-white/80 mb-8">
-                Our team is here to help you find the perfect plan for your trading needs.
+                 Our team can help you choose the right level of research access.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-8 py-6 text-base font-semibold shadow-xl"
@@ -502,7 +482,7 @@ export function PricingPage() {
                       Starting...
                     </>
                   ) : (
-                    "Start Free Trial"
+                     "Start 7-Day Access"
                   )}
                 </Button>
                 <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 px-8 py-6 text-base">
@@ -514,20 +494,7 @@ export function PricingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-[#0a0a0b] text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-lg font-bold">StocksIntels</span>
-            </div>
-            <p className="text-muted-foreground text-sm">© 2026 StocksIntels. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+       <PublicBrandFooter />
     </div>
   );
 }

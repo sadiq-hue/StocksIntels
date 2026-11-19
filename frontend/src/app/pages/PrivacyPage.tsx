@@ -14,7 +14,7 @@ const sections = [
   },
   {
     title: "3. Data Storage and Security",
-    content: "All personal data is encrypted at rest using AES-256 and in transit using TLS 1.3. We are headquartered in Nairobi, Kenya, and your data is stored on servers located within compliant jurisdictions.",
+    content: "We use access controls, encrypted network connections and service-provider security controls to protect information. Data may be processed in jurisdictions where StocksIntels and its infrastructure providers operate.",
   },
   {
     title: "4. Data Sharing",
@@ -30,7 +30,7 @@ const sections = [
   },
   {
     title: "7. Contact",
-    content: "For privacy-related inquiries: support@stocksintels.com · Nairobi, Kenya",
+    content: "For privacy-related inquiries: support@stocksintels.com · Nairobi, Kenya · Delaware, United States",
   },
 ];
 

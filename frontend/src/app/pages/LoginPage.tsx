@@ -90,14 +90,14 @@ function CompactHero() {
         <img src="/logo1.jpg" alt="StocksIntels" className="size-10 rounded-xl shadow-lg shadow-black/10 ring-1 ring-white/20" />
         <h1 className="text-foreground text-xl font-bold tracking-tight">StocksIntels</h1>
       </div>
-      <p className="text-muted-foreground/70 text-xs mt-2">African &amp; Global Markets Intelligence</p>
+      <p className="text-muted-foreground/70 text-xs mt-2">Financial Intelligence. Elevated.</p>
     </div>
   );
 }
 export function LoginPage() {
   useSEO({
     title: "Login – Access Your StocksIntels Account",
-    description: "Log in to StocksIntels for AI-powered stock market intelligence, real-time prices, and portfolio tracking for African and global markets.",
+    description: "Access StocksIntels financial intelligence, company research, market analysis and portfolio tools for African and global markets.",
     canonical: "/login",
   });
 

@@ -1,27 +1,26 @@
-import { Link } from "react-router";
 import { Button } from "../components/ui/button";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { MapPin, Briefcase, ArrowRight } from "lucide-react";
 import { useSEO } from "../hooks/useSEO";
+import { PublicBrandHeader, PublicBrandFooter } from "../components/PublicBrandChrome";
 
 const roles = [
   {
     title: "Senior ML Engineer — Signal Modeling",
     location: "Nairobi, Kenya",
     type: "Full-time",
-    description: "Own the development and improvement of our AI signal models. You'll work with financial time-series data, evaluate model performance, and ship improvements that directly affect trader outcomes.",
+    description: "Work on financial time-series models, evaluation, monitoring and research systems that support StocksIntels market intelligence.",
   },
   {
     title: "Frontend Engineer — React/TypeScript",
     location: "Nairobi, Kenya",
     type: "Full-time · Remote-friendly",
-    description: "Build the trading interfaces, dashboards, and data visualizations that traders interact with every day. Strong design sensibility and comfort with real-time data are a plus.",
+    description: "Build research interfaces, financial data visualizations and responsive product experiences in React and TypeScript.",
   },
   {
     title: "Market Data Analyst",
     location: "Nairobi, Kenya",
     type: "Full-time",
-    description: "Monitor data quality across our 15+ exchange feeds, identify anomalies, and work with our data engineering team to expand coverage to new African markets.",
+    description: "Monitor data quality across African and global feeds, investigate anomalies and support responsible market coverage.",
   },
   {
     title: "Business Development — West Africa",
@@ -34,38 +33,21 @@ const roles = [
 export function CareersPage() {
   useSEO({
     title: "Careers",
-    description: "Join the StocksIntels team and help build the future of AI-powered financial intelligence for African markets.",
+    description: "Join StocksIntels and help build financial intelligence, research and analytical infrastructure for African and global markets.",
     canonical: "/careers",
-    keywords: "fintech careers, AI finance jobs, StocksIntels hiring",
+    keywords: "fintech careers, financial data jobs, market intelligence careers, StocksIntels hiring",
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="size-9 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Link to="/login">
-                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">Sign In</Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="si-landing min-h-screen bg-[#F5F8FC] text-[#202B3A]">
+      <PublicBrandHeader />
 
-      <section className="pt-32 pb-16">
+      <section className="si-grid pt-36 pb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Careers</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">Join the StocksIntels Team</h1>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-            We're building the financial intelligence layer for African markets. If you're excited about AI, financial data, and building products that matter to millions of African investors, we'd love to hear from you.
+          <p className="text-[#2563A6] font-semibold text-xs uppercase tracking-[0.22em] mb-3">Careers</p>
+          <h1 className="si-display text-5xl sm:text-7xl font-medium tracking-[-0.04em] text-[#102B50] mb-5">Build financial intelligence with us.</h1>
+          <p className="text-base leading-7 text-[#607187] max-w-3xl mx-auto">
+            We are building analytical infrastructure and research experiences for African and global markets. We value disciplined engineering, data quality and intellectual honesty.
           </p>
         </div>
       </section>
@@ -74,10 +56,10 @@ export function CareersPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-6">
             {roles.map((role) => (
-              <div key={role.title} className="bg-card border border-border rounded-2xl p-4 md:p-6 hover:shadow-lg transition-shadow">
+              <div key={role.title} className="bg-white border border-[#D5E0EB] rounded-2xl p-5 md:p-7 hover:shadow-lg transition-shadow">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-[#0D7490]/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Briefcase className="w-6 h-6 text-[#0D7490]" />
+                  <div className="w-12 h-12 bg-[#2563A6]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Briefcase className="w-6 h-6 text-[#2563A6]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-xl font-bold text-foreground mb-2">{role.title}</h2>
@@ -89,39 +71,25 @@ export function CareersPage() {
                       <span className="px-2.5 py-0.5 bg-muted rounded-full text-xs font-medium">{role.type}</span>
                     </div>
                     <p className="text-muted-foreground leading-relaxed mb-4">{role.description}</p>
-                    <Button className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white">
-                      Apply Now <ArrowRight className="ml-2 w-4 h-4" />
-                    </Button>
+                    <Button asChild className="bg-[#2563A6] hover:bg-[#174A7E] text-white"><a href={`mailto:support@stocksintels.com?subject=${encodeURIComponent(`Application: ${role.title}`)}`}>Apply Now <ArrowRight className="ml-2 w-4 h-4" /></a></Button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-12 text-center p-4 md:p-6 bg-muted rounded-2xl">
+          <div className="mt-12 text-center p-5 md:p-7 bg-[#EDF3F9] border border-[#D5E0EB] rounded-2xl">
             <h3 className="text-lg font-bold text-foreground mb-2">How to Apply</h3>
             <p className="text-muted-foreground text-sm">
               Send your CV and a short note on why you're excited about StocksIntels to{' '}
               <a href="mailto:support@stocksintels.com" className="text-[#0D7490] hover:underline">support@stocksintels.com</a>
-              {' '}with the role name in the subject line. We review every application personally.
+              {' '}with the role name in the subject line.
             </p>
           </div>
         </div>
       </section>
 
-      <footer className="bg-gray-900 dark:bg-[#0a0a0b] text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-lg font-bold">StocksIntels</span>
-            </div>
-            <p className="text-gray-500 text-sm">© 2026 StocksIntels. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      <PublicBrandFooter />
     </div>
   );
 }
