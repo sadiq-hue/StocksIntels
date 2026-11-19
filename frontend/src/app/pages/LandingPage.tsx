@@ -140,13 +140,13 @@ function QuoteRow({
   const up = Number.isFinite(change) && change >= 0;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-white/10 py-3 last:border-0">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-[#102B50]/10 py-3 last:border-0">
       <div className="min-w-0">
-        <p className="font-mono text-[11px] font-semibold tracking-[0.12em] text-cyan-200">{symbol.replace("NSE:", "")}</p>
-        <p className="truncate text-xs text-slate-300">{name}</p>
+        <p className="font-mono text-[11px] font-semibold tracking-[0.12em] text-[#174A7E]">{symbol.replace("NSE:", "")}</p>
+        <p className="truncate text-xs text-[#52647A]">{name}</p>
       </div>
-      <p className="font-mono text-xs tabular-nums text-white">{quoteText(quote, currency)}</p>
-      <p className={`min-w-14 text-right font-mono text-xs font-semibold tabular-nums ${up ? "text-emerald-300" : "text-rose-300"}`}>
+      <p className="font-mono text-xs font-semibold tabular-nums text-[#102B50]">{quoteText(quote, currency)}</p>
+      <p className={`min-w-14 text-right font-mono text-xs font-semibold tabular-nums ${up ? "text-emerald-700" : "text-rose-700"}`}>
         {changeText(quote)}
       </p>
     </div>
@@ -168,48 +168,48 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
 
   return (
     <div className="relative mx-auto w-full max-w-[720px]" aria-label="StocksIntels platform interface preview">
-      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#4386C8]/10 blur-3xl" />
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#102B50] shadow-[0_35px_80px_-36px_rgba(16,43,80,0.8)]">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
+      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#D5A64A]/20 blur-3xl" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-[#B99145]/55 bg-[#E7D6AC] shadow-[0_35px_80px_-36px_rgba(102,76,31,0.65)]">
+        <div className="flex items-center justify-between border-b border-[#102B50]/10 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-emerald-400" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">Research workspace</span>
+            <span className="size-2 rounded-full bg-[#16A085]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#102B50]">Research workspace</span>
           </div>
-          <span className="font-mono text-[10px] text-slate-400">LIVE OR DELAYED BY EXCHANGE</span>
+          <span className="font-mono text-[10px] font-semibold text-[#70521D]">LIVE OR DELAYED BY EXCHANGE</span>
         </div>
 
         <div className="grid lg:grid-cols-[1.15fr_.85fr]">
-          <div className="border-b border-white/10 p-5 sm:p-7 lg:border-b-0 lg:border-r">
+          <div className="border-b border-[#102B50]/10 p-5 sm:p-7 lg:border-b-0 lg:border-r">
             <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-200">NSE / SCOM</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">Safaricom PLC</h3>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#174A7E]">NSE / SCOM</p>
+                <h3 className="mt-2 text-xl font-semibold text-[#102B50]">Safaricom PLC</h3>
               </div>
               <div className="text-left sm:text-right">
-                <p className="font-mono text-2xl font-semibold tabular-nums text-white">{quoteText(scom, "KES")}</p>
-                <p className={`font-mono text-xs ${Number(scom?.changePercent) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                <p className="font-mono text-2xl font-semibold tabular-nums text-[#102B50]">{quoteText(scom, "KES")}</p>
+                <p className={`font-mono text-xs font-semibold ${Number(scom?.changePercent) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                   {changeText(scom)} {scomStatus.toLowerCase()}
                 </p>
               </div>
             </div>
 
-            <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10">
+            <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[#102B50]/10 bg-[#102B50]/10">
               {[
                 ["Evidence", "Multi-factor"],
                 ["Coverage", "African + global"],
                 ["Context", "Risk-aware"],
               ].map(([label, value]) => (
-                <div key={label} className="bg-[#102B50] px-3 py-4">
-                  <p className="text-[9px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-100">{value}</p>
+                <div key={label} className="bg-[#F2E6C7] px-3 py-4">
+                  <p className="text-[9px] uppercase tracking-[0.18em] text-[#7A694D]">{label}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#102B50]">{value}</p>
                 </div>
               ))}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="rounded-xl border border-[#102B50]/10 bg-white/30 p-4">
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-xs font-semibold text-white">Intelligence evidence</span>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-slate-400">Availability varies</span>
+                <span className="text-xs font-semibold text-[#102B50]">Intelligence evidence</span>
+                <span className="text-[9px] uppercase tracking-[0.18em] text-[#7A694D]">Availability varies</span>
               </div>
               <div className="space-y-3">
                 {[
@@ -219,8 +219,8 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
                   ["Macro & news", 66],
                 ].map(([label, width]) => (
                   <div key={label as string}>
-                    <div className="mb-1 flex justify-between text-[10px] text-slate-300"><span>{label}</span><span>research layer</span></div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="mb-1 flex justify-between text-[10px] text-[#52647A]"><span>{label}</span><span>research layer</span></div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-[#102B50]/10">
                       <div className="h-full rounded-full bg-gradient-to-r from-[#4386C8] to-[#16A085]" style={{ width: `${width}%` }} />
                     </div>
                   </div>
@@ -231,18 +231,18 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
 
           <div className="p-5 sm:p-7">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Market desk</h3>
-              <Activity className="size-4 text-cyan-300" />
+              <h3 className="text-sm font-semibold text-[#102B50]">Market desk</h3>
+              <Activity className="size-4 text-[#2563A6]" />
             </div>
             <QuoteRow symbol="NSE:EQTY" name="Equity Group" currency="KES" quotes={quotes} />
             <QuoteRow symbol="AAPL" name="Apple Inc." currency="$" quotes={quotes} />
             <QuoteRow symbol="NVDA" name="NVIDIA" currency="$" quotes={quotes} />
             <QuoteRow symbol="MSFT" name="Microsoft" currency="$" quotes={quotes} />
-            <div className="mt-5 rounded-xl border border-[#D5A64A]/30 bg-[#D5A64A]/[0.08] p-4">
+            <div className="mt-5 rounded-xl border border-[#102B50]/20 bg-[#102B50] p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#E1BE72]">Research principle</p>
-              <p className="mt-2 text-xs leading-5 text-slate-300">No single indicator explains a market. StocksIntels brings the evidence together.</p>
+              <p className="mt-2 text-xs leading-5 text-slate-200">No single indicator explains a market. StocksIntels brings the evidence together.</p>
             </div>
-            {error && <p className="mt-3 text-[10px] text-amber-200">Quote feed temporarily unavailable. Platform preview remains available.</p>}
+            {error && <p className="mt-3 text-[10px] text-[#7B4F13]">Quote feed temporarily unavailable. Platform preview remains available.</p>}
           </div>
         </div>
       </div>
