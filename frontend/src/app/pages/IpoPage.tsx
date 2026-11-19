@@ -99,7 +99,7 @@ const statusColors: Record<string, string> = {
 const fmtPct = (v: number | null | undefined, dp = 1) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(dp)}%`);
 
 function StatusBadge({ status }: { status: string }) {
-  const label = status === "info" ? "" : status.charAt(0).toUpperCase() + status.slice(1);
+  const label = status === "info" ? "" : status === "current" ? "Trading Today" : status.charAt(0).toUpperCase() + status.slice(1);
   return <Badge className={`text-[10px] px-2 py-0.5 font-medium border ${statusColors[status] || statusColors.info}`}>{label}</Badge>;
 }
 

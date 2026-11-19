@@ -93,7 +93,7 @@ test("dashboard balances market cards and recent IPOs", async ({ browser }) => {
   await expect(combinedMarketCard.getByRole("heading", { name: "Recent IPOs" })).toBeVisible();
   await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link")).toHaveCount(6);
   await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link").first()).toContainText("Anthropic, PBC");
-  await expect(combinedMarketCard.getByText("Current IPO")).toBeVisible();
+  await expect(combinedMarketCard.getByText("Trading Today")).toBeVisible();
   const marketBox = await combinedMarketCard.boundingBox();
   const intelligenceBox = await intelligenceCard.boundingBox();
   expect(marketBox?.x || 0).toBeLessThan(intelligenceBox?.x || 0);

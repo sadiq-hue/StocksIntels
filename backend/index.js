@@ -9172,13 +9172,13 @@ async function _loadIpoHub() {
     if (sec) { i.sec = sec; if (!i.status) i.status = _normalizeIpoStatus(i.listing_date, sec.hasIpoFiling); }
   }));
 
-  // Attach current prices for listed names (so "since IPO" works).
-  const listed = merged.filter((i) => i.status === 'listed' && i.ticker);
-  if (listed.length) {
+  // Attach current prices for listed names and same-day debuts.
+  const trading = merged.filter((i) => ['current', 'listed'].includes(i.status) && i.ticker);
+  if (trading.length) {
     try {
       const marketService = require('./marketService');
-      const quotes = await marketService.getQuotesBatch(listed.map((i) => i.ticker));
-      for (const i of listed) {
+      const quotes = await marketService.getQuotesBatch(trading.map((i) => i.ticker));
+      for (const i of trading) {
         const q = (quotes || {})[i.ticker];
         if (!q) continue;
         i.current_price = q.price ?? i.current_price;
