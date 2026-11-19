@@ -81,6 +81,19 @@ function normalizeMover(s: any) {
 }
 
 const MARKET_LABEL: Record<string, string> = { nse: "NSE", ngx: "NGX", jse: "JSE", global: "Global" };
+const DASHBOARD_AFRICAN_INDEX_ORDER = [
+  "NSE:NSEASI",
+  "NGX:ASI",
+  "^J203.JO",
+  "NSE:NSE20",
+  "NGX:NGX30",
+  "^J200.JO",
+];
+const INDEX_MARKET_BADGE: Record<string, string> = {
+  NSE: "bg-[#0D7490]/10 text-[#0D7490]",
+  NGX: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  JSE: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+};
 
 function parseVolume(vol: string): number {
   const num = parseFloat(vol.replace("M", "").replace("K", "").replace("B", ""));
@@ -453,8 +466,10 @@ export function DashboardPage() {
     return built;
   }, [activeStocks, watchlistItems, watchlistQuotes]);
 
-  const nseIndices = liveIndices.filter(i => i.market === "NSE");
-  const globalIndices = liveIndices.filter(i => i.market === "Global");
+  const africanIndices = DASHBOARD_AFRICAN_INDEX_ORDER
+    .map(symbol => liveIndices.find(index => index.symbol === symbol))
+    .filter(Boolean);
+  const globalIndices = liveIndices.filter(index => index.market === "Global").slice(0, 6);
 
   const [newsItems, setNewsItems] = useState<NewsArticle[]>(fallbackNews);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -823,32 +838,35 @@ export function DashboardPage() {
       )}
 
       {/* Market Indices */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" data-tour="market-indices">
-        <Card className="border shadow-sm p-5">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3" data-tour="market-indices">
+        <Card className="h-fit gap-0 border p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
                 <BarChart3 className="size-4 text-[#0D7490]" />
               </div>
-              <h3 className="text-sm font-semibold text-foreground">NSE Indices</h3>
+              <h3 className="text-sm font-semibold text-foreground">African Indices</h3>
             </div>
             <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               All markets <ChevronRight className="size-3.5" />
             </Link>
           </div>
-          <div className="space-y-3">
-            {nseIndices.length === 0 && (
+          <div className="space-y-2">
+            {africanIndices.length === 0 && (
               <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
             )}
-            {nseIndices.map((index) => (
-              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">{index.name}</span>
-                    <span className="text-[11px] text-muted-foreground">Vol: {index.volume}</span>
+            {africanIndices.map((index) => (
+              <div key={index.symbol} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
+                <div className="min-w-0 pr-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span title={index.name} className="truncate text-sm font-semibold text-foreground">{index.name}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${INDEX_MARKET_BADGE[index.market] || "bg-muted text-muted-foreground"}`}>
+                      {index.market}
+                    </span>
                   </div>
+                  {index.volume && index.volume !== "0" && <div className="mt-0.5 text-[10px] text-muted-foreground">Volume {index.volume}</div>}
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <div className="text-sm font-bold text-foreground">{index.value}</div>
                   <div className={`flex items-center gap-0.5 justify-end text-xs font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {index.isPositive ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
@@ -860,7 +878,7 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        <Card className="border shadow-sm p-5">
+        <Card className="h-fit gap-0 border p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
@@ -872,19 +890,17 @@ export function DashboardPage() {
               View all <ChevronRight className="size-3.5" />
             </Link>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {globalIndices.length === 0 && (
               <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
             )}
             {globalIndices.map((index) => (
-              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">{index.name}</span>
-                    <span className="text-[11px] text-muted-foreground">Vol: {index.volume}</span>
-                  </div>
+              <div key={index.symbol} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
+                <div className="min-w-0 pr-3">
+                  <span title={index.name} className="block truncate text-sm font-semibold text-foreground">{index.name}</span>
+                  {index.volume && index.volume !== "0" && <div className="mt-0.5 text-[10px] text-muted-foreground">Volume {index.volume}</div>}
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <div className="text-sm font-bold text-foreground">{index.value}</div>
                   <div className={`flex items-center gap-0.5 justify-end text-xs font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {index.isPositive ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
@@ -896,28 +912,33 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        <Card className="border shadow-sm p-5 lg:col-span-1" data-tour="sector-performance">
+        <Card className="h-fit gap-0 border p-5 shadow-sm lg:col-span-1" data-tour="sector-performance">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Activity className="size-4 text-[#0D7490]" />
+              <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                <Activity className="size-4 text-emerald-600" />
+              </div>
               <h3 className="text-sm font-semibold text-foreground">Sector Performance</h3>
             </div>
-            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
+            <Link to="/app/sectors" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               All sectors <ChevronRight className="size-3.5" />
             </Link>
           </div>
           <div className="space-y-2">
+            {sectorData.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live sector data available</div>
+            )}
             {sectorData.slice(0, 6).map((s) => (
-              <div key={s.sector} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-                <div className="flex items-center gap-2">
-                  <div className={`size-2 rounded-full ${s.avgChange >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">{s.sector}</span>
+              <div key={s.sector} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
+                <div className="flex min-w-0 items-center gap-2 pr-3">
+                  <div className={`size-2 shrink-0 rounded-full ${s.avgChange >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span title={s.sector} className="truncate text-sm font-semibold text-foreground">{s.sector}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold ${s.avgChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                <div className="shrink-0 text-right">
+                  <div className={`text-xs font-semibold ${s.avgChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                     {s.avgChange >= 0 ? "+" : ""}{s.avgChange.toFixed(2)}%
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">({s.count})</span>
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">{s.count} {s.count === 1 ? "stock" : "stocks"}</div>
                 </div>
               </div>
             ))}

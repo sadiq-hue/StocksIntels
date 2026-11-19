@@ -4,13 +4,13 @@ registerTour("dashboard", [
   {
     target: "[data-tour='portfolio-cards']",
     title: "Your Portfolio at a Glance",
-    content: "These cards show your total investment value, split between the Nairobi Securities Exchange (NSE) and global markets. Holdings = how many different stocks you own. Market Intelligence = automated buy/sell suggestions from the engine.",
+    content: "These cards show your total investment value, split between African exchanges and global markets. Holdings = how many different stocks you own. Market Intelligence = automated buy/sell suggestions from the engine.",
     position: "bottom",
   },
   {
     target: "[data-tour='market-indices']",
     title: "Market Indices",
-    content: "Track how the overall market is performing. The NSE 20 tracks Kenya's top companies. The S&P 500 tracks America's 500 largest. Green numbers mean the market is up today, red means it's down.",
+    content: "Track major African and global benchmarks, including the NSE All Share, NGX All Share, FTSE/JSE All Share and S&P 500. Green numbers mean the market is up today, red means it's down.",
     position: "bottom",
   },
   {
