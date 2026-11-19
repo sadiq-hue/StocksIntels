@@ -22,10 +22,11 @@ const dimensions = [
 
 export function AboutPage() {
   useSEO({
-    title: "About StocksIntels",
-    description: "StocksIntels is a financial intelligence company combining advanced technology, multi-dimensional analysis and human expertise for African and global markets.",
+    title: "About StocksIntels | African & Global Market Intelligence",
+    absoluteTitle: true,
+    description: "Learn how StocksIntels combines Super Intelligence, company financials, market analysis and human analyst expertise to deepen research across African and global equity markets.",
     canonical: "/about",
-    keywords: "StocksIntels, Super Intelligence, African financial intelligence, market research, Nairobi fintech, Delaware fintech",
+    keywords: "StocksIntels, Super Intelligence, African market intelligence, global equity research, company financials, Nairobi fintech, Delaware fintech",
   });
 
   return (

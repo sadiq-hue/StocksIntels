@@ -35,9 +35,9 @@ const sections = [
 export function SecurityPage() {
   useSEO({
     title: "Security",
-    description: "StocksIntels security practices. Enterprise-grade security with encryption, Cloudflare protection, and secure authentication.",
+    description: "Learn about StocksIntels security practices for protecting financial research accounts, personal information and platform data.",
     canonical: "/security",
-    keywords: "security, data encryption, Cloudflare protection, secure platform",
+    keywords: "StocksIntels security, data protection, secure financial research platform",
   });
 
   return (

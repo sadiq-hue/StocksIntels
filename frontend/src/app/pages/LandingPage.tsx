@@ -252,10 +252,11 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
 
 export function LandingPage() {
   useSEO({
-    title: "Financial Intelligence. Elevated.",
-    description: "StocksIntels brings together advanced technology, multi-dimensional financial analysis and human expertise for African and global markets.",
+    title: "StocksIntels | Financial Market Intelligence for Africa & Global Markets",
+    absoluteTitle: true,
+    description: "Discover StocksIntels, a Super Intelligence-powered financial research platform combining market analysis, company financials, investment insights and human analyst expertise across African and global equity markets.",
     canonical: "/",
-    keywords: "financial intelligence, African markets, NSE, NGX, JSE, market research, company analysis, StocksIntels",
+    keywords: "financial market intelligence, African equity markets, global equity markets, company financials, investment research, Super Intelligence, StocksIntels",
   });
 
   const { quotes, error: quoteError } = useHeroQuotes();

@@ -32,8 +32,9 @@ const roles = [
 
 export function CareersPage() {
   useSEO({
-    title: "Careers",
-    description: "Join StocksIntels and help build financial intelligence, research and analytical infrastructure for African and global markets.",
+    title: "Careers at StocksIntels | Build Financial Intelligence",
+    absoluteTitle: true,
+    description: "Join StocksIntels and help build Super Intelligence-powered financial research, data and analytical infrastructure for African and global equity markets.",
     canonical: "/careers",
     keywords: "fintech careers, financial data jobs, market intelligence careers, StocksIntels hiring",
   });

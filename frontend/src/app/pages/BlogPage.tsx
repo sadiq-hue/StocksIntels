@@ -54,10 +54,11 @@ function BlogList() {
   const [loading, setLoading] = useState(true);
 
   useSEO({
-    title: "Blog",
-    description: "Latest insights, analysis, and market intelligence from African and global stock markets.",
+    title: "StocksIntels Insights | African & Global Market Research",
+    absoluteTitle: true,
+    description: "Read StocksIntels research and market insights covering company performance, financial markets and investment context across African and global equities.",
     canonical: "/blog",
-    keywords: "stock market blog, African markets news, NSE Kenya analysis, market intelligence",
+    keywords: "African market research, global equity insights, company analysis, financial market intelligence, StocksIntels insights",
   });
 
   useEffect(() => {

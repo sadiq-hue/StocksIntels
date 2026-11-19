@@ -50,8 +50,9 @@ function CompactHero() {
 }
 export function LoginPage() {
   useSEO({
-    title: "Login – Access Your StocksIntels Account",
-    description: "Access StocksIntels financial intelligence, company research, market analysis and portfolio tools for African and global markets.",
+    title: "StocksIntels Login | Access Your Research Workspace",
+    absoluteTitle: true,
+    description: "Log in to StocksIntels to access financial market intelligence, company financials, investment insights, portfolio tools and research across African and global markets.",
     canonical: "/login",
   });
 

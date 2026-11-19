@@ -308,6 +308,94 @@ app.use((req, res, next) => {
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
 const serveFrontend = fs.existsSync(frontendDist);
 if (serveFrontend) {
+  const frontendIndexHtml = fs.readFileSync(path.join(frontendDist, 'index.html'), 'utf8');
+  const publicPageSeo = {
+    '/': {
+      title: 'StocksIntels | Financial Market Intelligence for Africa & Global Markets',
+      description: 'Discover StocksIntels, a Super Intelligence-powered financial research platform combining market analysis, company financials, investment insights and human analyst expertise across African and global equity markets.',
+      keywords: 'financial market intelligence, African equity markets, global equity markets, company financials, investment research, Super Intelligence, StocksIntels',
+    },
+    '/about': {
+      title: 'About StocksIntels | African & Global Market Intelligence',
+      description: 'Learn how StocksIntels combines Super Intelligence, company financials, market analysis and human analyst expertise to deepen research across African and global equity markets.',
+      keywords: 'StocksIntels, Super Intelligence, African market intelligence, global equity research, company financials',
+    },
+    '/pricing': {
+      title: 'StocksIntels Pricing | Financial Intelligence Plans',
+      description: 'Compare StocksIntels Core, Pro and Premium plans for Super Intelligence-powered market research, company financials, investment insights and portfolio tools.',
+      keywords: 'financial market intelligence pricing, investment research plans, African equity research, portfolio analysis tools',
+    },
+    '/blog': {
+      title: 'StocksIntels Insights | African & Global Market Research',
+      description: 'Read StocksIntels research and market insights covering company performance, financial markets and investment context across African and global equities.',
+      keywords: 'African market research, global equity insights, company analysis, financial market intelligence',
+    },
+    '/careers': {
+      title: 'Careers at StocksIntels | Build Financial Intelligence',
+      description: 'Join StocksIntels and help build Super Intelligence-powered financial research, data and analytical infrastructure for African and global equity markets.',
+      keywords: 'fintech careers, financial data jobs, market intelligence careers, StocksIntels hiring',
+    },
+    '/login': {
+      title: 'StocksIntels Login | Access Your Research Workspace',
+      description: 'Log in to StocksIntels to access financial market intelligence, company financials, investment insights, portfolio tools and research across African and global markets.',
+      keywords: 'StocksIntels login, financial research platform, market intelligence workspace',
+    },
+    '/privacy': {
+      title: 'Privacy Policy | StocksIntels',
+      description: 'StocksIntels privacy policy. Learn how we collect, use and protect your personal and financial data.',
+      keywords: 'StocksIntels privacy policy, data protection, privacy',
+    },
+    '/terms': {
+      title: 'Terms of Service | StocksIntels',
+      description: 'Review the conditions governing your use of the StocksIntels financial intelligence, research and analytics platform.',
+      keywords: 'StocksIntels terms of service, user agreement, platform terms',
+    },
+    '/security': {
+      title: 'Security | StocksIntels',
+      description: 'Learn about StocksIntels security practices for protecting financial research accounts, personal information and platform data.',
+      keywords: 'StocksIntels security, data protection, secure financial research platform',
+    },
+    '/disclaimer': {
+      title: 'Financial Disclaimer | StocksIntels',
+      description: 'Read important StocksIntels disclosures covering automated analysis, financial research, investment risk and market-data accuracy.',
+      keywords: 'StocksIntels disclaimer, financial research disclaimer, investment risk',
+    },
+  };
+
+  const escapeHtml = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const renderPublicPage = (seo, routePath) => {
+    const title = escapeHtml(seo.title);
+    const description = escapeHtml(seo.description);
+    const keywords = escapeHtml(seo.keywords);
+    const canonical = escapeHtml(routePath === '/' ? 'https://stocksintels.com' : `https://stocksintels.com${routePath}`);
+    return frontendIndexHtml
+      .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
+      .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${description}" />`)
+      .replace(/<meta name="keywords"[^>]*>/i, `<meta name="keywords" content="${keywords}" />`)
+      .replace(/<link rel="canonical"[^>]*>/i, `<link rel="canonical" href="${canonical}" />`)
+      .replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${canonical}" />`)
+      .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${title}" />`)
+      .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${description}" />`)
+      .replace(/<meta property="og:image:alt"[^>]*>/i, `<meta property="og:image:alt" content="${title}" />`)
+      .replace(/<meta name="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${title}" />`)
+      .replace(/<meta name="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${description}" />`);
+  };
+
+  // Give crawlers route-specific metadata before the client-side app hydrates.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const routePath = req.path.length > 1 ? req.path.replace(/\/+$/, '') : '/';
+    const seo = publicPageSeo[routePath];
+    if (!seo) return next();
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    return res.type('html').send(renderPublicPage(seo, routePath));
+  });
+
   // Cache rules for the SPA: index.html must never be cached for long (or the
   // browser/CDN keeps an old copy that references purged hashed chunks -> 404).
   // The hashed /assets/* bundles are immutable, so they can be cached forever.

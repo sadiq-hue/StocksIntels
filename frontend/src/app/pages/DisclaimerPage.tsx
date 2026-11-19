@@ -6,10 +6,10 @@ import { useSEO } from "../hooks/useSEO";
 
 export function DisclaimerPage() {
   useSEO({
-    title: "Disclaimer",
-    description: "StocksIntels disclaimer. Important disclosures covering automated analysis, financial research, investment risk and market-data accuracy.",
+    title: "Financial Disclaimer",
+    description: "Read important StocksIntels disclosures covering automated analysis, financial research, investment risk and market-data accuracy.",
     canonical: "/disclaimer",
-    keywords: "disclaimer, financial disclaimer, investment warning",
+    keywords: "StocksIntels disclaimer, financial research disclaimer, investment risk",
   });
 
   return (

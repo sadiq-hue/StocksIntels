@@ -37,9 +37,9 @@ const sections = [
 export function PrivacyPage() {
   useSEO({
     title: "Privacy Policy",
-    description: "StocksIntels privacy policy. Learn how we collect, use, and protect your personal and financial data.",
+    description: "StocksIntels privacy policy. Learn how we collect, use and protect your personal and financial data.",
     canonical: "/privacy",
-    keywords: "privacy policy, data protection, GDPR compliance",
+    keywords: "StocksIntels privacy policy, data protection, privacy",
   });
 
   return (

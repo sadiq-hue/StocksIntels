@@ -68,10 +68,11 @@ const faqs = [
 
 export function PricingPage() {
   useSEO({
-    title: "Pricing – StocksIntels Investment Plans",
-    description: "Choose Core, Pro, or Premium access to StocksIntels financial intelligence, multi-dimensional analysis and research tools. Starting at $79/year.",
+    title: "StocksIntels Pricing | Financial Intelligence Plans",
+    absoluteTitle: true,
+    description: "Compare StocksIntels Core, Pro and Premium plans for Super Intelligence-powered market research, company financials, investment insights and portfolio tools.",
     canonical: "/pricing",
-    keywords: "stock market intelligence pricing, investment research plans, AI stock analysis, portfolio management tools, stock screening software",
+    keywords: "financial market intelligence pricing, investment research plans, African equity research, portfolio analysis tools, company financials",
   });
 
   useEffect(() => {

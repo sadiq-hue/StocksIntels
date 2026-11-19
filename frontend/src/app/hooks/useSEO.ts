@@ -3,6 +3,7 @@ import { useEffect } from "react";
 export interface SEOProps {
   title: string;
   description: string;
+  absoluteTitle?: boolean;
   canonical?: string;
   ogImage?: string;
   ogType?: string;
@@ -16,13 +17,14 @@ const BASE_URL = "https://stocksintels.com";
 export function useSEO({
   title,
   description,
+  absoluteTitle = false,
   canonical,
   ogImage,
   ogType = "website",
   keywords,
 }: SEOProps) {
-  const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
-  const url = canonical ? `${BASE_URL}${canonical}` : BASE_URL;
+  const fullTitle = absoluteTitle || title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
+  const url = !canonical || canonical === "/" ? BASE_URL : `${BASE_URL}${canonical}`;
   const image = ogImage || DEFAULT_IMAGE;
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function useSEO({
     setMeta("property", "og:url", url);
     setMeta("property", "og:type", ogType);
     setMeta("property", "og:image", image);
+    setMeta("property", "og:image:alt", `${fullTitle} logo`);
     setMeta("property", "og:site_name", SITE_NAME);
     setMeta("name", "twitter:title", fullTitle);
     setMeta("name", "twitter:description", description);
