@@ -168,8 +168,8 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
 
   return (
     <div className="relative mx-auto w-full max-w-[720px]" aria-label="StocksIntels platform interface preview">
-      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#D5A64A]/20 blur-3xl" />
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-[#B99145]/55 bg-[#E7D6AC] shadow-[0_35px_80px_-36px_rgba(102,76,31,0.65)]">
+      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#D5A64A]/10 blur-3xl" />
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-[#D9C58F]/65 bg-[#F7F1E3] shadow-[0_35px_80px_-40px_rgba(102,76,31,0.38)]">
         <div className="flex items-center justify-between border-b border-[#102B50]/10 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-[#16A085]" />
@@ -199,7 +199,7 @@ function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStoc
                 ["Coverage", "African + global"],
                 ["Context", "Risk-aware"],
               ].map(([label, value]) => (
-                <div key={label} className="bg-[#F2E6C7] px-3 py-4">
+                <div key={label} className="bg-[#FCF8EE] px-3 py-4">
                   <p className="text-[9px] uppercase tracking-[0.18em] text-[#7A694D]">{label}</p>
                   <p className="mt-1 text-xs font-semibold text-[#102B50]">{value}</p>
                 </div>
