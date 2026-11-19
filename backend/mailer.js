@@ -31,7 +31,7 @@ async function getTransporter() {
         pass: process.env.SMTP_PASS,
       },
     });
-  } else {
+  } else if (process.env.NODE_ENV !== 'production') {
     const testAccount = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
@@ -43,6 +43,8 @@ async function getTransporter() {
       },
     });
     console.log('[MAILER] Using Ethereal test account:', testAccount.user);
+  } else {
+    throw new Error('No production email provider configured (set RESEND_API_KEY, ENSEND_PROJECT_SECRET, or SMTP_HOST)');
   }
 
   await transporter.verify();

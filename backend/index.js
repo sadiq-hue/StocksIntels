@@ -777,6 +777,25 @@ app.post('/api/testimonials', async (req, res) => {
   }
 });
 
+async function storeAndSendOtp(email, code, type, expiresAt, sender) {
+  await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, type]);
+  await pool.query(
+    'INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)',
+    [email, code, type, expiresAt]
+  );
+  try {
+    await sender(email, code);
+  } catch (error) {
+    // Never leave an unsent code behind: cooldown checks must not tell the user
+    // to check their inbox for a message the provider rejected.
+    await pool.query(
+      'DELETE FROM otp_codes WHERE email = $1 AND code = $2 AND type = $3',
+      [email, code, type]
+    ).catch(() => {});
+    throw error;
+  }
+}
+
 // Admin OTP login routes (no auth required)
 app.post('/api/admin/send-otp', async (req, res) => {
   try {
@@ -801,9 +820,7 @@ app.post('/api/admin/send-otp', async (req, res) => {
     }
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'admin_login']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'admin_login', expiresAt]);
-    await sendOtpEmail(email, code).catch(e => console.error('[MAILER] admin send-otp failed:', e.message));
+    await storeAndSendOtp(email, code, 'admin_login', expiresAt, sendOtpEmail);
     await logAdminAction(user.rows[0].id, email, 'otp_sent', ip, ua, null, true);
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
   } catch (error) {
@@ -1457,9 +1474,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
     const { email } = user.rows[0];
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
-    await sendResetCode(email, code).catch(e => console.error('[MAILER] admin reset-password failed:', e.message));
+    await storeAndSendOtp(email, code, 'password_reset', expiresAt, sendResetCode);
     res.json({ message: 'Password reset email sent' });
   } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
@@ -2945,10 +2960,8 @@ app.post('/api/auth/send-verification-code', verifyTurnstile, async (req, res) =
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'email_verify']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'email_verify', expiresAt]);
+    await storeAndSendOtp(email, code, 'email_verify', expiresAt, sendVerificationEmail);
     if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} verification code: ${code}`);
-    await sendVerificationEmail(email, code).catch(e => console.error('[MAILER] send-verification-code failed:', e.message));
     res.json({ message: 'Verification code sent to email', expiresIn: 600 });
   } catch (error) {
     console.error('send-verification-code error:', error.message);
@@ -3218,11 +3231,8 @@ app.post('/api/auth/send-otp', async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login', expiresAt]);
+    await storeAndSendOtp(email, code, 'login', expiresAt, sendOtpEmail);
     if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} login code: ${code}`);
-    // Send email in the background so the UI responds immediately even if the mailer is slow/fails
-    sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
   } catch (error) {
     console.error('send-otp error:', error.message);
@@ -3291,11 +3301,8 @@ app.post('/api/auth/login-request-otp', verifyTurnstile, async (req, res) => {
     if (recentOtp.rows.length) return res.json({ message: 'A login code was just sent. Please check your inbox and wait a minute before requesting another.', expiresIn: 600, cooldown: true });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login_password', expiresAt]);
+    await storeAndSendOtp(email, code, 'login_password', expiresAt, sendOtpEmail);
     if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} login code: ${code}`);
-    // Send email in the background so the UI responds immediately even if the mailer is slow/fails
-    sendOtpEmail(email, code).catch(e => console.error('[MAILER] login-request-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
   } catch (error) {
     console.error('login-request-otp error:', error && error.stack ? error.stack : error);
@@ -3447,9 +3454,7 @@ app.post('/api/auth/forgot-password', verifyTurnstile, async (req, res) => {
     if (recentReset.rows.length) return res.json({ message: 'A reset code was just sent. Please check your inbox and wait a minute before requesting another.', expiresIn: 900, cooldown: true });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
-    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
-    await sendResetCode(email, code).catch(e => console.error('[MAILER] forgot-password failed:', e.message));
+    await storeAndSendOtp(email, code, 'password_reset', expiresAt, sendResetCode);
     res.json({ message: 'Reset code sent to email', expiresIn: 900 });
   } catch (error) {
     console.error('forgot-password error:', error.message);
