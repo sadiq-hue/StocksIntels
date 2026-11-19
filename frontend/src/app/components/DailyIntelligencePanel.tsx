@@ -74,7 +74,7 @@ function IndexTile({ idx }: { idx: BriefIndex }) {
   );
 }
 
-export function DailyIntelligencePanel() {
+export function DailyIntelligencePanel({ className = "", contentClassName = "" }: { className?: string; contentClassName?: string }) {
   const [data, setData] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,8 +109,8 @@ export function DailyIntelligencePanel() {
 
   if (loading && !data) {
     return (
-      <Card className="p-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Card className={`gap-0 p-4 ${className}`}>
+        <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> Loading today&apos;s market intelligence…
         </div>
       </Card>
@@ -119,8 +119,8 @@ export function DailyIntelligencePanel() {
 
   if (error && !data) {
     return (
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <Card className={`gap-0 p-4 ${className}`}>
+        <div className="flex h-full flex-wrap items-center justify-center gap-2">
           <p className="flex-1 text-sm text-red-600">{error}</p>
           <Button variant="outline" size="sm" onClick={() => load(true)}>
             <RefreshCw className="size-3.5" /> Retry
@@ -137,7 +137,7 @@ export function DailyIntelligencePanel() {
   const movers = (data.yesterdayTopMovers || []).filter((m) => m && m.symbol && m.symbol !== "--");
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={`gap-0 overflow-hidden ${className}`}>
       <div className="border-b border-border bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] px-4 py-3 text-white">
         <div className="flex flex-wrap items-center gap-2">
           <Newspaper className="size-4" />
@@ -163,7 +163,7 @@ export function DailyIntelligencePanel() {
         )}
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className={`space-y-4 p-4 ${contentClassName}`}>
         {/* Index strip */}
         {(africa.length > 0 || global.length > 0) && (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

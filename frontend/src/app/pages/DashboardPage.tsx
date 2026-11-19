@@ -1192,9 +1192,9 @@ export function DashboardPage() {
       </div>
 
       {/* Watchlist, active names and new listings share one compact market surface. */}
-      <div className="space-y-6">
-        <Card className="gap-0 border p-5 shadow-sm">
-          <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <Card className="gap-0 border p-5 shadow-sm xl:h-[900px] xl:overflow-y-auto">
+          <div className="grid gap-6">
             <section aria-labelledby="dashboard-watchlist-heading">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -1252,7 +1252,7 @@ export function DashboardPage() {
               </div>
             </section>
 
-            <section aria-labelledby="dashboard-ipos-heading" className="border-t border-border pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+            <section aria-labelledby="dashboard-ipos-heading" className="border-t border-border pt-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
@@ -1306,8 +1306,7 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        {/* The digest narrative is full width so it no longer forces a sparse sibling card to its height. */}
-        <DailyIntelligencePanel />
+        <DailyIntelligencePanel className="xl:h-[900px]" contentClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto" />
 
         {/*
         <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20" data-tour="ai-signals-section">

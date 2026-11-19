@@ -50,8 +50,9 @@ const recentIpos = ["WWB", "VVVV", "JAN", "RACC", "BULL", "FIGR"].map((ticker, i
   since_ipo_pct: index % 2 ? -4.5 - index : 8.5 + index,
 }));
 
-test("dashboard balances market cards and recent IPOs", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
+test("dashboard balances market cards and recent IPOs", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = [];
@@ -88,9 +89,15 @@ test("dashboard balances market cards and recent IPOs", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "NSE Indices" })).toHaveCount(0);
 
   const combinedMarketCard = page.getByRole("heading", { name: "Watchlist / Most Active" }).locator("xpath=ancestor::div[@data-slot='card']");
+  const intelligenceCard = page.getByRole("heading", { name: "Today's Market Intelligence" }).locator("xpath=ancestor::div[@data-slot='card']");
   await expect(combinedMarketCard.getByRole("heading", { name: "Recent IPOs" })).toBeVisible();
   await expect(combinedMarketCard.getByTestId("recent-ipos-list").getByRole("link")).toHaveCount(6);
-  expect((await combinedMarketCard.boundingBox())?.height || 0).toBeLessThan(650);
+  const marketBox = await combinedMarketCard.boundingBox();
+  const intelligenceBox = await intelligenceCard.boundingBox();
+  expect(marketBox?.x || 0).toBeLessThan(intelligenceBox?.x || 0);
+  expect(Math.abs((marketBox?.y || 0) - (intelligenceBox?.y || 0))).toBeLessThanOrEqual(2);
+  expect(Math.abs((marketBox?.height || 0) - (intelligenceBox?.height || 0))).toBeLessThanOrEqual(2);
+  expect(marketBox?.height || 0).toBeLessThanOrEqual(902);
 
   const heights = await Promise.all([africanCard, globalCard, sectorCard].map(async card => (await card.boundingBox())?.height || 0));
   expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(24);
@@ -98,4 +105,5 @@ test("dashboard balances market cards and recent IPOs", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   const pageWidth = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
   expect(pageWidth).toBeLessThanOrEqual(377);
+  await context.close();
 });
