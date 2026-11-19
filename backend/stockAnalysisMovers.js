@@ -99,7 +99,7 @@ function loadCache() {
         gainers: parsed.gainers || [],
         losers: parsed.losers || [],
         premarket: parsed.premarket || [],
-        afterhours: parsed.afterhours || [],
+        afterhours: (parsed.afterhours || []).filter((r) => r?.ticker),
         at: parsed.at || 0,
       };
     }
@@ -117,7 +117,7 @@ const SECTION_URL = {
   gainers: 'https://stockanalysis.com/markets/gainers/',
   losers: 'https://stockanalysis.com/markets/losers/',
   premarket: 'https://stockanalysis.com/markets/premarket/',
-  afterhours: 'https://stockanalysis.com/markets/after-hours/',
+  afterhours: 'https://stockanalysis.com/markets/afterhours/',
 };
 
 async function fetchList(kind) {

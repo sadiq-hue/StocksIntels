@@ -2721,9 +2721,9 @@ async function fetchRealTopMovers() {
     gainers: [...global.gainers, ...africaGainers].sort((a, b) => b.changePercent - a.changePercent).slice(0, 50),
     losers: [...global.losers, ...africaLosers].sort((a, b) => a.changePercent - b.changePercent).slice(0, 50),
   };
-  // Premarket comes from stockanalysis.com (works via renderer). After Hours is
-  // Cloudflare-blocked server-side, so build it from Yahoo v7 post-market prints
-  // for the movers universe (real after-hours data, micro-cap inclusive).
+// Premarket and After Hours use the matching stockanalysis.com tables. If the
+  // after-hours scrape is blocked, fall back to real Yahoo v7 post-market prints
+  // for the same movers universe and persist the last successful session.
   if (!global.premarket || !global.afterhours) {
     try {
       const saMovers = require('./stockAnalysisMovers');
@@ -2737,32 +2737,34 @@ async function fetchRealTopMovers() {
         };
       };
       global.premarket = (await saMovers.getPremarket(30)).map(mapRow);
-      if (global.premarket.length) {
+      global.afterhours = (await saMovers.getAfterHours(30)).map(mapRow);
+
+      if (!global.afterhours.length) {
         const { fetchV7Quotes } = require('./yahooService');
-        const universe = [...new Set([...combined.gainers, ...combined.losers].map(r => r.ticker))];
+        const baseRows = [...global.gainers, ...global.losers];
+        const universe = [...new Set(baseRows.map((r) => r.ticker))];
         const v7 = await fetchV7Quotes(universe);
-        const nameMap = Object.fromEntries([...combined.gainers, ...combined.losers].map(r => [r.ticker.toUpperCase(), r.name]));
-        const mapPost = (q) => {
-          const c = Number(q.postMarketChangePercent ?? q.preMarketChangePercent) || 0;
-          const price = Number(q.postMarketPrice ?? q.preMarketPrice) || 0;
+        const ah = baseRows.map((row) => {
+          const q = v7[row.ticker.toUpperCase()];
+          if (!q) return null;
+          const c = Number(q.postMarketChangePercent) || 0;
+          const price = Number(q.postMarketPrice) || 0;
           if (!price) return null;
-          const t = String(q.symbol || q.ticker || '').toUpperCase();
+          const t = row.ticker.toUpperCase();
           return {
-            ticker: t, symbol: t, name: nameMap[t] || t,
+            ticker: t, symbol: t, name: row.name || t,
             price, currency: 'USD',
             change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-            volume: fmt(Number(q.volume) || 0), rawVolume: Number(q.volume) || 0, marketCap: Number(q.marketCap) || 0, market: 'Global',
+            volume: fmt(Number(q.regularMarketVolume) || Number(row.rawVolume) || 0),
+            rawVolume: Number(q.regularMarketVolume) || Number(row.rawVolume) || 0,
+            marketCap: Number(q.marketCap) || Number(row.marketCap) || 0,
+            market: 'Global',
           };
-        };
-        // Yahoo gives post-market prints only while the after-hours window is open.
-        // When it's closed they're null, so persist the last real session and
-        // serve that instead of an empty list (mirrors stockanalysis.com).
-        const ah = [...combined.gainers, ...combined.losers].map(r => v7[r.ticker.toUpperCase()]).filter(Boolean).map(mapPost).filter(Boolean).sort((a, b) => b.changePercent - a.changePercent);
+        }).filter(Boolean).sort((a, b) => b.changePercent - a.changePercent);
+
         if (ah.length) {
           saMovers._saveAfterHours(ah.map(r => ({ ticker: r.ticker, name: r.name, price: r.price, changePercent: r.changePercent, volume: r.rawVolume, marketCap: r.marketCap })));
           global.afterhours = ah;
-        } else {
-          global.afterhours = saMovers._getLastGood().afterhours || [];
         }
       }
     } catch (e) { console.warn('[movers] premarket/afterhours build failed:', e.message); }
