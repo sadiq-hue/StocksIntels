@@ -42,8 +42,9 @@ export function CareersPage() {
     <div className="si-landing min-h-screen bg-[#F5F8FC] text-[#202B3A]">
       <PublicBrandHeader />
 
-      <section className="si-grid pt-36 pb-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section className="relative overflow-hidden pt-36 pb-20">
+        <div className="si-grid pointer-events-none absolute inset-0" />
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-[#2563A6] font-semibold text-xs uppercase tracking-[0.22em] mb-3">Careers</p>
           <h1 className="si-display text-5xl sm:text-7xl font-medium tracking-[-0.04em] text-[#102B50] mb-5">Build financial intelligence with us.</h1>
           <p className="text-base leading-7 text-[#607187] max-w-3xl mx-auto">

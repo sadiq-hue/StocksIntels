@@ -197,25 +197,26 @@ export function PricingPage() {
       <PublicBrandHeader />
 
        {/* Hero */}
-       <section className="si-grid pt-32 pb-16">
-         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+       <section className="relative overflow-hidden pt-32 pb-16">
+         <div className="si-grid pointer-events-none absolute inset-0" />
+         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
            <p className="text-[#2563A6] font-semibold text-xs uppercase tracking-[0.22em] mb-3">Access StocksIntels</p>
            <h1 className="si-display text-4xl sm:text-6xl font-medium tracking-[-0.035em] text-[#102B50] mb-4">
               Choose your research depth.
             </h1>
-           <p className="text-base leading-7 text-[#607187] max-w-2xl mx-auto mb-5">
+           <p className="text-base font-medium leading-7 text-[#40556D] max-w-2xl mx-auto mb-5">
              Core, Pro and Premium provide progressively deeper market intelligence, company research and portfolio tools.
            </p>
-           <p className="mb-10 text-xs font-medium text-[#8A6A2D]">7-day access begins after the $1 commitment fee. {MONEY_BACK_GUARANTEE}.</p>
+           <p className="mx-auto mb-10 w-fit rounded-full border border-[#D5A64A]/35 bg-[#D5A64A]/10 px-4 py-2 text-xs font-semibold text-[#70521D]">7-day access begins after the $1 commitment fee. {MONEY_BACK_GUARANTEE}.</p>
 
           {/* Billing Toggle */}
-           <div className="inline-flex items-center gap-3 border border-[#CCD9E7] bg-white rounded-full p-1.5">
+           <div className="inline-flex items-center gap-2 border border-[#B8CADC] bg-white rounded-full p-1.5 shadow-sm">
             <button
               onClick={() => setIsYearly(false)}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                 !isYearly
                    ? "bg-[#102B50] text-white shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                   : "text-[#52647A] hover:text-[#102B50]"
               }`}
             >
               Monthly
@@ -225,7 +226,7 @@ export function PricingPage() {
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
                 isYearly
                    ? "bg-[#102B50] text-white shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
+                   : "text-[#52647A] hover:text-[#102B50]"
               }`}
             >
               Yearly

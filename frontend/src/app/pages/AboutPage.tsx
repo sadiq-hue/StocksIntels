@@ -33,8 +33,9 @@ export function AboutPage() {
       <PublicBrandHeader />
 
       <main>
-        <section className="si-grid pt-36 pb-20 sm:pt-44 sm:pb-28">
-          <div className="mx-auto grid max-w-[1320px] gap-12 px-5 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:px-12">
+        <section className="relative overflow-hidden pt-36 pb-20 sm:pt-44 sm:pb-28">
+          <div className="si-grid pointer-events-none absolute inset-0" />
+          <div className="relative mx-auto grid max-w-[1320px] gap-12 px-5 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:px-12">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563A6]">About StocksIntels</p>
               <h1 className="si-display mt-5 text-5xl leading-[.98] tracking-[-0.04em] text-[#102B50] sm:text-7xl">Built for a deeper understanding of markets.</h1>
