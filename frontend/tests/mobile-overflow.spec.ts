@@ -101,6 +101,17 @@ test.describe("Mobile horizontal overflow @375px", () => {
     expect(width).toBeLessThanOrEqual(322);
   });
 
+  test("login, registration and email-code modes remain accessible", async ({ page }) => {
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Create one" }).click();
+    await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: /Sign in with email code/i }).click();
+    await expect(page.getByRole("heading", { name: "Sign in with an email code" })).toBeVisible();
+    const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
+    expect(width).toBeLessThanOrEqual(377);
+  });
+
   for (const route of PUBLIC_ROUTES) {
     test(`public ${route}`, async ({ page }) => {
       await page.goto(route, { waitUntil: "networkidle" }).catch(() => {});

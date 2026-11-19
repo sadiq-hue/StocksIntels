@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   Mail, Lock, Eye, EyeOff, ArrowRight,
-  AlertCircle, CheckCircle2, Loader2, User, KeyRound,
+  AlertCircle, CheckCircle2, Loader2, User, KeyRound, Cpu, Globe2, FileText,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -10,7 +10,6 @@ import { Card } from "../components/ui/card";
 import { jwtDecode } from "jwt-decode";
 import { useAuth } from "../auth/AuthContext";
 import { motion, AnimatePresence } from "motion/react";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSEO } from "../hooks/useSEO";
@@ -38,59 +37,14 @@ type AuthMode = "login" | "register" | "forgot" | "reset" | "otp-login";
 type RegStage = "form" | "verify";
 type OtpStage = "send" | "verify";
 
-const floatingShapes = [
-  { size: 60, top: "8%", left: "3%", delay: 0, depth: 1 },
-  { size: 40, top: "18%", right: "5%", delay: 1.2, depth: 3 },
-  { size: 90, top: "50%", left: "1%", delay: 0.7, depth: 2 },
-  { size: 35, top: "70%", right: "3%", delay: 1.8, depth: 1 },
-  { size: 50, top: "35%", left: "12%", delay: 0.3, depth: 3 },
-  { size: 30, top: "82%", left: "18%", delay: 2.2, depth: 2 },
-  { size: 45, top: "12%", left: "45%", delay: 0.5, depth: 3 },
-  { size: 35, top: "42%", right: "15%", delay: 1.5, depth: 2 },
-  { size: 55, top: "60%", left: "30%", delay: 0.9, depth: 1 },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3 },
-];
-
-function StockChartBg() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <svg className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.04]" viewBox="0 0 100 80" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="login-chart-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.1" />
-            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d="M0 60 Q20 50 40 55 T80 45 T120 35 T160 48 T200 30 T240 25 T280 28 T320 20 T360 22 T400 15 L400 80 L0 80 Z" fill="url(#login-chart-grad)" />
-        <path d="M0 60 Q20 50 40 55 T80 45 T120 35 T160 48 T200 30 T240 25 T280 28 T320 20 T360 22 T400 15" fill="none" stroke="#0D7490" strokeWidth="0.5" />
-      </svg>
-    </div>
-  );
-}
-
-function FeatureCard({ icon: Icon, title, desc, delay }: { icon: React.ElementType; title: string; desc: string; delay: number }) {
-  return (
-    <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay, duration: 0.5 }}
-      className="group flex items-center gap-4 p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 hover:bg-white/15 transition-all duration-300 cursor-default">
-      <div className="w-12 h-12 bg-gradient-to-br from-white/20 to-white/5 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg">
-        <Icon className="w-6 h-6 text-white" />
-      </div>
-      <div>
-        <h3 className="text-white font-semibold text-base">{title}</h3>
-        <p className="text-white/60 text-sm mt-0.5">{desc}</p>
-      </div>
-    </motion.div>
-  );
-}
-
 function CompactHero() {
   return (
     <div className="mb-6 text-center">
       <div className="flex items-center justify-center gap-3">
         <img src="/logo1.jpg" alt="StocksIntels" className="size-10 rounded-xl shadow-lg shadow-black/10 ring-1 ring-white/20" />
-        <h1 className="text-foreground text-xl font-bold tracking-tight">StocksIntels</h1>
+        <h1 className="text-[#102B50] text-xl font-bold tracking-tight">StocksIntels</h1>
       </div>
-      <p className="text-muted-foreground/70 text-xs mt-2">Financial Intelligence. Elevated.</p>
+      <p className="text-[#607187] text-xs mt-2">Financial Intelligence. Elevated.</p>
     </div>
   );
 }
@@ -124,7 +78,6 @@ export function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
   const [country, setCountry] = useState("");
   const [countries, setCountries] = useState<{ code: string; name: string; flag: string }[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
@@ -142,12 +95,6 @@ export function LoginPage() {
     c.name.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.toLowerCase().includes(countrySearch.toLowerCase())
   );
   const selectedCountry = countries.find(c => c.name === country);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
-    window.addEventListener("mousemove", handler);
-    return () => window.removeEventListener("mousemove", handler);
-  }, []);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -276,7 +223,7 @@ export function LoginPage() {
   }, [navigate, login, register, redirectTo]);
 
   const handleGoogleError = useCallback(() => {
-    setError("Google auth failed â€” check VITE_GOOGLE_CLIENT_ID in frontend/.env");
+    setError("Google sign-in failed. Please try email sign-in or contact support.");
   }, []);
 
   const loginWithGoogle = useCallback(() => {
@@ -295,45 +242,55 @@ export function LoginPage() {
   }, [searchParams]);
 
   const inputClasses = (fieldName: string) => cn(
-    "pl-10 pr-3 h-11 bg-white/50 dark:bg-white/[0.04] border text-foreground rounded-xl transition-all duration-200",
-    "placeholder:text-muted-foreground/50",
-    "border-white/30 dark:border-white/[0.06]",
+    "pl-10 pr-3 h-11 bg-[#F8FAFC] border text-[#102B50] rounded-xl transition-all duration-200",
+    "placeholder:text-[#8A98A9]",
+    "border-[#D4DFEA]",
     focusedField === fieldName
-      ? "border-[#0D7490] bg-white/80 dark:bg-white/[0.10] shadow-md shadow-[#0D7490]/5"
-      : "hover:border-[#0D7490]/30",
+      ? "border-[#4386C8] bg-white shadow-md shadow-[#4386C8]/10"
+      : "hover:border-[#9EB6D0]",
     error && "border-red-300 focus:border-red-500 focus:ring-red-500/10"
   );
 
   return (
-    <div className="min-h-screen overflow-auto overflow-x-hidden bg-[#f5f5f7] dark:bg-[#1c1c1e] flex relative">
-      <div className="absolute top-4 right-4 z-50"><ThemeToggle /></div>
-      <StockChartBg />
-      {floatingShapes.map((s, i) => (
-        <div key={i} className="absolute rounded-full bg-[#0D7490]/[0.03] animate-float-3d pointer-events-none"
-          style={{
-            width: s.size, height: s.size,
-            top: `calc(${s.top} + ${(mousePos.y - 0.5) * (s.depth || 1) * 20}px)`,
-            left: s.left ? `calc(${s.left} + ${(mousePos.x - 0.5) * (s.depth || 1) * 20}px)` : undefined,
-            right: s.right ? `calc(${s.right} + ${(0.5 - mousePos.x) * (s.depth || 1) * 20}px)` : undefined,
-            animationDelay: `${s.delay}s`,
-          }}
-        />
-      ))}
-      <div className="flex-1 flex items-center justify-center p-4 lg:p-8 relative">
-        <div className="w-full max-w-sm relative z-10">
+    <div className="si-landing grid min-h-screen bg-[#F5F8FC] text-[#202B3A] lg:grid-cols-[minmax(0,1fr)_560px]">
+      <aside className="relative hidden overflow-hidden bg-[#102B50] p-12 text-white lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div className="si-grid pointer-events-none absolute inset-0 opacity-30" />
+        <div className="relative">
+          <Link to="/" className="flex items-center gap-3"><img src="/logo1.jpg" alt="" className="size-10 rounded-lg object-cover" /><div><span className="block text-sm font-extrabold">StocksIntels</span><span className="text-[8px] font-bold uppercase tracking-[0.22em] text-cyan-200">Financial Intelligence</span></div></Link>
+        </div>
+        <div className="relative max-w-2xl py-16">
+          <span className="grid size-12 place-items-center rounded-full border border-[#D5A64A]/40 bg-[#D5A64A]/10 font-mono text-xs font-bold text-[#E1BE72]">SI</span>
+          <h2 className="si-display mt-8 text-5xl leading-[1.02] tracking-[-0.04em] xl:text-6xl">Research the market beyond a single signal.</h2>
+          <p className="mt-6 max-w-xl text-sm leading-7 text-slate-300">Access company financials, technical evidence, macro context, news intelligence and portfolio tools across African and global markets.</p>
+          <div className="mt-10 divide-y divide-white/10 border-y border-white/10">
+            {[
+              { icon: FileText, label: "Multi-dimensional company research" },
+              { icon: Globe2, label: "African relevance with global context" },
+              { icon: Cpu, label: "Technology designed to support judgement" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex items-center gap-4 py-4 text-sm text-slate-200"><Icon className="size-4 text-cyan-300" />{label}</div>
+            ))}
+          </div>
+        </div>
+        <p className="relative max-w-xl text-[11px] leading-5 text-slate-500">StocksIntels provides research and analytics for informational purposes. Market data may be delayed and investing involves risk.</p>
+      </aside>
+
+      <main className="relative flex min-h-screen items-center justify-center px-4 py-14 sm:px-8 lg:px-12">
+        <Link to="/" className="absolute left-5 top-5 text-xs font-semibold text-[#52647A] hover:text-[#174A7E] sm:left-8 sm:top-7">Back to site</Link>
+        <div className="w-full max-w-[420px] relative z-10">
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
-            <CompactHero />
-            <Card className="bg-white/60 dark:bg-white/[0.06] backdrop-blur-2xl border border-white/30 dark:border-white/[0.08] rounded-[24px] p-6 shadow-xl shadow-black/[0.04] dark:shadow-black/30">
+            <div className="lg:hidden"><CompactHero /></div>
+            <Card className="rounded-[24px] border border-[#D5E0EB] bg-white p-6 shadow-[0_28px_70px_-50px_rgba(16,43,80,0.7)] sm:p-7">
               
               <div className="mb-6">
                 <h2 className="text-foreground text-xl font-bold tracking-tight mb-1.5">
-                  {mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Reset Password" : mode === "otp-login" ? "Sign in with OTP" : "Set New Password"}
+                  {mode === "login" ? "Access your research workspace" : mode === "register" ? "Create your account" : mode === "forgot" ? "Reset your password" : mode === "otp-login" ? "Sign in with an email code" : "Set a new password"}
                 </h2>
                 <p className="text-muted-foreground/70 text-sm leading-relaxed">
                   {mode === "login"
-                    ? "Enter your email and password to sign in"
+                    ? "Sign in to your StocksIntels financial intelligence workspace."
                     : mode === "register"
-                    ? "Enter your credentials to access your dashboard"
+                    ? "Begin with your email, then verify and complete your profile."
                     : mode === "forgot"
                     ? "Enter your email to receive a reset code"
                     : mode === "otp-login"
@@ -403,19 +360,19 @@ export function LoginPage() {
                           </div>
                         </div>
                         <Button type="submit" disabled={isLoading || !email || !password || (turnstileEnabled && !turnstileToken && !turnstileUnavailable)}
-                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          className="w-full h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Signing in...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); clear(); }}
                           className="w-full text-center text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold">
-                          <KeyRound className="inline w-3.5 h-3.5 mr-1 -mt-0.5" /> Sign in with OTP Only
+                          <KeyRound className="inline w-3.5 h-3.5 mr-1 -mt-0.5" /> Sign in with email code
                         </button>
                       </>
                     )}
                     {mode === "register" && regStage === "form" && (
                       <Button type="submit" disabled={isLoading || !email || (turnstileEnabled && !turnstileToken && !turnstileUnavailable)}
-                        className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                        className="w-full h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                         {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                           : <span className="flex items-center gap-2">Send Verification Code <ArrowRight className="w-4 h-4" /></span>}
                       </Button>
@@ -512,7 +469,7 @@ export function LoginPage() {
                             Back
                           </button>
                           <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword}
-                            className="flex-1 h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                            className="flex-1 h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                             {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Creating account...</span>
                               : <span className="flex items-center gap-2">Create Account <ArrowRight className="w-4 h-4" /></span>}
                           </Button>
@@ -546,7 +503,7 @@ export function LoginPage() {
                       </div>
                     )}
                     <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email || (turnstileEnabled && !turnstileToken && !turnstileUnavailable) : otpCode.length < 6)}
-                      className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                      className="w-full h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
                         : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
@@ -564,7 +521,7 @@ export function LoginPage() {
                         className={inputClasses("email")} required autoComplete="email" />
                     </div>
                     <Button type="submit" disabled={isLoading}
-                      className="w-full mt-3 h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      className="w-full mt-3 h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
@@ -601,7 +558,7 @@ export function LoginPage() {
                     </div>
                     {countdown > 0 && <p className="text-xs text-muted-foreground text-center">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                     <Button type="submit" disabled={isLoading || otpCode.length < 6 || newPassword.length < 6}
-                      className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      className="w-full h-10 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Resetting...</span>
                         : <span className="flex items-center gap-2">Reset Password <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
@@ -618,34 +575,29 @@ export function LoginPage() {
               {(mode === "login" || mode === "register") && (
                 <>
                   <div className="flex items-center my-5">
-                    <div className="flex-1 h-px bg-white/30 dark:bg-white/[0.08]" />
+                    <div className="flex-1 h-px bg-[#DCE5EF]" />
                     <span className="px-3 text-[11px] text-muted-foreground/50 font-medium uppercase tracking-wider">or</span>
-                    <div className="flex-1 h-px bg-white/30 dark:bg-white/[0.08]" />
+                    <div className="flex-1 h-px bg-[#DCE5EF]" />
                   </div>
                   <div className="relative">
                     <button type="button" onClick={() => setSocialOpen(!socialOpen)}
-                      className="w-full flex items-center justify-between gap-2 h-11 px-4 bg-white/50 dark:bg-white/[0.04] border border-white/30 dark:border-white/[0.06] rounded-xl text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
+                      className="w-full flex items-center justify-between gap-2 h-11 px-4 bg-[#F8FAFC] border border-[#D4DFEA] rounded-xl text-sm font-medium text-[#52647A] hover:text-[#102B50] transition-colors">
                       <span>More sign-in options</span>
                       <svg className={`w-4 h-4 transition-transform ${socialOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
                     {socialOpen && (
                       <div className="mt-2 space-y-2">
                         <button type="button" onClick={() => loginWithGoogle()}
-                          className="w-full flex items-center justify-center gap-3 h-11 bg-white/50 dark:bg-white/[0.04] border border-white/30 dark:border-white/[0.06] rounded-xl transition-all hover:bg-white/80 dark:hover:bg-white/[0.08] text-foreground font-medium text-sm">
+                          className="w-full flex items-center justify-center gap-3 h-11 bg-[#F8FAFC] border border-[#D4DFEA] rounded-xl transition-all hover:bg-white text-[#102B50] font-medium text-sm">
                           <svg className="w-5 h-5" viewBox="0 0 533.5 544.3" xmlns="http://www.w3.org/2000/svg"><path d="M533.5 278.4c0-18.5-1.5-37.3-4.7-55.1H272v104.5h146.9c-6.3 33.8-25.5 62.5-54.3 81.6v67.8h87.7c51.3-47.3 81.2-116.9 81.2-198.8z" fill="#4285F4"/><path d="M272 544.3c73.5 0 135.3-24.1 180.4-65.4l-87.7-67.8c-24.4 16.4-55.7 26.1-92.7 26.1-71 0-131.3-48-152.8-112.5H31.8v70.5C76.9 494.9 168.2 544.3 272 544.3z" fill="#34A853"/><path d="M119.2 323.7c-11.9-35.3-11.9-73.1 0-108.4V144.8H31.8C11.3 190.9 0 233.6 0 278.4s11.3 87.5 31.8 133.6l87.4-88.3z" fill="#FBBC05"/><path d="M272 109.7c39.9-.6 78.2 14 107.4 40.3l80.5-80.5C404.7 24.5 345.5 0 272 0 168.2 0 76.9 49.4 31.8 144.8l87.4 70.5C140.7 157.7 201 109.7 272 109.7z" fill="#EA4335"/></svg>
                           <span>Sign in with Google</span>
-                        </button>
-                        <button type="button" onClick={() => { console.log('Apple Sign in clicked'); }}
-                          className="w-full flex items-center justify-center gap-3 h-11 bg-foreground text-background border border-foreground/10 rounded-xl transition-all hover:opacity-90 font-medium text-sm">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                          <span>Continue with Apple</span>
                         </button>
                       </div>
                     )}
                   </div>
                 </>
               )}
-              <div className="mt-5 pt-4 border-t border-white/20 dark:border-white/[0.06]">
+              <div className="mt-5 pt-4 border-t border-[#DCE5EF]">
                 {(mode === "login" || mode === "otp-login" || mode === "register") && (
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-center text-muted-foreground/60 text-xs flex items-center justify-center gap-2">
                     <span>{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
@@ -659,9 +611,7 @@ export function LoginPage() {
             </Card>
           </motion.div>
         </div>
-      </div>
-
-      
+      </main>
     </div>
   );
 }
