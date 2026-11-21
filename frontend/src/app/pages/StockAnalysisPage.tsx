@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import {
-  AreaChart, Area, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip,
+  LineChart as RechartsLineChart, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ComposedChart, Bar, Legend,
 } from "recharts";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router";
@@ -20,7 +20,7 @@ import {
   TrendingUp, Search, Star, BarChart3, Building2,
   DollarSign, Activity, ArrowUpDown, TrendingUpIcon,
   Loader2, ExternalLink, X, Zap,
-  Info, Shield, Wallet, Target, LineChart,
+  Info, Shield, Wallet, Target, ChartLine, ChartCandlestick,
   ChevronDown, ChevronUp, AlertTriangle,
   Layers, PieChart, Percent,
 } from "lucide-react";
@@ -49,7 +49,7 @@ import type {
 import { SignalContextExtras } from "../components/SignalContext";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
-import { TradingViewChart } from "../components/TradingViewChart";
+import { CandlestickChart } from "../components/CandlestickChart";
 import { useAuth } from "../auth/AuthContext";
 import { authFetch } from "../auth/tokenStore";
 import { CompareButton } from "../components/CompareButton";
@@ -668,8 +668,7 @@ export function StockAnalysisPage() {
   const [chartHistory, setChartHistory] = useState<PriceBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartPeriod, setChartPeriod] = useState("6M");
-  const [tvFailed, setTvFailed] = useState(false);
-  const historySource = chartHistory.length > 0 ? 'live' : 'none';
+  const [chartMode, setChartMode] = useState<"line" | "candlestick">("line");
 
   const periodToRange = (period: string): string => {
     switch (period) {
@@ -686,17 +685,23 @@ export function StockAnalysisPage() {
     }
   };
 
+  const periodToInterval = (period: string): string => {
+    if (period === "1D") return "5m";
+    if (period === "5D") return "15m";
+    return "1d";
+  };
+
   useEffect(() => {
     let cancelled = false;
-    setTvFailed(false);
     setChartLoading(true);
     setChartHistory([]);
     const fetchHistory = async () => {
       try {
-        const bars = await fetchStockHistory(historySymbol, periodToRange(chartPeriod));
+        const bars = await fetchStockHistory(historySymbol, periodToRange(chartPeriod), periodToInterval(chartPeriod));
         // African listings via MyStocks return sparse data for short ranges
         // (e.g. 6mo returns ~20 bars). Fall back to 1y which returns full history.
-        const effectiveBars = (!isAfricanMarket || bars.length >= 30) ? bars : await fetchStockHistory(historySymbol, "1y");
+        const shouldUseLongFallback = isAfricanMarket && ["3M", "6M"].includes(chartPeriod) && bars.length < 30;
+        const effectiveBars = shouldUseLongFallback ? await fetchStockHistory(historySymbol, "1y") : bars;
         if (!cancelled && effectiveBars.length > 0) {
           setChartHistory(effectiveBars);
         }
@@ -732,11 +737,14 @@ export function StockAnalysisPage() {
     return chartHistory.map((bar, i) => {
       const sma20 = i >= 19 ? prices.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20 : null;
       const sma50 = i >= 49 ? prices.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50 : null;
-      const d = new Date(bar.date + 'T00:00:00');
+      const hasIntradayTime = ["1D", "5D"].includes(chartPeriod) && Number(bar.timestamp) > 0;
+      const d = hasIntradayTime ? new Date(Number(bar.timestamp) * 1000) : new Date(bar.date + 'T00:00:00');
+      const dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const timeLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       return {
-        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        displayDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        fullDate: d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+        date: hasIntradayTime ? (chartPeriod === "1D" ? timeLabel : dayLabel) : dayLabel,
+        displayDate: hasIntradayTime ? `${dayLabel}, ${timeLabel}` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        fullDate: hasIntradayTime ? `${d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}, ${timeLabel}` : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
         price: bar.close ?? 0,
         open: bar.open ?? 0,
         high: bar.high ?? 0,
@@ -746,7 +754,7 @@ export function StockAnalysisPage() {
         sma50: sma50 !== null ? sma50 : null,
       };
     });
-  }, [chartHistory]);
+  }, [chartHistory, chartPeriod]);
 
   const { rsi, atr, atrPct, sma20, sma50, macdLine, macdSignal, macdSignalLine, macdHistogram, bbUpper, bbLower, bbPosition } = useMemo(() => {
     const prices = chartData.map((d: any) => d.price);
@@ -938,7 +946,29 @@ export function StockAnalysisPage() {
               <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-4 bg-gradient-to-b from-[#0D7490]/[0.03] to-transparent">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <h2 className="text-sm font-semibold text-foreground">Price Chart</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-semibold text-foreground">Price Chart</h2>
+                    <div role="group" aria-label="Chart type" className="flex rounded-lg border border-border bg-muted/40 p-0.5">
+                      <button
+                        type="button"
+                        aria-label="Line chart"
+                        aria-pressed={chartMode === "line"}
+                        onClick={() => setChartMode("line")}
+                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${chartMode === "line" ? "bg-card text-[#0D7490] shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <ChartLine className="size-3" /> Line
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Candlestick chart"
+                        aria-pressed={chartMode === "candlestick"}
+                        onClick={() => setChartMode("candlestick")}
+                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${chartMode === "candlestick" ? "bg-card text-[#0D7490] shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        <ChartCandlestick className="size-3" /> Candles
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-wrap gap-0.5">
                     {["1D", "5D", "1M", "YTD", "3M", "6M", "1Y", "5Y", "Max"].map((p) => (
                       <button
@@ -954,24 +984,20 @@ export function StockAnalysisPage() {
                   </div>
                 </div>
                 {chartLoading && chartHistory.length === 0 ? (
-                  <div className="h-[300px] flex items-center justify-center text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin mr-2" /> Loading chart…</div>
+                  <div className="h-[320px] flex items-center justify-center text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin mr-2" /> Loading chart…</div>
                 ) : chartData.length === 0 ? (
-                  <div className="h-[300px] flex items-center justify-center text-xs text-muted-foreground">No price history available</div>
+                  <div className="h-[320px] flex items-center justify-center text-xs text-muted-foreground">No price history available</div>
+                ) : chartMode === "candlestick" ? (
+                  <CandlestickChart data={chartData} currency={curSym} />
                 ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={chartData} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="priceArea" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#0D7490" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#0D7490" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <RechartsLineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval={Math.max(1, Math.floor(chartData.length / 6))} />
-                      <YAxis domain={["dataMin - 1", "dataMax + 1"]} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={52} tickFormatter={(v: number) => formatCompact(v)} />
-                      <Tooltip formatter={(v: any) => `${curSym} ${formatPrice(Number(v))}`} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
-                      <Area type="monotone" dataKey="price" stroke="#0D7490" strokeWidth={2} fill="url(#priceArea)" dot={false} />
-                    </AreaChart>
+                      <YAxis domain={[(dataMin: number) => dataMin - Math.max(Math.abs(dataMin) * 0.02, 0.01), (dataMax: number) => dataMax + Math.max(Math.abs(dataMax) * 0.02, 0.01)]} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={52} tickFormatter={(v: number) => formatCompact(v)} />
+                      <Tooltip labelFormatter={(_label: any, payload: any[]) => payload?.[0]?.payload?.displayDate || _label} formatter={(v: any) => `${curSym} ${formatPrice(Number(v))}`} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                      <Line type="monotone" dataKey="price" name="Close" stroke="#0D7490" strokeWidth={2.25} dot={false} activeDot={{ r: 4, fill: "#0D7490", stroke: "var(--card)", strokeWidth: 2 }} />
+                    </RechartsLineChart>
                   </ResponsiveContainer>
                 )}
               </div>
