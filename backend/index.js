@@ -9033,6 +9033,14 @@ function _normalizeIpoStatus(listingDate, hasFiled) {
   return d.getTime() < Date.now() ? 'listed' : 'upcoming';
 }
 
+function _newYorkDateKey() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
 // Best-effort SEC enrichment: real filing history for a US ticker already known
 // to the EDGAR CIK map (S-1/F-1/POS AM/424B IPO registration filings).
 async function _enrichWithSec(ipo) {
@@ -9166,6 +9174,12 @@ async function _loadIpoHub() {
     }
   }
   const merged = [...byTicker.values()];
+  const marketDate = _newYorkDateKey();
+  for (const ipo of merged) {
+    if (['current', 'listed'].includes(ipo.status) && String(ipo.listing_date || '').slice(0, 10) === marketDate) {
+      ipo.status = 'current';
+    }
+  }
   const enrichTargets = merged.filter((i) => i.market === 'GLOBAL' && i.ticker).slice(0, 12);
   await Promise.all(enrichTargets.map(async (i) => {
     const sec = await _enrichWithSec(i);
