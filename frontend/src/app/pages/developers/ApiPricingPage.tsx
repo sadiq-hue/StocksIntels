@@ -15,7 +15,6 @@ const apiPricingTiers = [
     features: [
       { text: "REST API access", included: true },
       { text: "End-of-day market data", included: true },
-      { text: "1,000 requests/day", included: true },
       { text: "Basic recommended positions", included: true },
       { text: "Community support", included: true },
       { text: "WebSocket streaming", included: false },
