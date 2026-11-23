@@ -83,7 +83,7 @@ export function ApiPricingPage() {
 
   const handlePlanClick = (planName: string) => {
     if (planName === "Free") {
-      navigate("/login?redirect=/developers/docs");
+      navigate("/login?redirect=/settings?tab=api-keys");
       return;
     }
     if (planName === "Enterprise") {

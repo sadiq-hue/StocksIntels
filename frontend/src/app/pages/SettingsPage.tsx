@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router";
 import { Card } from "../components/ui/card";
 import {
   Bell, Shield, User, Palette, Database, Check, Loader2, Eye, EyeOff,
@@ -30,7 +31,9 @@ interface AppearanceSettings {
 export function SettingsPage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
-  const [activeSection, setActiveSection] = useState("profile");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "profile";
+  const [activeSection, setActiveSection] = useState(initialTab);
 
   const [profile, setProfile] = useState({
     full_name: user?.full_name || "",
