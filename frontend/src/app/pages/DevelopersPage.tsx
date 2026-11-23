@@ -772,7 +772,7 @@ export function DevelopersPage() {
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <Button asChild size="lg">
-              <Link to="/login?redirect=/settings?tab=api-keys">Get Started Free</Link>
+              <Link to="/login?redirect=/developers/api-keys">Get Started Free</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link to="/pricing">Explore API Pricing</Link>
