@@ -36,10 +36,6 @@ export const router = createBrowserRouter([
     Component: LoginPage,
   },
   {
-    path: "/developers",
-    Component: DevelopersPage,
-  },
-  {
     path: "/developers/docs",
     Component: ApiDocsPage,
   },
@@ -62,6 +58,10 @@ export const router = createBrowserRouter([
   {
     path: "/developers/api-keys",
     Component: ApiKeysPage,
+  },
+  {
+    path: "/developers",
+    Component: DevelopersPage,
   },
   {
     path: "/app",
