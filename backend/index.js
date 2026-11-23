@@ -16333,6 +16333,29 @@ class AppError extends Error {
   }
 }
 
+// ── Server-side redirects for legacy / short paths ────────
+// Preserve query parameters when redirecting to /app/* routes
+const redirectPaths = [
+  { from: '/markets', to: '/app/markets' },
+  { from: '/stocks', to: '/app/stocks' },
+  { from: '/sectors', to: '/app/sectors' },
+  { from: '/signals', to: '/app/signals' },
+  { from: '/signals/engine', to: '/app/signals/engine' },
+  { from: '/news', to: '/app/news' },
+  { from: '/financials', to: '/app/financials' },
+  { from: '/watchlist', to: '/app/watchlist' },
+  { from: '/portfolio', to: '/app/portfolio' },
+  { from: '/notifications', to: '/app/notifications' },
+  { from: '/settings', to: '/app/settings' },
+];
+
+for (const { from, to } of redirectPaths) {
+  app.get(from, (req, res) => {
+    const search = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    res.redirect(302, to + search);
+  });
+}
+
 // ── SPA fallback: serve index.html for all non-API routes ────────
 // Only enabled when the backend is co-located with a built frontend.
 // MUST run before the 404 handler below, or SPA deep links 404.
