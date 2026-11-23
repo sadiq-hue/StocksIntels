@@ -85,5 +85,12 @@ export default defineConfig({
         ws: true,
       },
     },
+    // SPA fallback for client-side routing in development
+    middlewareMode: false,
+    // Ensure SPA fallback works for all non-asset routes
+    hmr: {
+      overlay: true,
+    },
   },
+  appType: 'spa',
 })

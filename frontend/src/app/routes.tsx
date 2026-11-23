@@ -16,6 +16,12 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SectorsPage } from "./pages/SectorsPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { IpoPage } from "./pages/IpoPage";
+import { DevelopersPage } from "./pages/DevelopersPage";
+import { ApiDocsPage } from "./pages/developers/ApiDocsPage";
+import { SdksPage } from "./pages/developers/SdksPage";
+import { PlaygroundPage } from "./pages/developers/PlaygroundPage";
+import { AuthGuidePage } from "./pages/developers/AuthGuidePage";
+import { ApiPricingPage } from "./pages/developers/ApiPricingPage";
 // import { DerivativesPage } from "./pages/DerivativesPage"; // Derivatives page disabled
 import { AdminStocks } from "./pages/AdminStocks";
 import { SignalEnginePage } from "./pages/SignalEnginePage";
@@ -27,6 +33,30 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     Component: LoginPage,
+  },
+  {
+    path: "/developers",
+    Component: DevelopersPage,
+  },
+  {
+    path: "/developers/docs",
+    Component: ApiDocsPage,
+  },
+  {
+    path: "/developers/sdks",
+    Component: SdksPage,
+  },
+  {
+    path: "/developers/playground",
+    Component: PlaygroundPage,
+  },
+  {
+    path: "/developers/auth",
+    Component: AuthGuidePage,
+  },
+  {
+    path: "/developers/pricing",
+    Component: ApiPricingPage,
   },
   {
     path: "/app",

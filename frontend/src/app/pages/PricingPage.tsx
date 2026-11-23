@@ -23,7 +23,8 @@ import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans
 // page-specific presentation choices.
 const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown };
 
-const plans = PLANS.map((p) => ({
+const marketingPlans = PLANS.filter(p => ["core", "pro", "premium"].includes(p.id));
+const plans = marketingPlans.map((p) => ({
   ...p,
   description: p.tagline,
   icon: PLAN_ICONS[p.id],
@@ -182,9 +183,18 @@ export function PricingPage() {
 
   const handlePlanClick = async (planName: string) => {
     if (!user) {
-      navigate(`/login?redirect=/pricing`);
+      const redirectUrl = planName !== "Free" ? `/subscribe/${planName.toLowerCase()}` : "/pricing";
+      navigate(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
+    // Paid plans (Starter, Pro, Premium) always go to subscription page
+    // Free plan goes to trial flow
+    if (planName !== "Free") {
+      trackEvent(MetaEvents.InitiateCheckout, { content_name: planName });
+      navigate(`/subscribe/${planName.toLowerCase()}`);
+      return;
+    }
+    // Free plan - trial flow
     if (trialInfo.isWithinTrial || !trialInfo.canStartTrial) {
       trackEvent(MetaEvents.InitiateCheckout, { content_name: planName });
       navigate(`/subscribe/${planName.toLowerCase()}`);

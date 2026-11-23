@@ -49,7 +49,7 @@ export function PublicBrandFooter() {
         </div>
         <div className="flex flex-col gap-4 pt-7 text-[11px] text-slate-500 sm:flex-row sm:justify-between">
           <span>Copyright {new Date().getFullYear()} StocksIntels.</span>
-          <div className="flex gap-5"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/disclaimer">Disclaimer</Link></div>
+          <div className="flex gap-5"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/disclaimer">Disclaimer</Link><Link to="/developers">Developer Portal</Link></div>
         </div>
       </div>
     </footer>

@@ -1,17 +1,12 @@
-// Single source of truth for the Core / Pro / Premium plans.
+// Single source of truth for all pricing plans.
 //
 // Every pricing surface imports this so a price or plan name can only be
 // changed in one place: the marketing pricing page, the landing-page pricing
-// block, and the checkout page all render from PLANS. Before this existed the
-// same three tiers carried four different price lists across the site, and the
-// pricing page linked to a /subscribe/core route that did not exist.
-//
-// Prices are USD. KES is derived with the same 130 rate the M-Pesa flow uses
-// (backend index.js: USD_TO_KES_RATE).
+// block, the developer portal pricing, and the checkout page all render from PLANS.
 
 export const USD_TO_KES = 130;
 
-export type PlanId = "core" | "pro" | "premium";
+export type PlanId = "core" | "pro" | "premium" | "free" | "starter" | "enterprise" | "api-pro";
 
 export interface PlanFeature {
   text: string;
@@ -33,6 +28,7 @@ export interface Plan {
 }
 
 export const PLANS: Plan[] = [
+  // Marketing plans (Core, Pro, Premium)
   {
     id: "core",
     name: "Core",
@@ -117,14 +113,108 @@ export const PLANS: Plan[] = [
       { text: "Dedicated support", included: true },
     ],
   },
+  // Developer API plans (Free, Starter, Pro, Enterprise)
+  {
+    id: "free",
+    name: "Free",
+    tagline: "Start building",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    popular: false,
+    highlights: [
+      "REST API access",
+      "End-of-day market data",
+      "1,000 requests/day",
+      "Basic recommended positions",
+    ],
+    features: [
+      { text: "REST API access", included: true },
+      { text: "End-of-day market data", included: true },
+      { text: "1,000 requests/day", included: true },
+      { text: "Basic recommended positions", included: true },
+      { text: "Community support", included: true },
+      { text: "WebSocket streaming", included: false },
+      { text: "Real-time data", included: false },
+      { text: "Webhooks", included: false },
+    ],
+  },
+  {
+    id: "starter",
+    name: "Starter",
+    tagline: "Build with live data",
+    monthlyPrice: 29.94,
+    yearlyPrice: 299,
+    popular: false,
+    highlights: [
+      "REST API access",
+      "Real-time market quotes",
+      "10,000 requests/day",
+      "Basic recommended positions",
+    ],
+    features: [
+      { text: "REST API access", included: true },
+      { text: "Real-time market quotes", included: true },
+      { text: "10,000 requests/day", included: true },
+      { text: "Basic recommended positions", included: true },
+      { text: "Email support", included: true },
+      { text: "WebSocket streaming", included: false },
+      { text: "Advanced recommended positions", included: false },
+      { text: "Webhooks", included: false },
+    ],
+  },
+  {
+    id: "api-pro",
+    name: "Pro",
+    tagline: "Scale your integration",
+    monthlyPrice: 49.83,
+    yearlyPrice: 499,
+    popular: true,
+    highlights: [
+      "Real-time data, recommended positions, webhooks, WebSocket streaming",
+    ],
+    features: [
+      { text: "REST API + WebSocket", included: true },
+      { text: "Real-time market data", included: true },
+      { text: "100,000 requests/day", included: true },
+      { text: "Full recommended positions", included: true },
+      { text: "Webhooks & event streaming", included: true },
+      { text: "Priority email support", included: true },
+      { text: "Advanced screening", included: true },
+      { text: "SLA: 99.9% uptime", included: true },
+    ],
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    tagline: "Custom infrastructure",
+    monthlyPrice: 0, // Custom pricing
+    yearlyPrice: 0,
+    popular: false,
+    highlights: [
+      "Dedicated infrastructure, SLA, tailored data access",
+    ],
+    features: [
+      { text: "Dedicated infrastructure", included: true },
+      { text: "Custom rate limits", included: true },
+      { text: "Real-time global equities", included: true },
+      { text: "Full recommended positions", included: true },
+      { text: "Webhooks & WebSocket", included: true },
+      { text: "Dedicated support engineer", included: true },
+      { text: "Custom SLA & contracts", included: true },
+      { text: "On-premise deployment option", included: true },
+    ],
+  },
 ];
 
 /** Legacy /subscribe/:planId slugs still resolve to a real plan. */
 const PLAN_ALIASES: Record<string, PlanId> = {
-  starter: "core",
+  starter: "starter",
   core: "core",
   pro: "pro",
   premium: "premium",
+  free: "free",
+  enterprise: "enterprise",
+  "api-pro": "api-pro",
 };
 
 export function planById(id?: string): Plan {

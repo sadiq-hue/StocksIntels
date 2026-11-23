@@ -30,6 +30,8 @@ import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/m
 import { useSEO } from "../hooks/useSEO";
 import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
 
+const MARKETING_PLANS = PLANS.filter((p) => ["core", "pro", "premium"].includes(p.id));
+
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "AAPL", "MSFT", "NVDA"];
 
@@ -579,7 +581,7 @@ export function LandingPage() {
             </div>
 
             <div className="mt-14 grid gap-5 lg:grid-cols-3">
-              {PLANS.map((plan) => {
+              {MARKETING_PLANS.map((plan) => {
                 const featured = plan.popular;
                 const premium = plan.id === "premium";
                 const price = yearlyPricing ? plan.yearlyPrice : plan.monthlyPrice;
@@ -711,7 +713,7 @@ export function LandingPage() {
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Company</p>
-              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/about" className="block hover:text-white">About</Link><Link to="/careers" className="block hover:text-white">Careers</Link><a href="#contact" className="block hover:text-white">Business enquiries</a><Link to="/pricing" className="block hover:text-white">Pricing</Link></div>
+              <div className="mt-5 space-y-3 text-sm text-slate-400"><Link to="/about" className="block hover:text-white">About</Link><Link to="/careers" className="block hover:text-white">Careers</Link><a href="#contact" className="block hover:text-white">Business enquiries</a><Link to="/pricing" className="block hover:text-white">Pricing</Link><Link to="/developers" className="block hover:text-white">Developer Portal</Link></div>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300">Legal</p>

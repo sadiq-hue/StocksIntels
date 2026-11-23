@@ -10,7 +10,7 @@ import { trackEvent, MetaEvents } from "../utils/metaPixel";
 import { trackXEvent, XEvents } from "../utils/xPixel";
 import { PLANS, planById } from "../data/plans";
 
-const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown };
+const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown, starter: Zap, free: Zap, enterprise: Crown };
 
 // Checkout reads the same config the marketing pages render, so the amount
 // charged can never drift from the advertised price. Legacy slugs
@@ -83,6 +83,10 @@ export function SubscriptionPage() {
       if (bachsRef) {
         fetch(`${import.meta.env.VITE_API_URL || "/api"}/payments/bachs-status?reference=${encodeURIComponent(bachsRef)}`).catch(() => {});
       }
+      (async () => {
+        await refreshUser();
+        navigate("/developers/docs");
+      })();
       let attempts = 0;
       const poll = setInterval(() => {
         refreshUser();
@@ -190,6 +194,8 @@ export function SubscriptionPage() {
                   content_name: selectedPlan.name,
                 });
                 toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
+                await refreshUser();
+                navigate("/developers/docs");
                 return;
               }
               if (currentStatus === "failed") {
@@ -269,10 +275,10 @@ export function SubscriptionPage() {
               <h2 className="text-2xl md:text-3xl font-black text-foreground mb-2">Subscription Confirmed!</h2>
               <p className="text-muted-foreground mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
               <Button 
-                onClick={async () => { await refreshUser(); navigate("/app/dashboard"); }}
+                onClick={async () => { await refreshUser(); navigate("/developers/docs"); }}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20"
               >
-                Go to Home
+                Get Your API Key
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Card>

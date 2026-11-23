@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Card } from "../components/ui/card";
-import { 
-  Bell, Shield, User, Palette, Database, Check, Loader2, Eye, EyeOff, 
+import {
+  Bell, Shield, User, Palette, Database, Check, Loader2, Eye, EyeOff,
   Trash2, Download, Globe2, Mail,
-  TrendingUp, BarChart3, LineChart, Newspaper
+  TrendingUp, BarChart3, LineChart, Newspaper, Key, Copy, Plus, Trash
 } from "lucide-react";
 import { Switch } from "../components/ui/switch";
 import { Button } from "../components/ui/button";
@@ -31,7 +31,7 @@ export function SettingsPage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState("profile");
-  
+
   const [profile, setProfile] = useState({
     full_name: user?.full_name || "",
     email: user?.email || "",
@@ -47,7 +47,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(false);
 
   const hasProfileChanges = JSON.stringify(profile) !== JSON.stringify(originalProfile);
-  
+
   const [notifications, setNotifications] = useState<NotificationSettings>(() => {
     try {
       const saved = localStorage.getItem("notificationSettings");
@@ -55,24 +55,24 @@ export function SettingsPage() {
     } catch { /* ignore */ }
     return { priceAlerts: true, tradingSignals: true, marketNews: true, portfolioUpdates: true, chatMessages: false };
   });
-  
+
   const [appearance, setAppearance] = useState<AppearanceSettings>({
     darkMode: true,
     compactView: false,
   });
-  
+
   const [security, setSecurity] = useState({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
-  
+
   const [privacy, setPrivacy] = useState({
     dataVisibility: "public",
     allowAnalytics: true,
     showPortfolio: true,
   });
-  
+
   const [saving, setSaving] = useState(false);
   const [weeklyDigestOptedIn, setWeeklyDigestOptedIn] = useState(true);
   const [dailyBriefOptedIn, setDailyBriefOptedIn] = useState(true);
@@ -84,6 +84,76 @@ export function SettingsPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [sendingReport, setSendingReport] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<Array<{id: string, prefix: string, suffix: string, type: "production" | "sandbox", created_at: string, last_used?: string, full_key?: string}>>([]);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [generatingKey, setGeneratingKey] = useState(false);
+
+  // Fetch API keys on mount and when user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchApiKeys();
+    }
+  }, [user?.id]);
+
+  const fetchApiKeys = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${user.id}/api-keys`);
+      if (res.ok) {
+        const data = await res.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch API keys", err);
+    }
+  };
+
+  const handleGenerateApiKey = async (type: "production" | "sandbox" = "production") => {
+    if (!user?.id) return;
+    setGeneratingKey(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${user.id}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.key) {
+          setNewApiKey(data.key);
+          toast.success(`${type} API key generated successfully`);
+        }
+        await fetchApiKeys();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Failed to generate API key");
+      }
+    } catch (err) {
+      toast.error("Failed to generate API key");
+    } finally {
+      setGeneratingKey(false);
+    }
+  };
+
+  const handleRevokeKey = async (keyId: string) => {
+    if (!user?.id) return;
+    if (!confirm("Are you sure you want to revoke this API key? This action cannot be undone.")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${user.id}/api-keys/${keyId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success("API key revoked");
+        await fetchApiKeys();
+      } else {
+        toast.error("Failed to revoke API key");
+      }
+    } catch (err) {
+      toast.error("Failed to revoke API key");
+    }
+  };
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -267,7 +337,7 @@ export function SettingsPage() {
   const handleSendReport = async (reportType: string) => {
     setSendingReport(reportType);
     try {
-      const endpoint = reportType === 'sentiment' 
+      const endpoint = reportType === 'sentiment'
         ? `${API_BASE_URL}/user/send-test-sentiment`
         : reportType === 'portfolio'
         ? `${API_BASE_URL}/user/send-test-portfolio`
@@ -284,7 +354,7 @@ export function SettingsPage() {
         : reportType === 'quarterly-movers'
         ? `${API_BASE_URL}/user/send-test-quarterly-movers`
         : `${API_BASE_URL}/user/send-test-hot-news`;
-      
+
       const body = {
         email: user?.email || profile.email,
         userId: user?.id,
@@ -436,6 +506,7 @@ export function SettingsPage() {
     { icon: Bell, label: "Notifications", id: "notifications" },
     { icon: Mail, label: "Email Reports", id: "email-reports" },
     { icon: Shield, label: "Security", id: "security" },
+    { icon: Key, label: "API Keys", id: "api-keys" },
     { icon: Palette, label: "Appearance", id: "appearance" },
     { icon: Database, label: "Data & Privacy", id: "privacy" },
   ];
@@ -479,7 +550,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <Button 
+              <Button
                 onClick={handleSaveProfile}
                 disabled={saving || !hasProfileChanges}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
@@ -514,7 +585,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Price Alerts</div>
                   <div className="text-muted-foreground text-sm">Get notified when stocks hit target prices</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={notifications.priceAlerts}
                   onCheckedChange={(checked) => handleNotificationChange("priceAlerts", checked)}
                 />
@@ -525,7 +596,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Market Intelligence</div>
                   <div className="text-muted-foreground text-sm">Receive machine learning-driven market intelligence</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={notifications.tradingSignals}
                   onCheckedChange={(checked) => handleNotificationChange("tradingSignals", checked)}
                 />
@@ -536,7 +607,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Market News</div>
                   <div className="text-muted-foreground text-sm">Stay updated with NSE news</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={notifications.marketNews}
                   onCheckedChange={(checked) => handleNotificationChange("marketNews", checked)}
                 />
@@ -547,7 +618,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Portfolio Updates</div>
                   <div className="text-muted-foreground text-sm">Daily portfolio performance summary</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={notifications.portfolioUpdates}
                   onCheckedChange={(checked) => handleNotificationChange("portfolioUpdates", checked)}
                 />
@@ -558,7 +629,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Chat Messages</div>
                   <div className="text-muted-foreground text-sm">Notifications from trading groups</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={notifications.chatMessages}
                   onCheckedChange={(checked) => handleNotificationChange("chatMessages", checked)}
                 />
@@ -583,7 +654,7 @@ export function SettingsPage() {
                     {theme === "dark" ? "Currently enabled" : "Currently disabled"}
                   </div>
                 </div>
-                <Switch 
+                <Switch
                   checked={theme === "dark"}
                   onCheckedChange={(checked) => handleAppearanceChange("darkMode", checked)}
                 />
@@ -594,7 +665,7 @@ export function SettingsPage() {
                   <div className="text-foreground font-medium">Compact View</div>
                   <div className="text-muted-foreground text-sm">Show more data in less space</div>
                 </div>
-                <Switch 
+                <Switch
                   checked={appearance.compactView}
                   onCheckedChange={(checked) => handleAppearanceChange("compactView", checked)}
                 />
@@ -961,7 +1032,7 @@ export function SettingsPage() {
                     />
                   </div>
 
-                  <Button 
+                  <Button
                     onClick={handlePasswordChange}
                     disabled={saving}
                     className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
@@ -984,6 +1055,120 @@ export function SettingsPage() {
                 <Button variant="outline" className="border-border text-muted-foreground hover:bg-muted">
                   Enable 2FA
                 </Button>
+              </div>
+            </div>
+          </Card>
+        );
+
+      case "api-keys":
+        return (
+          <Card className="bg-card border-border p-4 md:p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Key className="w-6 h-6 text-[#0D7490]" />
+              <h3 className="text-foreground text-xl">API Keys</h3>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <p className="text-muted-foreground mb-6 max-w-2xl">
+                  Manage your API keys for programmatic access to the StocksIntels Financial Intelligence API.
+                  Use sandbox keys for development and production keys for live applications.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  onClick={() => handleGenerateApiKey("production")}
+                  disabled={generatingKey}
+                  className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                >
+                  {generatingKey ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Generate New API Key
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-border text-muted-foreground hover:bg-muted"
+                  onClick={() => handleGenerateApiKey("sandbox")}
+                  disabled={generatingKey}
+                >
+                  <Key className="w-4 h-4 mr-2" />
+                  Generate Sandbox Key
+                </Button>
+              </div>
+
+              {newApiKey && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-green-900 font-medium">New API Key Generated</h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { navigator.clipboard.writeText(newApiKey); toast.success("Copied!"); }}
+                    >
+                      <Copy className="w-4 h-4 mr-1" />
+                      Copy
+                    </Button>
+                  </div>
+                  <div className="bg-white border border-green-200 rounded p-3 font-mono text-sm text-green-900 break-all">
+                    {newApiKey}
+                  </div>
+                  <p className="text-green-700 text-sm mt-2">
+                    Save this key now — it won't be shown again. Store it securely in your environment variables.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-border">
+                <h4 className="text-foreground font-medium mb-4">Your API Keys</h4>
+                {apiKeys.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Key className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                    <p>No API keys yet. Generate one to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {apiKeys.map((key) => (
+                      <div key={key.id} className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${key.type === "production" ? "bg-green-500" : "bg-amber-500"}`} />
+                          <div>
+                            <div className="font-mono text-sm text-foreground">{key.prefix}••••••••{key.suffix}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {key.type === "production" ? "Production" : "Sandbox"} • Created {new Date(key.created_at).toLocaleDateString()}
+                              {key.last_used && ` • Last used ${new Date(key.last_used).toLocaleDateString()}`}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { if (key.full_key) { navigator.clipboard.writeText(key.full_key); toast.success("Copied!"); } }}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => handleRevokeKey(key.id)}
+                          >
+                            <Trash className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -1022,7 +1207,7 @@ export function SettingsPage() {
                       <div className="text-foreground font-medium">Analytics</div>
                       <div className="text-muted-foreground text-sm">Allow anonymous usage analytics</div>
                     </div>
-                    <Switch 
+                    <Switch
                       checked={privacy.allowAnalytics}
                       onCheckedChange={(checked) => handlePrivacyChange("allowAnalytics", checked)}
                     />
@@ -1033,7 +1218,7 @@ export function SettingsPage() {
                       <div className="text-foreground font-medium">Show Portfolio</div>
                       <div className="text-muted-foreground text-sm">Let others view your portfolio</div>
                     </div>
-                    <Switch 
+                    <Switch
                       checked={privacy.showPortfolio}
                       onCheckedChange={(checked) => handlePrivacyChange("showPortfolio", checked)}
                     />
@@ -1044,7 +1229,7 @@ export function SettingsPage() {
                       <div className="text-foreground font-medium">Show in Community Directory</div>
                       <div className="text-muted-foreground text-sm">Appear in the traders directory and be discoverable</div>
                     </div>
-                    <Switch 
+                    <Switch
                       checked={profile.visible_in_directory}
                       onCheckedChange={async (checked) => {
                         setProfile(p => ({ ...p, visible_in_directory: checked }));
@@ -1071,7 +1256,7 @@ export function SettingsPage() {
               <div className="pt-4 border-t border-border">
                 <h4 className="text-foreground font-medium mb-4">Data Management</h4>
                 <div className="space-y-3">
-                  <Button 
+                  <Button
                     variant="outline"
                     onClick={handleExportData}
                     className="border-border text-muted-foreground hover:bg-muted w-full justify-start"
@@ -1079,8 +1264,8 @@ export function SettingsPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Export My Data
                   </Button>
-                  
-                  <Button 
+
+                  <Button
                     variant="outline"
                     onClick={handleDeleteAccount}
                     className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 w-full justify-start"

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
 import { Header } from "../components/Header";
 import { Sidebar } from "../components/Sidebar";
@@ -6,6 +6,7 @@ import { Toaster } from "../components/ui/sonner";
 import { useAuth } from "../auth/AuthContext";
 import { BeginnerModeProvider } from "../contexts/BeginnerModeContext";
 import { GuidedTour } from "../components/GuidedTour";
+import { RouteLoadingFallback } from "../components/RouteLoadingFallback";
 import "../pages/DashboardTour";
 import "../pages/SignalsTour";
 import "../pages/FinancialsTour";
@@ -32,7 +33,9 @@ export function MainLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 overflow-y-auto">
-          <Outlet />
+          <Suspense fallback={<RouteLoadingFallback pathname={location.pathname} />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <Toaster position="top-right" />

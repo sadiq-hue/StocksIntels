@@ -320,10 +320,45 @@ if (serveFrontend) {
       description: 'Learn how StocksIntels combines Super Intelligence, company financials, market analysis and human analyst expertise to deepen research across African and global equity markets.',
       keywords: 'StocksIntels, Super Intelligence, African market intelligence, global equity research, company financials',
     },
-    '/pricing': {
-      title: 'StocksIntels Pricing | Financial Intelligence Plans',
-      description: 'Compare StocksIntels Core, Pro and Premium plans for Super Intelligence-powered market research, company financials, investment insights and portfolio tools.',
-      keywords: 'financial market intelligence pricing, investment research plans, African equity research, portfolio analysis tools',
+    '/developers/pricing': {
+      title: 'StocksIntels API Pricing | Developer Plans',
+      description: 'Simple, transparent pricing for the StocksIntels Financial Intelligence API. Start free, scale as you grow with Starter, Pro, and Enterprise tiers.',
+      keywords: 'API pricing, financial intelligence API, developer plans, Starter Pro Enterprise',
+    },
+    '/subscribe': {
+      title: 'Subscribe | StocksIntels',
+      description: 'Choose your plan and subscribe to StocksIntels. Secure checkout with M-Pesa, cards, or crypto.',
+      keywords: 'subscribe, payment, M-Pesa, Bachs, subscription',
+    },
+    '/subscribe/starter': {
+      title: 'Subscribe to Starter | StocksIntels',
+      description: 'Start building with live market data. 10,000 requests/day, real-time quotes, basic recommended positions.',
+      keywords: 'starter plan, API subscription, market data, real-time quotes',
+    },
+    '/subscribe/pro': {
+      title: 'Subscribe to Pro | StocksIntels',
+      description: 'Scale your integration with real-time data, recommended positions, webhooks, and WebSocket streaming.',
+      keywords: 'pro plan, API subscription, webhooks, WebSocket, real-time data',
+    },
+    '/subscribe/pro': {
+      title: 'Subscribe to Pro | StocksIntels',
+      description: 'Scale your integration with real-time data, recommended positions, webhooks, and WebSocket streaming.',
+      keywords: 'pro plan, API subscription, webhooks, WebSocket, real-time data',
+    },
+    '/subscribe/premium': {
+      title: 'Subscribe to Premium | StocksIntels',
+      description: 'Operate like a serious investor with multi-market screening, cross-market intelligence, and human analyst insights.',
+      keywords: 'premium plan, API subscription, multi-market, analyst insights',
+    },
+    '/subscribe/enterprise': {
+      title: 'Subscribe to Enterprise | StocksIntels',
+      description: 'Custom infrastructure, SLA, and tailored data access for enterprise teams.',
+      keywords: 'enterprise plan, API subscription, dedicated infrastructure, SLA',
+    },
+    '/subscribe/free': {
+      title: 'Free Developer Plan | StocksIntels',
+      description: 'Start building with free sandbox access. 1,000 requests/day, end-of-day data, basic recommended positions.',
+      keywords: 'free tier, API sandbox, developer plan, sandbox key',
     },
     '/blog': {
       title: 'StocksIntels Insights | African & Global Market Research',
@@ -390,6 +425,8 @@ if (serveFrontend) {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     const routePath = req.path.length > 1 ? req.path.replace(/\/+$/, '') : '/';
+    // Skip SEO rendering for /subscribe/* routes - let SPA handle them
+    if (routePath.startsWith('/subscribe/')) return next();
     const seo = publicPageSeo[routePath];
     if (!seo) return next();
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -3596,8 +3633,9 @@ async function requireActiveSubscription(req, res, next) {
     }
     const { subscription_tier, subscription_status, trial_start_date } = result.rows[0];
     const hasPaid = subscription_status === 'active' && subscription_tier !== 'free' && subscription_tier !== null;
+    const isFreeTier = subscription_tier === 'free' && subscription_status === 'active';
     const inTrial = trial_start_date && (Date.now() - new Date(trial_start_date).getTime()) < 7 * 24 * 60 * 60 * 1000;
-    if (!hasPaid && !inTrial) {
+    if (!hasPaid && !isFreeTier && !inTrial) {
       return res.status(403).json({
         error: 'Active subscription required. Please subscribe to continue using the app.',
         code: 'SUBSCRIPTION_REQUIRED',
@@ -8203,6 +8241,92 @@ app.put('/api/users/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
+
+
+// --- API Keys Management ---
+app.get('/api/users/:id/api-keys', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (parseInt(id) !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const result = await pool.query(
+      `SELECT id, key_prefix, key_suffix, key_type, created_at, last_used_at
+       FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`,
+      [id]
+    );
+    const keys = result.rows.map(row => ({
+      id: row.id,
+      prefix: row.key_prefix,
+      suffix: row.key_suffix,
+      type: row.key_type,
+      created_at: row.created_at,
+      last_used: row.last_used_at,
+    }));
+    res.json({ keys });
+  } catch (error) {
+    console.error('Error fetching API keys:', error.message);
+    res.status(500).json({ error: 'Failed to fetch API keys' });
+  }
+});
+
+app.post('/api/users/:id/api-keys', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'production' } = req.body;
+    if (parseInt(id) !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    if (!['production', 'sandbox'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid key type. Must be production or sandbox' });
+    }
+    const crypto = require('crypto');
+    const prefix = type === 'production' ? 'sk_live' : 'sk_sandbox';
+    const randomPart = crypto.randomBytes(24).toString('base64url');
+    const fullKey = `${prefix}_${randomPart}`;
+    const keyHash = crypto.createHash('sha256').update(fullKey).digest('hex');
+    const keyPrefix = fullKey.substring(0, 12);
+    const keySuffix = fullKey.substring(fullKey.length - 8);
+    const result = await pool.query(
+      `INSERT INTO api_keys (user_id, key_hash, key_prefix, key_suffix, key_type)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, key_prefix, key_suffix, key_type, created_at`,
+      [id, keyHash, keyPrefix, keySuffix, type]
+    );
+    const key = result.rows[0];
+    res.json({
+      key: {
+        id: key.id,
+        prefix: key.key_prefix,
+        suffix: key.key_suffix,
+        type: key.key_type,
+        created_at: key.created_at,
+        full_key: fullKey,
+      }
+    });
+  } catch (error) {
+    console.error('Error creating API key:', error.message);
+    res.status(500).json({ error: 'Failed to create API key' });
+  }
+});
+
+app.delete('/api/users/:id/api-keys/:keyId', authenticateToken, async (req, res) => {
+  try {
+    const { id, keyId } = req.params;
+    if (parseInt(id) !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    await pool.query(
+      `DELETE FROM api_keys WHERE id = $1 AND user_id = $2`,
+      [keyId, id]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error revoking API key:', error.message);
+    res.status(500).json({ error: 'Failed to revoke API key' });
+  }
+});
+
 
 // --- People / Community Directory ---
 app.post('/api/people/:id/follow', async (req, res) => {
@@ -14550,8 +14674,10 @@ async function initDatabase() {
     // Set default duration_months for existing plans that don't have it
     await pool.query(`UPDATE subscription_plans SET duration_months = 1 WHERE duration_months IS NULL`);
 
-    // Fix: Free-tier users should have 'free' status, not 'active' (was defaulting incorrectly)
-    await pool.query(`UPDATE users SET subscription_status = 'free' WHERE subscription_tier = 'free' AND subscription_status = 'active'`);
+    // NOTE: Free-tier users CAN have 'active' status for API access.
+    // The middleware (requireActiveSubscription) allows free tier with active status.
+    // Commented out the migration that was reverting free tier users to 'free' status:
+    // await pool.query(`UPDATE users SET subscription_status = 'free' WHERE subscription_tier = 'free' AND subscription_status = 'active'`);
     // Seed subscription records for existing users with non-free tiers missing from subscriptions table
     await pool.query(`
       INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)

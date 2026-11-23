@@ -1,0 +1,227 @@
+import { PublicBrandHeader, PublicBrandFooter } from "../../components/PublicBrandChrome";
+import { Link, useNavigate } from "react-router";
+import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink } from "lucide-react";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+
+const apiPricingTiers = [
+  {
+    tier: "Free",
+    requests: "1,000",
+    websocket: false,
+    access: "REST API, end-of-day data",
+    price: "Free",
+    popular: false,
+    features: [
+      { text: "REST API access", included: true },
+      { text: "End-of-day market data", included: true },
+      { text: "1,000 requests/day", included: true },
+      { text: "Basic recommended positions", included: true },
+      { text: "Community support", included: true },
+      { text: "WebSocket streaming", included: false },
+      { text: "Real-time data", included: false },
+      { text: "Webhooks", included: false },
+    ],
+  },
+  {
+    tier: "Starter",
+    requests: "10,000",
+    websocket: false,
+    access: "REST API, real-time quotes, basic recommended positions",
+    price: "$29.94/month",
+    popular: false,
+    features: [
+      { text: "REST API access", included: true },
+      { text: "Real-time market quotes", included: true },
+      { text: "10,000 requests/day", included: true },
+      { text: "Basic recommended positions", included: true },
+      { text: "Email support", included: true },
+      { text: "WebSocket streaming", included: false },
+      { text: "Advanced recommended positions", included: false },
+      { text: "Webhooks", included: false },
+    ],
+  },
+  {
+    tier: "api-pro",
+    requests: "100,000",
+    websocket: true,
+    access: "Real-time data, recommended positions, webhooks, WebSocket streaming",
+    price: "$49.83/month",
+    popular: true,
+    features: [
+      { text: "REST API + WebSocket", included: true },
+      { text: "Real-time market data", included: true },
+      { text: "100,000 requests/day", included: true },
+      { text: "Full recommended positions", included: true },
+      { text: "Webhooks & event streaming", included: true },
+      { text: "Priority email support", included: true },
+      { text: "Advanced screening", included: true },
+      { text: "SLA: 99.9% uptime", included: true },
+    ],
+  },
+  {
+    tier: "Enterprise",
+    requests: "Custom",
+    websocket: true,
+    access: "Dedicated infrastructure, SLA, tailored data access",
+    price: "Custom",
+    popular: false,
+    features: [
+      { text: "Dedicated infrastructure", included: true },
+      { text: "Custom rate limits", included: true },
+      { text: "Real-time global equities", included: true },
+      { text: "Full recommended positions", included: true },
+      { text: "Webhooks & WebSocket", included: true },
+      { text: "Dedicated support engineer", included: true },
+      { text: "Custom SLA & contracts", included: true },
+      { text: "On-premise deployment option", included: true },
+    ],
+  },
+];
+
+export function ApiPricingPage() {
+  const navigate = useNavigate();
+
+  const handlePlanClick = (planName: string) => {
+    if (planName === "Free") {
+      navigate("/login?redirect=/developers/docs");
+      return;
+    }
+    if (planName === "Enterprise") {
+      navigate("/login?redirect=/developers/docs");
+      return;
+    }
+    // Starter and Pro go to subscription page for payment
+    navigate(`/subscribe/${planName.toLowerCase()}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-white">
+      <PublicBrandHeader />
+      <main className="pt-28">
+        {/* Header */}
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 border-b border-[#DCE5F0]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <Link to="/developers" className="text-sm text-[#52647A] hover:text-[#0D7490] mb-2 inline-flex items-center gap-1">
+                <ChevronRight className="size-4 rotate-180" />
+                Developer Portal
+              </Link>
+              <h1 className="text-3xl font-extrabold tracking-[-0.02em] text-[#102B50]">API Pricing</h1>
+              <p className="mt-2 text-[#52647A]">Simple, transparent pricing for the StocksIntels Financial Intelligence API. Start free, scale as you grow.</p>
+            </div>
+            <Button asChild variant="outline">
+              <Link to="/developers">← Back to Developer Portal</Link>
+            </Button>
+          </div>
+        </section>
+
+        {/* Pricing Table */}
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="border-b border-[#DCE5F0]">
+                  <th className="pb-3 font-semibold text-[#102B50]">Tier</th>
+                  <th className="pb-3 font-semibold text-[#102B50] text-right">Requests/Day</th>
+                  <th className="pb-3 font-semibold text-[#102B50] text-center">WebSocket</th>
+                  <th className="pb-3 font-semibold text-[#102B50]">Access</th>
+                  <th className="pb-3 font-semibold text-[#102B50] text-right">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {apiPricingTiers.map((tier, i) => (
+                  <tr key={i} className={`border-b border-[#DCE5F0]/50 ${tier.popular ? "bg-[#0D7490]/5" : ""}`}>
+                    <td className="py-4 font-medium text-[#102B50]">
+                      {tier.popular && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#0D7490] text-white mr-2">Most Popular</span>}
+                      {tier.tier}
+                    </td>
+                    <td className="py-4 text-[#52647A] text-right">{tier.requests}</td>
+                    <td className="py-4 text-center">
+                      {tier.websocket ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                          ✅ Included
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                          ❌ Not included
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-4 text-[#52647A]">{tier.access}</td>
+                    <td className="py-4 font-semibold text-[#2563A6] text-right">{tier.price}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Feature Comparison Cards */}
+          <div className="mt-16 grid gap-6 lg:grid-cols-4">
+            {apiPricingTiers.map((tier, i) => (
+              <Card key={i} className={`border-[#DCE5F0] ${tier.popular ? "border-[#0D7490] ring-1 ring-[#0D7490]" : ""}`}>
+                {tier.popular && (
+                  <div className="bg-[#0D7490] text-white px-4 py-1 text-center text-sm font-medium">
+                    Most Popular
+                  </div>
+                )}
+                <CardHeader>
+                  <CardTitle className="text-[#102B50]">{tier.tier}</CardTitle>
+                  <div className="mt-2 text-3xl font-bold text-[#0D7490]">{tier.price}</div>
+                  <p className="text-sm text-[#52647A]">{tier.requests} requests/day</p>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {tier.features.map((f, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm">
+                        {f.included ? (
+                          <Check className="size-4 text-green-600 flex-shrink-0" />
+                        ) : (
+                          <X className="size-4 text-gray-400 flex-shrink-0" />
+                        )}
+                        <span className={f.included ? "text-[#102B50]" : "text-[#52647A] line-through"}>
+                          {f.text}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button 
+                    onClick={() => handlePlanClick(tier.tier)}
+                    className="mt-6 w-full"
+                    variant={tier.popular ? "default" : "outline"}
+                    size="lg"
+                  >
+                    {tier.price === "Custom" ? (
+                      <>Contact Sales <ArrowRight className="ml-2 w-4 h-4" /></>
+                    ) : tier.tier === "Free" ? (
+                      <>Get Sandbox Key <ArrowRight className="ml-2 w-4 h-4" /></>
+                    ) : (
+                      <>Start {tier.tier} <ArrowRight className="ml-2 w-4 h-4" /></>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 text-center bg-[#F5F8FC] border-y border-[#DCE5F0]">
+          <h2 className="text-3xl font-bold text-[#102B50]">Ready to Build?</h2>
+          <p className="mt-4 text-lg text-[#52647A] max-w-xl mx-auto">
+            Choose your tier and start integrating StocksIntels Financial Intelligence API today.
+          </p>
+          <div className="mt-8 flex justify-center gap-4">
+            <Button onClick={() => handlePlanClick("Free")} size="lg">
+              Get Sandbox Key <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link to="/developers">Back to Developer Portal</Link>
+            </Button>
+          </div>
+        </section>
+      </main>
+      <PublicBrandFooter />
+    </div>
+  );
+}

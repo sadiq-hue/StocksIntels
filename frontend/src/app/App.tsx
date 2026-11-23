@@ -10,6 +10,7 @@ import { PortfolioDataProvider } from "./contexts/PortfolioDataContext";
 import { PaperTradingProvider } from "./contexts/PaperTradingContext";
 import { CompareProvider } from "./contexts/CompareContext";
 import { kenyanStocks, globalStocks } from "./data/stockUniverses";
+import { RouteLoadingFallback } from "./components/RouteLoadingFallback";
 
 function MetaPixelPageViewTracker() {
   const location = useLocation();
@@ -58,6 +59,12 @@ const SecurityPage = React.lazy(() => import("./pages/SecurityPage").then(m => (
 const DisclaimerPage = React.lazy(() => import("./pages/DisclaimerPage").then(m => ({ default: m.DisclaimerPage })));
 const AffiliatesPage = React.lazy(() => import("./pages/AffiliatesPage").then(m => ({ default: m.AffiliatesPage })));
 const IpoPage = React.lazy(() => import("./pages/IpoPage").then(m => ({ default: m.IpoPage })));
+const DevelopersPage = React.lazy(() => import("./pages/DevelopersPage").then(m => ({ default: m.DevelopersPage })));
+const ApiDocsPage = React.lazy(() => import("./pages/developers/ApiDocsPage").then(m => ({ default: m.ApiDocsPage })));
+const SdksPage = React.lazy(() => import("./pages/developers/SdksPage").then(m => ({ default: m.SdksPage })));
+const PlaygroundPage = React.lazy(() => import("./pages/developers/PlaygroundPage").then(m => ({ default: m.PlaygroundPage })));
+const AuthGuidePage = React.lazy(() => import("./pages/developers/AuthGuidePage").then(m => ({ default: m.AuthGuidePage })));
+const ApiPricingPage = React.lazy(() => import("./pages/developers/ApiPricingPage").then(m => ({ default: m.ApiPricingPage })));
 const InsiderPage = React.lazy(() => import("./pages/InsiderPage").then(m => ({ default: m.InsiderPage })));
 // const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage }))); // Derivatives page disabled
 const SpecialFundsPage = React.lazy(() => import("./pages/SpecialFundsPage").then(m => ({ default: m.SpecialFundsPage })));
@@ -91,10 +98,10 @@ function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  // Check active subscription (paid) or within 7-day trial
-  const hasPaid = user.subscription_status === 'active' && user.subscription_tier !== 'free' && user.subscription_tier !== null && user.subscription_tier !== undefined;
+  // Allow access for: active subscription (any tier including free), or within 7-day trial
+  const hasActiveSubscription = user.subscription_status === 'active' || user.subscription_tier === 'free';
   const trialInfo = getTrialInfo(user);
-  if (!hasPaid && !trialInfo.isWithinTrial) {
+  if (!hasActiveSubscription && !trialInfo.isWithinTrial) {
     return <Navigate to="/pricing" replace />;
   }
 
@@ -161,6 +168,36 @@ const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers",
+    element: <DevelopersPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/docs",
+    element: <ApiDocsPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/sdks",
+    element: <SdksPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/playground",
+    element: <PlaygroundPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/auth",
+    element: <AuthGuidePage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/pricing",
+    element: <ApiPricingPage />,
     errorElement: <NotFoundPage />,
   },
   {
@@ -234,8 +271,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
+  const pathname = typeof window === "undefined" ? "/" : window.location.pathname;
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0D7490]" /></div>}>
+    <Suspense fallback={<RouteLoadingFallback pathname={pathname} withShell />}>
       <RouterProvider router={router} />
     </Suspense>
   );
