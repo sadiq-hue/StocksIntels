@@ -465,6 +465,16 @@ export function DevelopersPage() {
                 </Button>
               </CardContent>
             </Card>
+            <Card className="border-[#DCE5F0]">
+              <CardContent className="pt-6">
+                <Key className="size-6 text-[#2563A6] mb-3" />
+                <h3 className="font-semibold text-[#102B50] mb-2">API Keys Management</h3>
+                <p className="text-sm text-[#52647A] mb-4">Generate, view and manage your sandbox and production API keys directly from the developer portal.</p>
+                <Button asChild variant="link" className="text-sm p-0">
+                  <Link to="/developers/api-keys">Manage API Keys →</Link>
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </section>
 

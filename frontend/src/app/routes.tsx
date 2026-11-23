@@ -22,6 +22,7 @@ import { SdksPage } from "./pages/developers/SdksPage";
 import { PlaygroundPage } from "./pages/developers/PlaygroundPage";
 import { AuthGuidePage } from "./pages/developers/AuthGuidePage";
 import { ApiPricingPage } from "./pages/developers/ApiPricingPage";
+import { ApiKeysPage } from "./pages/developers/ApiKeysPage";
 // import { DerivativesPage } from "./pages/DerivativesPage"; // Derivatives page disabled
 import { AdminStocks } from "./pages/AdminStocks";
 import { SignalEnginePage } from "./pages/SignalEnginePage";
@@ -57,6 +58,10 @@ export const router = createBrowserRouter([
   {
     path: "/developers/pricing",
     Component: ApiPricingPage,
+  },
+  {
+    path: "/developers/api-keys",
+    Component: ApiKeysPage,
   },
   {
     path: "/app",
