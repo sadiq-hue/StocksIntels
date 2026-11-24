@@ -1,6 +1,6 @@
 import { PublicBrandHeader, PublicBrandFooter } from "../../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
-import { ChevronRight, Copy, Check, Loader2, Key, Trash2, Shield, AlertTriangle, Mail, Lock, User, Eye, EyeOff, RotateCcw, ArrowRight } from "lucide-react";
+import { ChevronRight, Copy, Check, Loader2, Key, Trash2, Shield, AlertTriangle, Mail, Lock, User, Eye, EyeOff, RotateCcw, ArrowRight, Bug } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -8,7 +8,52 @@ import { Label } from "../../components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "../../auth/AuthContext";
 import { authFetch } from "../../auth/tokenStore";
-import { useState } from "react";
+import { useState, useEffect, Component, ReactNode } from "react";
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ApiKeysPage error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="max-w-md mx-auto text-center">
+        <Bug className="size-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-[#102B50] mb-2">Something went wrong</h2>
+        <p className="text-[#52647A] mb-4">{error.message}</p>
+        <pre className="bg-[#F5F8FC] border border-[#DCE5F0] p-4 rounded-lg text-xs text-left overflow-auto max-h-64 text-red-700">
+          {error.stack}
+        </pre>
+        <Button onClick={resetErrorBoundary} className="mt-4" variant="outline">
+          Try again
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function ApiKeysPage() {
 const { user, isLoading: authContextLoading, login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword } = useAuth();
@@ -422,8 +467,16 @@ const navigate = useNavigate();
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <PublicBrandHeader />
+    <ErrorBoundary
+      fallback={
+        <ErrorFallback
+          error={new Error("Failed to load API Keys page")}
+          resetErrorBoundary={() => window.location.reload()}
+        />
+      }
+    >
+      <div className="min-h-screen bg-white">
+        <PublicBrandHeader />
       <main className="pt-28">
         <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 border-b border-[#DCE5F0]">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -566,5 +619,6 @@ const navigate = useNavigate();
       </main>
       <PublicBrandFooter />
     </div>
+  </ErrorBoundary>
   );
 }
