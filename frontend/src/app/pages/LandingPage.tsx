@@ -300,39 +300,65 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
 
   const visibleSymbols = visibleIndices.map((idx) => symbolsWithData[idx]).filter(Boolean);
 
+  // Light theme colors
+  const bgPrimary = "bg-white";
+  const bgSecondary = "bg-gray-50";
+  const bgHover = "bg-gray-50";
+  const borderColor = "border-gray-200";
+  const borderHover = "border-gray-300";
+  const textPrimary = "text-gray-900";
+  const textSecondary = "text-gray-600";
+  const textMuted = "text-gray-400";
+  const accentBlue = "text-blue-600";
+  const accentBlueBg = "bg-blue-50";
+  const accentBlueBorder = "border-blue-200";
+  const accentOrange = "text-orange-600";
+  const accentOrangeBg = "bg-orange-50";
+  const accentOrangeBorder = "border-orange-200";
+  const positiveBg = "bg-green-50";
+  const positiveText = "text-green-700";
+  const negativeBg = "bg-red-50";
+  const negativeText = "text-red-700";
+  const neutralBg = "bg-gray-100";
+  const neutralText = "text-gray-600";
+  const accentBlueText = "text-blue-600";
+  const accentBlueBg2 = "bg-blue-50";
+  const streamingColor = "text-blue-600";
+  const streamingBg = "bg-blue-50";
+  const liveIndicator = "bg-green-500";
+
   if (totalSymbols === 0) {
     return (
       <div className="relative mx-auto w-full max-w-[720px]" aria-label="Live market ticker">
-        <div className="absolute -inset-4 rounded-[2rem] bg-[#D45500]/5 blur-2xl" />
-        <div className="relative overflow-hidden rounded-[1.5rem] border border-[#D45500]/10 bg-gradient-to-b from-[#FFFAF5] via-[#FFFFFE] to-[#FFFAF5] shadow-[0_25px_60px_-30px_rgba(212,85,0,0.05),0_8px_24px_-8px_rgba(212,85,0,0.03)]">
-          <div className="flex items-center justify-between border-b border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFAF5] to-[#FFFFFE]">
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-6 bg-gray-50">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2 w-2 items-center justify-center">
-                <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
-                <span className="relative size-1.5 rounded-full bg-[#D45500]" />
+                <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
+                <span className="relative size-1.5 rounded-full bg-green-500" />
               </span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D45500]/80">Live Market Stream</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Live Market Stream</span>
             </div>
-            <span className="font-mono text-[10px] font-semibold text-[#CC5200]">REAL-TIME QUOTES</span>
+            <span className="font-mono text-[10px] font-semibold text-gray-600">REAL-TIME QUOTES</span>
           </div>
           <div className="overflow-hidden h-80 sm:h-[400px] flex items-center justify-center">
-            <p className="text-[#CC5200] text-sm">No live quote data available at the moment</p>
+            <p className="text-gray-500 text-sm">No live quote data available at the moment</p>
           </div>
-          <div className="border-t border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFFFE] to-[#FFFAF5]">
+          <div className="border-t border-gray-200 px-4 py-3 sm:px-6 bg-gray-50">
             <div className="flex items-center justify-between gap-4 text-[10px]">
-              <span className="text-[#CC5200]">Waiting for market data...</span>
+              <span className="text-gray-500">Waiting for market data...</span>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                  <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
-                  <span className="relative size-1 rounded-full bg-[#D45500]" />
+                  <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
+                  <span className="relative size-1 rounded-full bg-green-500" />
                 </span>
-                <span className="font-mono font-semibold text-[#D45500]/80">STREAMING</span>
+                <span className="font-mono font-semibold text-green-600">STREAMING</span>
               </div>
             </div>
           </div>
           {error && (
-            <div className="border-t border-[#D45500]/18 bg-[#FFFAF5]/30 px-4 py-3 sm:px-6">
-              <p className="text-[10px] text-[#CC5200]">Quote feed temporarily unavailable.</p>
+            <div className="border-t border-red-200 bg-red-50 px-4 py-3 sm:px-6">
+              <p className="text-[10px] text-red-600">Quote feed temporarily unavailable.</p>
             </div>
           )}
         </div>
@@ -342,17 +368,16 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
 
   return (
     <div className="relative mx-auto w-full max-w-[720px]" aria-label="Live market ticker">
-      <div className="absolute -inset-4 rounded-[2rem] bg-[#D45500]/5 blur-2xl" />
-      <div className="relative overflow-hidden rounded-[1.5rem] border border-[#D45500]/10 bg-gradient-to-b from-[#FFFAF5] via-[#FFFFFE] to-[#FFFAF5] shadow-[0_25px_60px_-30px_rgba(212,85,0,0.05),0_8px_24px_-8px_rgba(212,85,0,0.03)]">
-        <div className="flex items-center justify-between border-b border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFAF5] to-[#FFFFFE]">
+      <div className="relative overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-6 bg-gray-50">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2 items-center justify-center">
-              <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
-              <span className="relative size-1.5 rounded-full bg-[#D45500]" />
+              <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
+              <span className="relative size-1.5 rounded-full bg-green-500" />
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D45500]/80">Live Market Stream</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Live Market Stream</span>
           </div>
-          <span className="font-mono text-[10px] font-semibold text-[#CC5200]">REAL-TIME QUOTES</span>
+          <span className="font-mono text-[10px] font-semibold text-gray-600">REAL-TIME QUOTES</span>
         </div>
 
         <div
@@ -371,8 +396,8 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
                 return (
                   <div
                     key={`${item.symbol}-${rowIndex}`}
-                    className={`relative flex items-center justify-between px-4 py-3 border-b border-[#D45500]/6 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#D45500]/3 hover:scale-[1.01] ${
-                      rowIndex === 0 ? "bg-white/60 backdrop-blur-sm shadow-[0_4px_16px_-4px_rgba(212,85,0,0.08)] z-10 scale-[1.02] border-l-2 border-[#D45500]/40" : ""
+                    className={`relative flex items-center justify-between px-4 py-3 border-b border-gray-200 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-gray-50 hover:scale-[1.01] ${
+                      rowIndex === 0 ? "bg-gray-50 backdrop-blur-sm shadow-sm z-10 scale-[1.02] border-l-2 border-blue-500" : ""
                     } ${rowIndex === 4 ? "border-0" : ""}`}
                     style={{
                       transformOrigin: "center",
@@ -382,22 +407,22 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
                   >
                     <div className="flex items-center gap-4 min-w-0 flex-1">
                       <div className="flex flex-col items-start justify-center min-w-[70px]">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-[#2563A6]">{item.exchange}</span>
-                        <span className="font-mono text-[11px] font-semibold text-[#102B50]">{item.symbol.replace(/^NSE:|^JSE:|^NGX:|^GSE:/, "")}</span>
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600">{item.exchange}</span>
+                        <span className="font-mono text-[11px] font-semibold text-gray-900">{item.symbol.replace(/^NSE:|^JSE:|^NGX:|^GSE:/, "")}</span>
                       </div>
-                      <div className="min-w-0 flex-1 border-l border-[#D9C58F]/30 pl-4">
-                        <p className="text-sm font-semibold text-[#102B50] truncate">{item.name}</p>
-                        <p className="text-[10px] uppercase tracking-[0.1em] text-[#7A694D]">{item.exchange} • {data.marketState === "REGULAR" ? "Live" : data.marketState === "CLOSED" ? "Closed" : "Delayed"}</p>
+                      <div className="min-w-0 flex-1 border-l border-gray-200 pl-4">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-gray-500">{item.exchange} • {data.marketState === "REGULAR" ? "Live" : data.marketState === "CLOSED" ? "Closed" : "Delayed"}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 min-w-[140px] text-right">
-                      <span className="font-mono text-lg font-semibold tabular-nums text-[#102B50]">
-                        {data.hasData ? data.price : <span className="text-[#9AA9BA]">--</span>}
+                      <span className="font-mono text-lg font-semibold tabular-nums text-gray-900">
+                        {data.hasData ? data.price : <span className="text-gray-400">--</span>}
                       </span>
                       {data.hasData && (
                         <span
                           className={`inline-flex items-center gap-1 font-mono text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full ${
-                            data.up ? "bg-emerald-100 text-emerald-700" : data.down ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"
+                            data.up ? "bg-green-50 text-green-700" : data.down ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-600"
                           }`}
                         >
                           {data.up && <TrendingUp className="size-3" />}
@@ -405,7 +430,7 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
                           {data.change}
                         </span>
                       )}
-                      {!data.hasData && <span className="text-[10px] text-[#9AA9BA]">No data</span>}
+                      {!data.hasData && <span className="text-[10px] text-gray-400">No data</span>}
                     </div>
                   </div>
                 );
@@ -413,23 +438,23 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#FFFAF5] to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none" />
         </div>
 
-        <div className="border-t border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFFFE] to-[#FFFAF5]">
+        <div className="border-t border-gray-200 px-4 py-3 sm:px-6 bg-gray-50">
           <div className="flex items-center justify-end gap-4 text-[10px]">
             <div className="flex items-center gap-2">
               <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
-                <span className="relative size-1 rounded-full bg-[#D45500]" />
+                <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
+                <span className="relative size-1 rounded-full bg-green-500" />
               </span>
-              <span className="font-mono font-semibold text-[#D45500]/80">STREAMING</span>
+              <span className="font-mono font-semibold text-green-600">STREAMING</span>
             </div>
           </div>
         </div>
         {error && (
-          <div className="border-t border-[#D45500]/18 bg-[#FFFAF5]/30 px-4 py-3 sm:px-6">
-            <p className="text-[10px] text-[#CC5200]">Quote feed temporarily unavailable. Showing cached data where available.</p>
+          <div className="border-t border-red-200 bg-red-50 px-4 py-3 sm:px-6">
+            <p className="text-[10px] text-red-600">Quote feed temporarily unavailable. Showing cached data where available.</p>
           </div>
         )}
       </div>
