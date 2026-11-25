@@ -1250,7 +1250,7 @@ export function DashboardPage() {
 
             {/* Market Movers */}
             <Link
-              to="/app/markets"
+              to="/app/market-movers"
               className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
             >
               <BarChart3 className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
