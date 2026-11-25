@@ -136,15 +136,9 @@ export function CatalystsNews() {
     let alive = true;
     const fetchNews = async () => {
       try {
-        let response = await fetch(`${API_BASE}/market-intel?limit=20`);
-        let data = await response.json();
+        const response = await fetch(`${API_BASE}/news?limit=20`);
+        const data = await response.json();
         let allNews = Array.isArray(data) ? data : [];
-        
-        if (allNews.length === 0) {
-          const blogResponse = await fetch(`${API_BASE}/blog?limit=20`);
-          const blogData = await blogResponse.json();
-          allNews = Array.isArray(blogData) ? blogData : (blogData.rows || []);
-        }
         
         if (alive) {
           const catalysts = allNews
