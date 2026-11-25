@@ -273,72 +273,43 @@ export function CatalystsNews() {
 
   return (
     <div className="space-y-6">
-      {/* Featured Article - Compact */}
+      {/* Featured Article - Stock-focused */}
       {featured && (
-        <article className="relative rounded-xl border border-white/10 overflow-hidden group max-h-[480px] md:max-h-[520px]">
+        <article className="relative rounded-xl border border-white/10 overflow-hidden group max-h-[400px] md:max-h-[440px]">
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-cover bg-center bg-no-repeat" style={{
-              backgroundImage: 'linear-gradient(rgba(15, 15, 35, 0.85), rgba(15, 15, 35, 0.75)), url("https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=1920&q=80")',
-              backgroundPosition: 'center 55%',
+              backgroundImage: 'linear-gradient(rgba(15, 15, 35, 0.85), rgba(15, 15, 35, 0.75)), url("https://images.unsplash.com/photo-1611974789895-a7e89e9c3b63?w=1920&q=80")',
+              backgroundPosition: 'center center',
             }} />
-            <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.015\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 36v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 6V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-40" />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-white/3 font-black text-7xl md:text-[10rem] lg:text-[12rem] font-mono leading-none select-none pointer-events-none" style={{ fontFamily: 'system-ui, sans-serif' }}>
-              S&P
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-950/90 via-slate-900/70 to-amber-900/30" />
-            <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-amber-900/40 via-orange-800/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950/90 via-slate-900/70 to-blue-900/30" />
+            <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-blue-900/40 via-blue-800/20 to-transparent" />
           </div>
           <div className="relative z-10 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-semibold tracking-[0.05em] bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                <Globe className="size-2.5" />
-                Market Intelligence
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-semibold tracking-[0.05em] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <TrendingUp className="size-2.5" />
-                Big Picture Outlook
-              </span>
+              {featured.category && (
+                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold ${getCategoryTag(featured.category).className}`}>
+                  {getCategoryTag(featured.category).icon}
+                  {getCategoryTag(featured.category).label}
+                </span>
+              )}
               <span className="text-[9px] text-slate-500 ml-auto">{formatTimeAgo(featured.publishedAt)}</span>
             </div>
             <div className="mb-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-400 mb-1">
-                Special Report
-              </p>
-              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-white leading-[1.1] mb-2 group-hover:text-blue-300 transition-colors">
-                Big Picture Outlook 2027
+              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-white leading-[1.1] mb-2 group-hover:text-blue-300 transition-colors line-clamp-2">
+                {featured.title}
               </h2>
-              <p className="text-sm md:text-base text-slate-300 leading-relaxed mb-2 max-w-2xl font-medium">
-                AI's Next Test
-              </p>
             </div>
             
-            <div className="space-y-1.5 mb-4 max-w-2xl text-slate-300 leading-relaxed">
-              <p className="text-sm leading-relaxed">
-                Can AI deliver on its promise in 2027? As attention shifts from AI investment to proof of returns,
-                <em className="text-white font-semibold">Big Picture Outlook 2027</em> examines where AI ROI is becoming measurable.
-              </p>
-              <div className="grid gap-1.5 md:grid-cols-2 sm:max-w-2xl">
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
-                  <TrendingUp className="size-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="text-[12px] text-slate-300 leading-relaxed">Where AI ROI is becoming measurable across sectors</span>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
-                  <Globe className="size-3.5 text-blue-400 shrink-0 mt-0.5" />
-                  <span className="text-[12px] text-slate-300 leading-relaxed">How markets are financing the AI infrastructure buildout</span>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
-                  <AlertTriangle className="size-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  <span className="text-[12px] text-slate-300 leading-relaxed">What could constrain AI infrastructure growth</span>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5 border border-white/5">
-                  <Shield className="size-3.5 text-purple-400 shrink-0 mt-0.5" />
-                  <span className="text-[12px] text-slate-300 leading-relaxed">Which businesses are defensible as AI reshapes M&A</span>
-                </div>
+            {featured.summary && (
+              <div className="space-y-1.5 mb-4 max-w-2xl text-slate-300 leading-relaxed">
+                <p className="text-sm leading-relaxed line-clamp-3">
+                  {featured.summary}
+                </p>
               </div>
-            </div>
+            )}
             <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/10">
               <span className="text-[9px] font-medium text-slate-500">Published by</span>
-              <a href={featured.url || featured.slug ? `https://www.spglobal.com/marketintelligence/en/insights/${featured.slug}` : "#"} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-white/80 hover:text-blue-300 transition-colors flex items-center gap-1">
+              <a href={featured.url || "#"} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-white/80 hover:text-blue-300 transition-colors flex items-center gap-1">
                 {featured.source}
                 <ExternalLink className="size-3 text-slate-400" />
               </a>
@@ -367,9 +338,9 @@ export function CatalystsNews() {
                   ))}
                 </div>
               )}
-              <div className="mt-3 pt-3 border-t border-white/10">
-                <a href={featured.url || featured.slug ? `https://www.spglobal.com/marketintelligence/en/insights/${featured.slug}` : "#"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-all hover:shadow-lg hover:shadow-blue-500/20">
-                  Read the full Big Picture Outlook 2027
+              <div className="mt-3 pt-3 border-t border-white/10 w-full">
+                <a href={featured.url || "#"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-lg transition-all hover:shadow-lg hover:shadow-blue-500/20 w-full justify-center">
+                  Read full article
                   <ChevronRight className="size-3.5" />
                 </a>
               </div>
