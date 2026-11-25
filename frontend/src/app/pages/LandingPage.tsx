@@ -712,15 +712,15 @@ export function LandingPage() {
         </section>
 
         {/* Catalysts News Section */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-[#0B1D3A] via-[#0F2644] to-[#142D4E] py-20 sm:py-24">
+        <section className="relative overflow-hidden bg-gradient-to-b from-[#0B1D3A] via-[#0F2644] to-[#142D4E] py-16 sm:py-20">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,166,0.1),transparent_60%)]" />
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
           <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
-            <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end mb-12">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end mb-8">
               <div>
                 <SectionLabel light>Market catalysts</SectionLabel>
-                <h2 className="si-display mt-4 text-4xl leading-[1.03] tracking-[-0.035em] text-white sm:text-5xl">News moving markets right now.</h2>
-                <p className="mt-4 text-lg leading-7 text-slate-300">High-impact developments with catalyst scores. Filtered for market-moving potential.</p>
+                <h2 className="si-display mt-3 text-3xl leading-[1.03] tracking-[-0.035em] text-white sm:text-4xl">News moving markets right now.</h2>
+                <p className="mt-3 text-base leading-6 text-slate-300">High-impact developments with catalyst scores. Filtered for market-moving potential.</p>
               </div>
               <Link to="/app/news" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-400 hover:text-amber-300 shrink-0">
                 View all catalysts <ExternalLink className="size-4" />
