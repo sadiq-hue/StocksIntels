@@ -201,7 +201,12 @@ export function CatalystsNews() {
         const normalizedNews = allNews.map(normalizeArticle);
         
         if (alive) {
-          const catalysts = normalizedNews
+          // Filter for articles with catalyst score > 30 OR articles with tickers (stock-related)
+          const stockRelatedNews = normalizedNews.filter((a: any) => 
+            (a.catalystScore && a.catalystScore > 30) || (a.tickers && a.tickers.length > 0)
+          );
+          
+          const catalysts = stockRelatedNews
             .filter((a: any) => a.catalystScore && a.catalystScore > 30)
             .sort((a: any, b: any) => (b.catalystScore || 0) - (a.catalystScore || 0))
             .slice(0, 6);
@@ -209,10 +214,11 @@ export function CatalystsNews() {
           if (catalysts.length > 0) {
             setArticles(catalysts);
           } else {
-            const recentNews = normalizedNews
-              .sort((a: any, b: any) => new Date(b.publishedAt || b.published_at || 0).getTime() - new Date(a.publishedAt || a.published_at || 0).getTime())
+            // Fallback: stock-related news sorted by catalyst score, then by date
+            const stockNews = stockRelatedNews
+              .sort((a: any, b: any) => (b.catalystScore || 0) - (a.catalystScore || 0))
               .slice(0, 6);
-            setArticles(recentNews);
+            setArticles(stockNews);
           }
           setError(null);
         }
