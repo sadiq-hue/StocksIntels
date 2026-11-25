@@ -3,10 +3,32 @@ import { ExternalLink, Clock, ChevronRight, Tag, Globe, TrendingUp, BarChart3, A
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+interface ApiNewsArticle {
+  id: string;
+  title: string;
+  summary?: string;
+  excerpt?: string;
+  source?: string;
+  publishedAt?: string;
+  url?: string;
+  slug?: string;
+  catalystStrength?: number;
+  catalystScore?: number;
+  relatedStocks?: string[];
+  tickers?: string[];
+  sentiment?: "bullish" | "bearish" | "neutral";
+  category?: string;
+  hot?: boolean;
+  hotType?: string;
+  catalyst?: string;
+  catalystDirection?: string;
+}
+
 interface NewsArticle {
   id: string;
   title: string;
   summary?: string;
+  excerpt?: string;
   source?: string;
   publishedAt?: string;
   url?: string;
@@ -38,6 +60,41 @@ function getCategoryTag(category?: string): { label: string; icon: React.ReactNo
   if (cat.includes("macro") || cat.includes("fed") || cat.includes("rate")) return { label: "Macro", icon: <Globe className="size-3" />, className: "bg-purple-500/10 text-purple-400 border-purple-500/20" };
   if (cat.includes("tech") || cat.includes("ai")) return { label: "Technology", icon: <TrendingUp className="size-3" />, className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" };
   return { label: "Markets", icon: <Tag className="size-3" />, className: "bg-slate-500/10 text-slate-400 border-slate-500/20" };
+}
+
+function normalizeArticle(article: ApiNewsArticle): NewsArticle {
+  const catalystScore = article.catalystScore ?? article.catalystStrength ?? 0;
+  const tickers = article.tickers ?? article.relatedStocks ?? [];
+  let category = article.category;
+  
+  // Infer category if not present
+  if (!category) {
+    const text = `${article.title || ''} ${article.excerpt || article.summary || ''} ${article.source || ''}`.toLowerCase();
+    if (text.includes("earnings") || text.includes("results") || text.includes("dividend") || text.includes("profit") || text.includes("revenue")) {
+      category = "Earnings";
+    } else if (text.includes("fed") || text.includes("rate") || text.includes("cpi") || text.includes("inflation") || text.includes("macro") || text.includes("central bank")) {
+      category = "Macro";
+    } else if (text.includes("tech") || text.includes("ai") || text.includes("nvidia") || text.includes("ai infrastructure") || text.includes("semiconductor")) {
+      category = "Technology";
+    } else {
+      category = "Markets";
+    }
+  }
+  
+  return {
+    id: article.id,
+    title: article.title,
+    summary: article.summary,
+    excerpt: article.excerpt,
+    source: article.source,
+    publishedAt: article.publishedAt,
+    url: article.url,
+    slug: article.slug,
+    catalystScore,
+    tickers,
+    sentiment: article.sentiment,
+    category,
+  };
 }
 
 const sampleCatalysts: NewsArticle[] = [
@@ -140,8 +197,11 @@ export function CatalystsNews() {
         const data = await response.json();
         let allNews = Array.isArray(data) ? data : [];
         
+        // Normalize articles to handle API field differences
+        const normalizedNews = allNews.map(normalizeArticle);
+        
         if (alive) {
-          const catalysts = allNews
+          const catalysts = normalizedNews
             .filter((a: any) => a.catalystScore && a.catalystScore > 30)
             .sort((a: any, b: any) => (b.catalystScore || 0) - (a.catalystScore || 0))
             .slice(0, 6);
@@ -149,7 +209,7 @@ export function CatalystsNews() {
           if (catalysts.length > 0) {
             setArticles(catalysts);
           } else {
-            const recentNews = allNews
+            const recentNews = normalizedNews
               .sort((a: any, b: any) => new Date(b.publishedAt || b.published_at || 0).getTime() - new Date(a.publishedAt || a.published_at || 0).getTime())
               .slice(0, 6);
             setArticles(recentNews);
