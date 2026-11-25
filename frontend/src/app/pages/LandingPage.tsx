@@ -347,13 +347,13 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
           <div className="border-t border-gray-200 px-4 py-3 sm:px-6 bg-gray-50">
             <div className="flex items-center justify-between gap-4 text-[10px]">
               <span className="text-gray-500">Waiting for market data...</span>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                  <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
-                  <span className="relative size-1 rounded-full bg-green-500" />
-                </span>
-                <span className="font-mono font-semibold text-green-600">STREAMING</span>
-              </div>
+<div className="flex items-center gap-2">
+              <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                <span className="absolute size-full rounded-full bg-amber-500 animate-ping opacity-75" />
+                <span className="relative size-1 rounded-full bg-amber-500" />
+              </span>
+              <span className="font-mono font-semibold text-amber-700">STREAMING</span>
+            </div>
             </div>
           </div>
           {error && (
@@ -445,10 +445,10 @@ function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, Realti
           <div className="flex items-center justify-end gap-4 text-[10px]">
             <div className="flex items-center gap-2">
               <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                <span className="absolute size-full rounded-full bg-green-500 animate-ping opacity-75" />
-                <span className="relative size-1 rounded-full bg-green-500" />
+                <span className="absolute size-full rounded-full bg-amber-500 animate-ping opacity-75" />
+                <span className="relative size-1 rounded-full bg-amber-500" />
               </span>
-              <span className="font-mono font-semibold text-green-600">STREAMING</span>
+              <span className="font-mono font-semibold text-amber-700">STREAMING</span>
             </div>
           </div>
         </div>
