@@ -475,6 +475,19 @@ export function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [yearlyPricing, setYearlyPricing] = useState(true);
+
+  const handleMonthlyClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Monthly clicked');
+    setYearlyPricing(false);
+  };
+  const handleYearlyClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Yearly clicked');
+    setYearlyPricing(true);
+  };
   const [articles, setArticles] = useState<Article[]>([]);
   const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [contactSending, setContactSending] = useState(false);
@@ -874,9 +887,9 @@ export function LandingPage() {
                 <h2 className="si-display max-w-3xl text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">Choose the depth of intelligence you need.</h2>
                 <p className="mt-6 max-w-2xl text-sm leading-6 text-[#607187]">One platform, three levels of research depth. Trial access begins after the $1 commitment fee.</p>
               </div>
-              <div className="inline-flex w-fit rounded-full border border-[#C8D6E5] bg-white p-1" aria-label="Pricing period">
-                <button type="button" onClick={() => setYearlyPricing(false)} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors ${!yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Monthly</button>
-                <button type="button" onClick={() => setYearlyPricing(true)} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors ${yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Yearly <span className="ml-1 text-[#D5A64A]">{YEARLY_SAVINGS_LABEL}</span></button>
+              <div className="inline-flex w-fit rounded-full border border-[#C8D6E5] bg-white p-1 relative z-10" aria-label="Pricing period">
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Monthly clicked'); setYearlyPricing(false); }} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors cursor-pointer pointer-events-auto select-none z-10 ${!yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Monthly</button>
+                <button type="button" onClick={handleYearlyClick} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors pointer-events-auto ${yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Yearly <span className="ml-1 text-[#D5A64A]">{YEARLY_SAVINGS_LABEL}</span></button>
               </div>
             </div>
 
