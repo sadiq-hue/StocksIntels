@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Link } from "react-router";
 import {
   Activity,
@@ -13,6 +13,7 @@ import {
   FileText,
   Globe2,
   Landmark,
+  LayoutGrid,
   LineChart,
   Mail,
   Menu,
@@ -22,18 +23,51 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
+  TrendingDown,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
 import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
+import { CatalystsNews } from "./CatalystsNews";
 
 const MARKETING_PLANS = PLANS.filter((p) => ["core", "pro", "premium"].includes(p.id));
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "AAPL", "MSFT", "NVDA"];
+
+const TICKER_SYMBOLS = [
+  { symbol: "NSE:SCOM", name: "Safaricom PLC", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:EQTY", name: "Equity Group", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:KCB", name: "KCB Group", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:COOP", name: "Co-op Bank", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:ABSA", name: "ABSA Bank Kenya", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:NCBA", name: "NCBA Group", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:EABL", name: "East African Breweries", currency: "KES", exchange: "NSE" },
+  { symbol: "NSE:BAT", name: "BAT Kenya", currency: "KES", exchange: "NSE" },
+  { symbol: "AAPL", name: "Apple Inc.", currency: "$", exchange: "NASDAQ" },
+  { symbol: "MSFT", name: "Microsoft", currency: "$", exchange: "NASDAQ" },
+  { symbol: "NVDA", name: "NVIDIA", currency: "$", exchange: "NASDAQ" },
+  { symbol: "GOOGL", name: "Alphabet", currency: "$", exchange: "NASDAQ" },
+  { symbol: "TSLA", name: "Tesla Inc.", currency: "$", exchange: "NASDAQ" },
+  { symbol: "AMZN", name: "Amazon.com", currency: "$", exchange: "NASDAQ" },
+  { symbol: "META", name: "Meta Platforms", currency: "$", exchange: "NASDAQ" },
+  { symbol: "JSE:NPN", name: "Naspers Ltd", currency: "ZAR", exchange: "JSE" },
+  { symbol: "JSE:FSR", name: "FirstRand", currency: "ZAR", exchange: "JSE" },
+  { symbol: "JSE:SBK", name: "Standard Bank Group", currency: "ZAR", exchange: "JSE" },
+  { symbol: "JSE:MTN", name: "MTN Group", currency: "ZAR", exchange: "JSE" },
+  { symbol: "NGX:MTNN", name: "MTN Nigeria", currency: "NGN", exchange: "NGX" },
+  { symbol: "NGX:DANGCEM", name: "Dangote Cement", currency: "NGN", exchange: "NGX" },
+  { symbol: "NGX:ZENITHBANK", name: "Zenith Bank", currency: "NGN", exchange: "NGX" },
+  { symbol: "NGX:GTCO", name: "Guaranty Trust Holding", currency: "NGN", exchange: "NGX" },
+  { symbol: "GSE:MTNGH", name: "MTN Ghana", currency: "GHS", exchange: "GSE" },
+  { symbol: "GSE:ETI", name: "Ecobank Transnational", currency: "GHS", exchange: "GSE" },
+];
+
+const HERO_SYMBOLS = TICKER_SYMBOLS.map((s) => s.symbol);
 
 type Article = {
   id: string;
@@ -126,35 +160,6 @@ function changeText(quote: RealtimeStockQuote | null) {
   return `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
 }
 
-function QuoteRow({
-  symbol,
-  name,
-  currency,
-  quotes,
-}: {
-  symbol: string;
-  name: string;
-  currency: string;
-  quotes: Record<string, RealtimeStockQuote>;
-}) {
-  const quote = findQuote(quotes, symbol);
-  const change = Number(quote?.changePercent);
-  const up = Number.isFinite(change) && change >= 0;
-
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-[#102B50]/10 py-3 last:border-0">
-      <div className="min-w-0">
-        <p className="font-mono text-[11px] font-semibold tracking-[0.12em] text-[#174A7E]">{symbol.replace("NSE:", "")}</p>
-        <p className="truncate text-xs text-[#52647A]">{name}</p>
-      </div>
-      <p className="font-mono text-xs font-semibold tabular-nums text-[#102B50]">{quoteText(quote, currency)}</p>
-      <p className={`min-w-14 text-right font-mono text-xs font-semibold tabular-nums ${up ? "text-emerald-700" : "text-rose-700"}`}>
-        {changeText(quote)}
-      </p>
-    </div>
-  );
-}
-
 function SectionLabel({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
   return (
     <p className={`mb-5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.24em] ${light ? "text-cyan-200" : "text-[#2563A6]"}`}>
@@ -164,89 +169,270 @@ function SectionLabel({ children, light = false }: { children: React.ReactNode; 
   );
 }
 
-function ProductPreview({ quotes, error }: { quotes: Record<string, RealtimeStockQuote>; error: boolean }) {
-  const scom = findQuote(quotes, "NSE:SCOM");
-  const scomStatus = scom?.marketState === "REGULAR" ? "Current session quote" : "Latest reported quote";
+function FloatingStocksTicker({ quotes, error }: { quotes: Record<string, RealtimeStockQuote>; error: boolean }) {
+  const [visibleIndices, setVisibleIndices] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [animating, setAnimating] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const intervalRef = useRef<number | null>(null);
+
+  function computeMarketState(exchange: string, fallbackState?: string): "REGULAR" | "CLOSED" | "PRE" | "POST" {
+    const now = new Date();
+    if (exchange === "NASDAQ") {
+      const etTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const day = etTime.getDay();
+      const hour = etTime.getHours();
+      const minute = etTime.getMinutes();
+      const minutesSinceMidnight = hour * 60 + minute;
+      const marketOpen = 9 * 60 + 30;
+      const marketClose = 16 * 60;
+      if (day >= 1 && day <= 5) {
+        if (minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose) return "REGULAR";
+        if (minutesSinceMidnight >= 4 * 60 && minutesSinceMidnight < marketOpen) return "PRE";
+        if (minutesSinceMidnight >= marketClose && minutesSinceMidnight < 20 * 60) return "POST";
+      }
+      return "CLOSED";
+    }
+    if (exchange === "NSE") {
+      const eatTime = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Nairobi" }));
+      const day = eatTime.getDay();
+      const hour = eatTime.getHours();
+      const minute = eatTime.getMinutes();
+      const minutesSinceMidnight = hour * 60 + minute;
+      const marketOpen = 9 * 60 + 30;
+      const marketClose = 15 * 60 + 30;
+      if (day >= 1 && day <= 5) {
+        if (minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose) return "REGULAR";
+      }
+      return "CLOSED";
+    }
+    if (exchange === "JSE") {
+      const saTime = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Johannesburg" }));
+      const day = saTime.getDay();
+      const hour = saTime.getHours();
+      const minute = saTime.getMinutes();
+      const minutesSinceMidnight = hour * 60 + minute;
+      const marketOpen = 9 * 60;
+      const marketClose = 17 * 60;
+      if (day >= 1 && day <= 5) {
+        if (minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose) return "REGULAR";
+      }
+      return "CLOSED";
+    }
+    if (exchange === "NGX") {
+      const watTime = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Lagos" }));
+      const day = watTime.getDay();
+      const hour = watTime.getHours();
+      const minute = watTime.getMinutes();
+      const minutesSinceMidnight = hour * 60 + minute;
+      const marketOpen = 10 * 60;
+      const marketClose = 14 * 60 + 30;
+      if (day >= 1 && day <= 5) {
+        if (minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose) return "REGULAR";
+      }
+      return "CLOSED";
+    }
+    if (exchange === "GSE") {
+      const gmtTime = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Accra" }));
+      const day = gmtTime.getDay();
+      const hour = gmtTime.getHours();
+      const minute = gmtTime.getMinutes();
+      const minutesSinceMidnight = hour * 60 + minute;
+      const marketOpen = 10 * 60;
+      const marketClose = 15 * 60;
+      if (day >= 1 && day <= 5) {
+        if (minutesSinceMidnight >= marketOpen && minutesSinceMidnight < marketClose) return "REGULAR";
+      }
+      return "CLOSED";
+    }
+    return (fallbackState as "REGULAR" | "CLOSED" | "PRE" | "POST") || "CLOSED";
+  }
+
+  const getQuoteData = useCallback((symbol: string) => {
+    const quote = findQuote(quotes, symbol);
+    const tickerItem = TICKER_SYMBOLS.find((s) => s.symbol === symbol);
+    const currency = tickerItem?.currency || "$";
+    const exchange = tickerItem?.exchange || "";
+    const change = Number(quote?.changePercent);
+    const up = Number.isFinite(change) && change >= 0;
+    const down = Number.isFinite(change) && change < 0;
+    const apiMarketState = quote?.marketState;
+    const computedMarketState = computeMarketState(exchange, apiMarketState);
+    const marketState = (exchange === "NASDAQ" || exchange === "NSE" || exchange === "JSE" || exchange === "NGX" || exchange === "GSE") 
+      ? computedMarketState 
+      : apiMarketState;
+    return {
+      price: quoteText(quote, currency),
+      change: changeText(quote),
+      changePercent: change,
+      up,
+      down,
+      hasData: Number.isFinite(change) && Number.isFinite(Number(quote?.price)),
+      marketState,
+    };
+  }, [quotes]);
+
+  const symbolsWithData = useMemo(() => {
+    return TICKER_SYMBOLS.filter((item) => {
+      const data = getQuoteData(item.symbol);
+      return data.hasData;
+    });
+  }, [quotes, getQuoteData]);
+
+  const totalSymbols = symbolsWithData.length;
+  const visibleCount = Math.min(5, totalSymbols);
+
+  const scrollTicker = useCallback(() => {
+    if (animating || totalSymbols <= visibleCount || isHovered) return;
+    setAnimating(true);
+    setVisibleIndices((prev) => {
+      const next = prev.map((i) => (i + 1) % totalSymbols);
+      setTimeout(() => setAnimating(false), 600);
+      return next;
+    });
+  }, [animating, totalSymbols, visibleCount, isHovered]);
+
+  useEffect(() => {
+    if (totalSymbols <= visibleCount) return;
+    intervalRef.current = window.setInterval(scrollTicker, 3000);
+    return () => {
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+    };
+  }, [scrollTicker, totalSymbols, visibleCount, isHovered]);
+
+  const visibleSymbols = visibleIndices.map((idx) => symbolsWithData[idx]).filter(Boolean);
+
+  if (totalSymbols === 0) {
+    return (
+      <div className="relative mx-auto w-full max-w-[720px]" aria-label="Live market ticker">
+        <div className="absolute -inset-4 rounded-[2rem] bg-[#D45500]/5 blur-2xl" />
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-[#D45500]/10 bg-gradient-to-b from-[#FFFAF5] via-[#FFFFFE] to-[#FFFAF5] shadow-[0_25px_60px_-30px_rgba(212,85,0,0.05),0_8px_24px_-8px_rgba(212,85,0,0.03)]">
+          <div className="flex items-center justify-between border-b border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFAF5] to-[#FFFFFE]">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2 items-center justify-center">
+                <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
+                <span className="relative size-1.5 rounded-full bg-[#D45500]" />
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D45500]/80">Live Market Stream</span>
+            </div>
+            <span className="font-mono text-[10px] font-semibold text-[#CC5200]">REAL-TIME QUOTES</span>
+          </div>
+          <div className="overflow-hidden h-80 sm:h-[400px] flex items-center justify-center">
+            <p className="text-[#CC5200] text-sm">No live quote data available at the moment</p>
+          </div>
+          <div className="border-t border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFFFE] to-[#FFFAF5]">
+            <div className="flex items-center justify-between gap-4 text-[10px]">
+              <span className="text-[#CC5200]">Waiting for market data...</span>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                  <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
+                  <span className="relative size-1 rounded-full bg-[#D45500]" />
+                </span>
+                <span className="font-mono font-semibold text-[#D45500]/80">STREAMING</span>
+              </div>
+            </div>
+          </div>
+          {error && (
+            <div className="border-t border-[#D45500]/18 bg-[#FFFAF5]/30 px-4 py-3 sm:px-6">
+              <p className="text-[10px] text-[#CC5200]">Quote feed temporarily unavailable.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative mx-auto w-full max-w-[720px]" aria-label="StocksIntels platform interface preview">
-      <div className="absolute -inset-6 rounded-[2.5rem] bg-[#D5A64A]/10 blur-3xl" />
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-[#D9C58F]/65 bg-[#F7F1E3] shadow-[0_35px_80px_-40px_rgba(102,76,31,0.38)]">
-        <div className="flex items-center justify-between border-b border-[#102B50]/10 px-4 py-3 sm:px-6">
+    <div className="relative mx-auto w-full max-w-[720px]" aria-label="Live market ticker">
+      <div className="absolute -inset-4 rounded-[2rem] bg-[#D45500]/5 blur-2xl" />
+      <div className="relative overflow-hidden rounded-[1.5rem] border border-[#D45500]/10 bg-gradient-to-b from-[#FFFAF5] via-[#FFFFFE] to-[#FFFAF5] shadow-[0_25px_60px_-30px_rgba(212,85,0,0.05),0_8px_24px_-8px_rgba(212,85,0,0.03)]">
+        <div className="flex items-center justify-between border-b border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFAF5] to-[#FFFFFE]">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-[#16A085]" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#102B50]">Research workspace</span>
+            <span className="relative flex h-2 w-2 items-center justify-center">
+              <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
+              <span className="relative size-1.5 rounded-full bg-[#D45500]" />
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D45500]/80">Live Market Stream</span>
           </div>
-          <span className="font-mono text-[10px] font-semibold text-[#70521D]">LIVE OR DELAYED BY EXCHANGE</span>
+          <span className="font-mono text-[10px] font-semibold text-[#CC5200]">REAL-TIME QUOTES</span>
         </div>
 
-        <div className="grid lg:grid-cols-[1.15fr_.85fr]">
-          <div className="border-b border-[#102B50]/10 p-5 sm:p-7 lg:border-b-0 lg:border-r">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#174A7E]">NSE / SCOM</p>
-                <h3 className="mt-2 text-xl font-semibold text-[#102B50]">Safaricom PLC</h3>
-              </div>
-              <div className="text-left sm:text-right">
-                <p className="font-mono text-2xl font-semibold tabular-nums text-[#102B50]">{quoteText(scom, "KES")}</p>
-                <p className={`font-mono text-xs font-semibold ${Number(scom?.changePercent) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                  {changeText(scom)} {scomStatus.toLowerCase()}
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[#102B50]/10 bg-[#102B50]/10">
-              {[
-                ["Evidence", "Multi-factor"],
-                ["Coverage", "African + global"],
-                ["Context", "Risk-aware"],
-              ].map(([label, value]) => (
-                <div key={label} className="bg-[#FCF8EE] px-3 py-4">
-                  <p className="text-[9px] uppercase tracking-[0.18em] text-[#7A694D]">{label}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#102B50]">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-xl border border-[#102B50]/10 bg-white/30 p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-xs font-semibold text-[#102B50]">Intelligence evidence</span>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-[#7A694D]">Availability varies</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  ["Fundamental", 82],
-                  ["Financial", 70],
-                  ["Technical", 58],
-                  ["Macro & news", 66],
-                ].map(([label, width]) => (
-                  <div key={label as string}>
-                    <div className="mb-1 flex justify-between text-[10px] text-[#52647A]"><span>{label}</span><span>research layer</span></div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[#102B50]/10">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[#4386C8] to-[#16A085]" style={{ width: `${width}%` }} />
+        <div
+          className="overflow-hidden h-80 sm:h-[400px] relative"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div
+            className={`transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${animating ? "-translate-y-20" : ""}`}
+            style={{ transform: animating ? "translateY(-80px)" : "translateY(0)" }}
+          >
+            <div className="grid grid-rows-[repeat(5,1fr)]">
+              {visibleSymbols.map((item, rowIndex) => {
+                const data = getQuoteData(item.symbol);
+                const delay = rowIndex * 80;
+                return (
+                  <div
+                    key={`${item.symbol}-${rowIndex}`}
+                    className={`relative flex items-center justify-between px-4 py-3 border-b border-[#D45500]/6 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#D45500]/3 hover:scale-[1.01] ${
+                      rowIndex === 0 ? "bg-white/60 backdrop-blur-sm shadow-[0_4px_16px_-4px_rgba(212,85,0,0.08)] z-10 scale-[1.02] border-l-2 border-[#D45500]/40" : ""
+                    } ${rowIndex === 4 ? "border-0" : ""}`}
+                    style={{
+                      transformOrigin: "center",
+                      animationDelay: `${delay}ms`,
+                      animationFillMode: "both",
+                    }}
+                  >
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
+                      <div className="flex flex-col items-start justify-center min-w-[70px]">
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-[#2563A6]">{item.exchange}</span>
+                        <span className="font-mono text-[11px] font-semibold text-[#102B50]">{item.symbol.replace(/^NSE:|^JSE:|^NGX:|^GSE:/, "")}</span>
+                      </div>
+                      <div className="min-w-0 flex-1 border-l border-[#D9C58F]/30 pl-4">
+                        <p className="text-sm font-semibold text-[#102B50] truncate">{item.name}</p>
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-[#7A694D]">{item.exchange} • {data.marketState === "REGULAR" ? "Live" : data.marketState === "CLOSED" ? "Closed" : "Delayed"}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 min-w-[140px] text-right">
+                      <span className="font-mono text-lg font-semibold tabular-nums text-[#102B50]">
+                        {data.hasData ? data.price : <span className="text-[#9AA9BA]">--</span>}
+                      </span>
+                      {data.hasData && (
+                        <span
+                          className={`inline-flex items-center gap-1 font-mono text-xs font-semibold tabular-nums px-2 py-0.5 rounded-full ${
+                            data.up ? "bg-emerald-100 text-emerald-700" : data.down ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {data.up && <TrendingUp className="size-3" />}
+                          {data.down && <TrendingDown className="size-3" />}
+                          {data.change}
+                        </span>
+                      )}
+                      {!data.hasData && <span className="text-[10px] text-[#9AA9BA]">No data</span>}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="p-5 sm:p-7">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[#102B50]">Market desk</h3>
-              <Activity className="size-4 text-[#2563A6]" />
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#FFFAF5] to-transparent pointer-events-none" />
+        </div>
+
+        <div className="border-t border-[#D45500]/12 px-4 py-3 sm:px-6 bg-gradient-to-r from-[#FFFFFE] to-[#FFFAF5]">
+          <div className="flex items-center justify-end gap-4 text-[10px]">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                <span className="absolute size-full rounded-full bg-[#D45500] animate-ping opacity-75" />
+                <span className="relative size-1 rounded-full bg-[#D45500]" />
+              </span>
+              <span className="font-mono font-semibold text-[#D45500]/80">STREAMING</span>
             </div>
-            <QuoteRow symbol="NSE:EQTY" name="Equity Group" currency="KES" quotes={quotes} />
-            <QuoteRow symbol="AAPL" name="Apple Inc." currency="$" quotes={quotes} />
-            <QuoteRow symbol="NVDA" name="NVIDIA" currency="$" quotes={quotes} />
-            <QuoteRow symbol="MSFT" name="Microsoft" currency="$" quotes={quotes} />
-            <div className="mt-5 rounded-xl border border-[#102B50]/20 bg-[#102B50] p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#E1BE72]">Research principle</p>
-              <p className="mt-2 text-xs leading-5 text-slate-200">No single indicator explains a market. StocksIntels brings the evidence together.</p>
-            </div>
-            {error && <p className="mt-3 text-[10px] text-[#7B4F13]">Quote feed temporarily unavailable. Platform preview remains available.</p>}
           </div>
         </div>
+        {error && (
+          <div className="border-t border-[#D45500]/18 bg-[#FFFAF5]/30 px-4 py-3 sm:px-6">
+            <p className="text-[10px] text-[#CC5200]">Quote feed temporarily unavailable. Showing cached data where available.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -330,7 +516,7 @@ export function LandingPage() {
             <img src="/logo1.jpg" alt="" className="size-9 rounded-lg object-cover" />
             <div>
               <span className="block text-sm font-extrabold tracking-[-0.02em] text-[#102B50]">StocksIntels</span>
-              <span className="block text-[8px] font-bold uppercase tracking-[0.24em] text-[#4386C8]">Financial Intelligence</span>
+              <span className="block text-[8px] font-bold uppercase tracking-[0.24em] text-[#2563A6]">Financial Intelligence</span>
             </div>
           </Link>
 
@@ -380,10 +566,6 @@ export function LandingPage() {
           <div className="absolute right-[-18%] top-[-20%] size-[700px] rounded-full bg-[#4386C8]/10 blur-[130px]" />
           <div className="relative mx-auto grid max-w-[1440px] items-center gap-16 px-5 sm:px-8 lg:grid-cols-[.9fr_1.1fr] lg:px-12">
             <div className="max-w-[650px]">
-              <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-[#BFD1E6] bg-white/75 px-4 py-2">
-                <span className="grid size-6 place-items-center rounded-full bg-[#102B50] text-[9px] font-black tracking-wider text-white">SI</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#174A7E]">Introducing Super Intelligence</span>
-              </div>
               <h1 className="si-display max-w-[720px] text-[3.5rem] font-medium leading-[0.93] tracking-[-0.045em] text-[#102B50] sm:text-[4.8rem] lg:text-[5.65rem]">
                 See the markets <span className="text-[#2563A6]">beyond</span> the numbers.
               </h1>
@@ -400,11 +582,12 @@ export function LandingPage() {
                 <span className="flex items-center gap-2"><CheckCircle2 className="size-4 text-[#16A085]" /> Evidence-led research</span>
               </div>
             </div>
-            <ProductPreview quotes={quotes} error={quoteError} />
+            <FloatingStocksTicker quotes={quotes} error={quoteError} />
           </div>
         </section>
 
-        <section id="intelligence" className="scroll-mt-24 bg-[#102B50] py-20 text-white sm:py-28">
+        <section id="intelligence" className="scroll-mt-24 relative overflow-hidden bg-[#102B50] py-20 text-white sm:py-28">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,166,0.15),transparent_60%)]" />
           <div className="mx-auto grid max-w-[1440px] gap-14 px-5 sm:px-8 lg:grid-cols-[.75fr_1.25fr] lg:px-12">
             <div className="lg:sticky lg:top-28 lg:self-start">
               <SectionLabel light>Super Intelligence</SectionLabel>
@@ -417,12 +600,18 @@ export function LandingPage() {
                 <p className="max-w-[240px] text-xs leading-5 text-slate-400">Technology, analysis and human judgement working in concert.</p>
               </div>
             </div>
-            <div className="divide-y divide-white/10 border-y border-white/10">
-              {intelligenceLayers.map((layer) => (
-                <div key={layer.number} className="group grid gap-3 py-6 sm:grid-cols-[60px_210px_1fr] sm:items-start">
-                  <span className="font-mono text-[10px] tracking-[0.2em] text-cyan-300/70">{layer.number}</span>
-                  <h3 className="text-base font-semibold text-white transition-colors group-hover:text-cyan-200">{layer.title}</h3>
-                  <p className="text-sm leading-6 text-slate-300">{layer.text}</p>
+            <div className="space-y-1">
+              {intelligenceLayers.map((layer, i) => (
+                <div key={layer.number} className="group relative rounded-xl border border-white/5 bg-white/[0.02] p-5 sm:p-6 hover:border-white/10 hover:bg-white/[0.05] transition-all duration-300 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative flex items-start gap-4 sm:flex-row sm:items-center">
+                    <span className="font-mono text-[10px] tracking-[0.2em] text-cyan-300/70 shrink-0 w-[60px]">{layer.number}</span>
+                    <div className="flex-1">
+                      <h3 className="text-base font-semibold text-white transition-colors group-hover:text-cyan-200">{layer.title}</h3>
+                      <p className="mt-1.5 text-sm leading-6 text-slate-300">{layer.text}</p>
+                    </div>
+                    <ChevronRight className="size-5 text-cyan-300/50 group-hover:text-cyan-200 group-hover:translate-x-1 transition-all shrink-0 mt-1 sm:mt-0" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -430,7 +619,8 @@ export function LandingPage() {
         </section>
 
         <section id="platform" className="scroll-mt-24 bg-white py-20 sm:py-28">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+          {/* Narrower container for text focus */}
+          <div className="mx-auto max-w-[1100px] px-5 sm:px-8 lg:px-12">
             <div className="grid gap-10 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
               <div>
                 <SectionLabel>Multi-dimensional intelligence</SectionLabel>
@@ -441,49 +631,102 @@ export function LandingPage() {
               </p>
             </div>
 
-            <div className="mt-14 grid border-y border-[#DCE5EF] md:grid-cols-2 lg:grid-cols-3">
-              {capabilities.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.label} className={`group min-h-56 border-[#DCE5EF] p-7 transition-colors hover:bg-[#F5F8FC] ${index % 3 !== 2 ? "lg:border-r" : ""} ${index < 3 ? "border-b" : ""} ${index % 2 === 0 ? "md:border-r lg:border-r" : ""}`}>
-                    <div className="flex items-start justify-between">
-                      <Icon className="size-5 text-[#2563A6]" />
-                      <span className="font-mono text-[10px] text-[#9AA9BA]">0{index + 1}</span>
+            <div className="mt-14 grid gap-6 lg:grid-cols-[1fr_1fr] lg:gap-8">
+              {/* Featured capability - larger */}
+              <article className="relative lg:col-span-1 group p-8 rounded-2xl border border-[#2563A6]/20 bg-gradient-to-br from-[#2563A6]/5 via-white to-white hover:border-[#2563A6]/40 hover:shadow-xl hover:shadow-[#2563A6]/10 transition-all duration-500 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#2563A6]/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="size-16 rounded-2xl bg-gradient-to-br from-[#2563A6] to-[#174A7E] flex items-center justify-center">
+                      <FileText className="size-8 text-white" />
                     </div>
-                    <h3 className="mt-10 text-lg font-semibold text-[#102B50]">{item.label}</h3>
-                    <p className="mt-3 text-sm leading-6 text-[#607187]">{item.text}</p>
+                    <span className="font-mono text-[10px] text-[#9AA9BA]">01</span>
                   </div>
-                );
-              })}
+                  <h3 className="text-2xl md:text-3xl font-bold text-[#102B50] mb-4">{capabilities[0].label}</h3>
+                  <p className="text-lg text-[#607187] leading-relaxed mb-8 pr-4">{capabilities[0].text}</p>
+                  <ul className="space-y-3 text-[#607187]">
+                    {[
+                      "Company quality, valuation and business drivers",
+                      "Revenue predictability and margin trajectory analysis",
+                      "Competitive positioning and moat assessment",
+                      "Capital allocation and shareholder return tracking"
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-3 group">
+                        <div className="size-6 rounded-lg bg-[#2563A6]/10 flex items-center justify-center group-hover:bg-[#2563A6]/20 transition-colors shrink-0">
+                          <CheckCircle2 className="size-3 text-[#2563A6]" />
+                        </div>
+                        <span className="text-base leading-relaxed">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button asChild variant="outline" className="mt-8 w-full rounded-full border-[#2563A6] text-[#2563A6] hover:bg-[#2563A6]/5"><Link to="/app/financials">Explore fundamental analysis <ArrowRight className="size-4" /></Link></Button>
+                </div>
+              </article>
+
+              {/* Secondary capabilities - 2 column grid */}
+              <div className="grid gap-4 md:grid-cols-2">
+                {capabilities.slice(1).map((item, index) => {
+                  const Icon = item.icon;
+                  return (
+                    <article key={item.label} className="group relative p-6 rounded-2xl border border-[#DCE5EF] bg-gradient-to-br from-white to-[#F5F8FC] hover:border-[#2563A6]/30 hover:shadow-lg hover:shadow-[#2563A6]/5 hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-[#2563A6]/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-start justify-between relative z-10">
+                        <div className="size-12 rounded-xl bg-[#2563A6]/10 flex items-center justify-center group-hover:bg-[#2563A6]/20 transition-colors">
+                          <Icon className="size-6 text-[#2563A6]" />
+                        </div>
+                        <span className="font-mono text-[10px] text-[#9AA9BA]">0{index + 2}</span>
+                      </div>
+                      <h3 className="mt-6 text-lg font-semibold text-[#102B50] relative z-10">{item.label}</h3>
+                      <p className="mt-2 text-sm leading-6 text-[#607187] relative z-10">{item.text}</p>
+                    </article>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="bg-[#EDF3F9] py-20 sm:py-28">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
-            <div className="grid items-center gap-16 lg:grid-cols-[.95fr_1.05fr]">
-              <div className="order-2 lg:order-1">
-                <ProductPreview quotes={quotes} error={quoteError} />
-              </div>
-              <div className="order-1 lg:order-2 lg:pl-8">
-                <SectionLabel>The actual platform</SectionLabel>
-                <h2 className="si-display text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">A research workspace, not a prediction feed.</h2>
-                <p className="mt-7 text-base leading-7 text-[#607187]">Move from market context to company detail without leaving the evidence behind.</p>
-                <div className="mt-8 divide-y divide-[#CEDAE7] border-y border-[#CEDAE7]">
-                  {[
-                    "Company analysis and financial statements",
-                    "Technical indicators and price history",
-                    "Market movers, heatmaps and intelligence briefs",
-                    "Watchlists, portfolio analytics and paper trading",
-                  ].map((text) => (
-                    <div key={text} className="flex items-center gap-4 py-4 text-sm font-medium text-[#334A64]">
-                      <ChevronRight className="size-4 text-[#2563A6]" /> {text}
-                    </div>
-                  ))}
-                </div>
-                <Button asChild variant="link" className="mt-5 px-0 text-[#174A7E]"><Link to="/login">Enter the platform <ArrowRight className="size-4" /></Link></Button>
+        {/* Breather: Full-bleed visual break */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-[#102B50] via-[#0E2542] to-[#0B1D3A] py-20 sm:py-28">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,166,0.15),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.02\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 36v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 6V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#102B50] via-[#0E2542] to-[#0B1D3A]" />
+          <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="text-center max-w-3xl mx-auto">
+              <SectionLabel light>One platform</SectionLabel>
+              <h2 className="si-display mt-4 text-4xl leading-[1.03] tracking-[-0.035em] text-white sm:text-6xl">African markets. Global context. One intelligence.</h2>
+              <p className="mt-5 text-lg leading-7 text-slate-300 max-w-2xl mx-auto">StocksIntels unifies African market depth with global perspective in a single research workspace.</p>
+              <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white/80 text-sm font-medium border border-white/10">
+                  <Globe2 className="size-4" /> 5 African Exchanges
+                </span>
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white/80 text-sm font-medium border border-white/10">
+                  <TrendingUp className="size-4" /> Global Coverage
+                </span>
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-white/80 text-sm font-medium border border-white/10">
+                  <Zap className="size-4" /> Real-time Intelligence
+                </span>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Catalysts News Section */}
+        <section className="relative overflow-hidden bg-gradient-to-b from-[#0B1D3A] via-[#0F2644] to-[#142D4E] py-20 sm:py-24">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,166,0.1),transparent_60%)]" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+          <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end mb-12">
+              <div>
+                <SectionLabel light>Market catalysts</SectionLabel>
+                <h2 className="si-display mt-4 text-4xl leading-[1.03] tracking-[-0.035em] text-white sm:text-5xl">News moving markets right now.</h2>
+                <p className="mt-4 text-lg leading-7 text-slate-300">High-impact developments with catalyst scores. Filtered for market-moving potential.</p>
+              </div>
+              <Link to="/app/news" className="inline-flex items-center gap-2 text-sm font-semibold text-amber-400 hover:text-amber-300 shrink-0">
+                View all catalysts <ExternalLink className="size-4" />
+              </Link>
+            </div>
+            <CatalystsNews />
           </div>
         </section>
 
@@ -508,7 +751,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden bg-[#102B50] py-20 text-white sm:py-28">
+        <section className="relative overflow-hidden bg-[#102B50] py-20 text-white sm:py-28">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,166,0.1),transparent_60%)]" />
           <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
             <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
               <div>
@@ -517,57 +761,108 @@ export function LandingPage() {
               </div>
               <p className="max-w-2xl text-base leading-7 text-slate-300 lg:justify-self-end">A platform designed around African market relevance, with the international context investors and institutions use to understand capital, sectors and companies.</p>
             </div>
-            <div className="mt-14 divide-y divide-white/10 border-y border-white/10">
+            <div className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {exchanges.map((exchange) => (
-                <div key={exchange.code} className="grid items-center gap-2 py-5 sm:grid-cols-[140px_1fr_auto]">
-                  <span className="font-mono text-sm font-bold tracking-[0.14em] text-cyan-200">{exchange.code}</span>
-                  <span className="text-sm text-slate-200">{exchange.city}</span>
-                  <span className="text-xs text-slate-400">{exchange.market}</span>
+                <div key={exchange.code} className="group relative rounded-xl border border-white/10 bg-white/[0.02] p-5 hover:border-white/20 hover:bg-white/[0.05] transition-all">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative flex flex-col items-start gap-1">
+                    <span className="font-mono text-sm font-bold tracking-[0.14em] text-cyan-200">{exchange.code}</span>
+                    <span className="text-sm text-slate-200">{exchange.city}</span>
+                    <span className="text-xs text-slate-400">{exchange.market}</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="audiences" className="scroll-mt-24 bg-white py-20 sm:py-28">
+        <section id="audiences" className="scroll-mt-24 relative overflow-hidden bg-white py-20 sm:py-28">
+          <div className="absolute inset-0 bg-gradient-to-b from-[#2563A6]/5 via-transparent to-transparent" />
           <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
-            <SectionLabel>Who we serve</SectionLabel>
-            <h2 className="si-display max-w-3xl text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">One intelligence foundation. Two paths forward.</h2>
-            <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-[#D5E0EB] bg-[#D5E0EB] lg:grid-cols-2">
-              <article className="bg-[#F8FAFD] p-8 sm:p-12">
-                <Search className="size-6 text-[#2563A6]" />
-                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-[#2563A6]">Investors & market participants</p>
-                <h3 className="mt-4 text-2xl font-semibold text-[#102B50]">Research with more context.</h3>
-                <ul className="mt-7 space-y-3 text-sm text-[#566A80]">
-                  {[
-                    "Company and financial analysis",
-                    "Fundamental and technical evidence",
-                    "Watchlists, portfolios and paper trading",
-                    "Market intelligence across regions",
-                  ].map((item) => <li key={item} className="flex gap-3"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#16A085]" />{item}</li>)}
-                </ul>
-                <Button asChild className="mt-9 rounded-full bg-[#2563A6] px-6 text-white"><Link to="/login">Explore the platform <ArrowRight className="size-4" /></Link></Button>
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <SectionLabel>Who we serve</SectionLabel>
+              <h2 className="si-display mt-4 text-4xl leading-[1.03] tracking-[-0.035em] text-[#102B50] sm:text-6xl">One intelligence foundation. Two paths forward.</h2>
+              <p className="mt-4 text-lg leading-7 text-[#607187]">Whether you're investing your own capital or managing institutional workflows, the same evidence base powers your decisions.</p>
+            </div>
+            <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr] lg:gap-10">
+              {/* Featured: Investors - larger, more prominent */}
+              <article className="relative lg:col-span-1 group p-8 sm:p-10 rounded-2xl border border-[#2563A6]/20 bg-gradient-to-br from-[#2563A6]/5 via-white to-white hover:border-[#2563A6]/40 hover:shadow-xl hover:shadow-[#2563A6]/10 transition-all duration-500 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#2563A6]/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="size-16 rounded-2xl bg-gradient-to-br from-[#2563A6] to-[#174A7E] flex items-center justify-center">
+                      <Search className="size-8 text-white" />
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#2563A6]">Investors & market participants</span>
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-bold text-[#102B50] mb-4">Research with more context.</h3>
+                  <p className="text-lg text-[#607187] leading-relaxed mb-8 pr-4">Access multi-dimensional company research, fundamental and technical evidence, portfolio tools, and market intelligence across African and global markets—all in one workspace.</p>
+                  <ul className="space-y-4 text-[#607180] mb-8">
+                    {[
+                      { icon: FileText, text: "Company and financial analysis with multi-factor scoring" },
+                      { icon: LineChart, text: "Fundamental and technical evidence with visual evidence trails" },
+                      { icon: LayoutGrid, text: "Watchlists, portfolios and paper trading with live P&L" },
+                      { icon: Globe2, text: "Market intelligence across African and global regions" },
+                    ].map((item, i) => (
+                      <li key={i} className="flex items-start gap-3 group">
+                        <div className="size-10 rounded-xl bg-[#2563A6]/10 flex items-center justify-center group-hover:bg-[#2563A6]/20 transition-colors shrink-0">
+                          <item.icon className="size-5 text-[#2563A6]" />
+                        </div>
+                        <span className="text-base leading-relaxed text-[#607187]">{item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button asChild className="w-full rounded-full bg-[#2563A6] px-6 text-white hover:bg-[#174A7E]"><Link to="/login">Explore the platform <ArrowRight className="size-4" /></Link></Button>
+                </div>
               </article>
-              <article className="bg-[#F2F6FA] p-8 sm:p-12">
-                <Building2 className="size-6 text-[#174A7E]" />
-                <p className="mt-10 text-[10px] font-bold uppercase tracking-[0.22em] text-[#174A7E]">Businesses & financial institutions</p>
-                <h3 className="mt-4 text-2xl font-semibold text-[#102B50]">Intelligence for research workflows.</h3>
-                <ul className="mt-7 space-y-3 text-sm text-[#566A80]">
+
+              {/* Secondary: Businesses - compact card */}
+              <article className="relative rounded-2xl border border-[#D5E0EB] bg-gradient-to-br from-[#F2F6FA] to-white p-8 sm:p-10 hover:border-[#174A7E]/30 hover:shadow-xl hover:shadow-[#174A7E]/5 transition-all duration-300 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-tr from-[#174A7E]/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex items-center gap-3 mb-6">
+                  <div className="size-12 rounded-xl bg-[#174A7E]/10 flex items-center justify-center">
+                    <Building2 className="size-6 text-[#174A7E]" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#174A7E]">Businesses & financial institutions</p>
+                </div>
+                <h3 className="text-2xl font-semibold text-[#102B50] mb-4">Intelligence for research workflows.</h3>
+                <p className="text-base text-[#607187] leading-relaxed mb-6">Embed our intelligence into your research workflows, risk models, and client reporting with flexible API access and data feeds.</p>
+                <ul className="space-y-2 text-sm text-[#566A80] mb-6">
                   {[
-                    "Market and company intelligence",
+                    "Market and company intelligence via API",
                     "Research and analytical support",
                     "Financial information infrastructure",
                     "Integration conversations where supported",
-                  ].map((item) => <li key={item} className="flex gap-3"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#16A085]" />{item}</li>)}
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-[#16A085] shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
                 </ul>
-                <Button asChild variant="outline" className="mt-9 rounded-full border-[#AFC2D8] bg-white px-6 text-[#174A7E]"><a href="#contact">Discuss your needs <ArrowRight className="size-4" /></a></Button>
+                <Button asChild variant="outline" className="w-full rounded-full border-[#AFC2D8] bg-white px-6 text-[#174A7E] hover:bg-[#F2F6FA]"><a href="#contact">Discuss your needs <ArrowRight className="size-4" /></a></Button>
               </article>
             </div>
           </div>
         </section>
 
-        <section id="pricing" className="scroll-mt-24 bg-[#F5F8FC] py-20 sm:py-28">
-          <div className="mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+        {/* Breather: Full-bleed before pricing */}
+        <section className="relative overflow-hidden bg-gradient-to-br from-[#0B1D3A] via-[#0F2644] to-[#142D4E] py-20 sm:py-24">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,166,0.1),transparent_60%)]" />
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.02\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 36v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 6V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0B1D3A] via-[#0F2644] to-[#142D4E]" />
+          <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8 lg:px-12">
+            <div className="text-center max-w-3xl mx-auto">
+              <SectionLabel light>Transparent pricing</SectionLabel>
+              <h2 className="si-display mt-4 text-4xl leading-[1.03] tracking-[-0.035em] text-white sm:text-6xl">Simple, transparent pricing. No surprises.</h2>
+              <p className="mt-5 text-lg leading-7 text-slate-300 max-w-2xl mx-auto">Three tiers. Monthly or yearly. All features included. Cancel anytime.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="scroll-mt-24 relative overflow-hidden bg-gradient-to-b from-[#F5F8FC] via-white to-[#F5F8FC] py-20 sm:py-28">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(37,99,166,0.05),transparent_60%)]" />
+          <div className="mx-auto max-w-[1200px] px-5 sm:px-8 lg:px-12">
             <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
               <div>
                 <SectionLabel>Access StocksIntels</SectionLabel>
@@ -585,30 +880,56 @@ export function LandingPage() {
                 const featured = plan.popular;
                 const premium = plan.id === "premium";
                 const price = yearlyPricing ? plan.yearlyPrice : plan.monthlyPrice;
+                const cardBase = "relative flex min-h-[520px] flex-col overflow-hidden rounded-[1.5rem] border p-7 sm:p-8 group";
+                const cardFeatured = "border-[#174A7E] bg-gradient-to-br from-[#102B50] via-[#0E2542] to-[#102B50] text-white shadow-[0_30px_65px_-45px_rgba(16,43,80,0.9)]";
+                const cardDefault = "border-[#D5E0EB] bg-white text-[#102B50] hover:border-[#2563A6]/30 hover:shadow-xl hover:shadow-[#2563A6]/5 hover:-translate-y-1";
+                const topBarFeatured = "bg-gradient-to-r from-[#56A6C8] to-[#D5A64A]";
+                const topBarPremium = "bg-[#D5A64A]";
+                const topBarDefault = "bg-gradient-to-r from-[#4386C8] to-[#2563A6]";
+                const labelFeatured = "text-cyan-200";
+                const labelPremium = "text-[#D5A64A]";
+                const labelDefault = "text-[#2563A6]";
+                const taglineFeatured = "text-slate-300";
+                const taglineDefault = "text-[#607187]";
+                const badgeFeatured = "bg-white/10 text-cyan-200";
+                const badgePremium = "bg-[#D5A64A]/15 text-[#9B732B]";
+                const badgeDefault = "bg-[#2563A6]/10 text-[#2563A6]";
+                const pricePeriodFeatured = "text-slate-400";
+                const pricePeriodDefault = "text-[#718196]";
+                const guaranteeFeatured = "text-slate-400";
+                const guaranteeDefault = "text-[#8190A2]";
+                const highlightFeatured = "text-slate-200";
+                const highlightDefault = "text-[#52647A]";
+                const checkFeatured = premium ? "text-[#D5A64A]" : "text-[#16A085]";
+                const checkDefault = "text-[#16A085]";
+                const btnFeatured = "bg-white text-[#102B50] hover:bg-cyan-50";
+                const btnPremium = "bg-[#D5A64A] text-[#2F291F] hover:bg-[#C69941]";
+                const btnDefault = "bg-[#2563A6] text-white hover:bg-[#174A7E]";
                 return (
-                  <article key={plan.id} className={`relative flex min-h-[520px] flex-col overflow-hidden rounded-[1.5rem] border p-7 sm:p-8 ${featured ? "border-[#174A7E] bg-[#102B50] text-white shadow-[0_30px_65px_-45px_rgba(16,43,80,0.9)]" : "border-[#D5E0EB] bg-white text-[#102B50]"}`}>
-                    <div className={`absolute inset-x-0 top-0 h-1 ${premium ? "bg-[#D5A64A]" : featured ? "bg-[#56A6C8]" : "bg-[#4386C8]"}`} />
-                    <div className="flex items-start justify-between gap-4">
+                  <article key={plan.id} className={`${cardBase} ${featured ? cardFeatured : cardDefault}`} style={{ transition: "all 0.3s ease" }}>
+                    <div className={`absolute inset-x-0 top-0 h-1 ${premium ? topBarPremium : featured ? topBarFeatured : topBarDefault}`} />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[1.5rem]" />
+                    <div className="relative flex items-start justify-between gap-4">
                       <div>
-                        <p className={`text-[10px] font-bold uppercase tracking-[0.22em] ${featured ? "text-cyan-200" : premium ? "text-[#A67A2D]" : "text-[#2563A6]"}`}>{featured ? "Most selected" : "StocksIntels"}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-[0.22em] ${featured ? labelFeatured : premium ? labelPremium : labelDefault}`}>{featured ? "Most selected" : "StocksIntels"}</p>
                         <h3 className="mt-4 text-2xl font-bold">{plan.name}</h3>
-                        <p className={`mt-2 text-sm ${featured ? "text-slate-300" : "text-[#607187]"}`}>{plan.tagline}</p>
+                        <p className={`mt-2 text-sm ${featured ? taglineFeatured : taglineDefault}`}>{plan.tagline}</p>
                       </div>
-                      <span className={`grid size-10 place-items-center rounded-full font-mono text-[10px] font-bold ${featured ? "bg-white/10 text-cyan-200" : premium ? "bg-[#D5A64A]/15 text-[#9B732B]" : "bg-[#2563A6]/10 text-[#2563A6]"}`}>{plan.name.slice(0, 2).toUpperCase()}</span>
+                      <span className={`grid size-10 place-items-center rounded-full font-mono text-[10px] font-bold ${featured ? badgeFeatured : premium ? badgePremium : badgeDefault}`}>{plan.name.slice(0, 2).toUpperCase()}</span>
                     </div>
                     <div className="mt-9 border-b border-current/10 pb-7">
                       <div className="flex items-end gap-2">
                         <span className="font-mono text-4xl font-semibold tabular-nums">${yearlyPricing ? price.toFixed(0) : price.toFixed(2)}</span>
-                        <span className={`pb-1 text-xs ${featured ? "text-slate-400" : "text-[#718196]"}`}>/{yearlyPricing ? "year" : "month"}</span>
+                        <span className={`pb-1 text-xs ${featured ? pricePeriodFeatured : pricePeriodDefault}`}>/{yearlyPricing ? "year" : "month"}</span>
                       </div>
-                      <p className={`mt-3 text-[10px] ${featured ? "text-slate-400" : "text-[#8190A2]"}`}>{MONEY_BACK_GUARANTEE}</p>
+                      <p className={`mt-3 text-[10px] ${featured ? guaranteeFeatured : guaranteeDefault}`}>{MONEY_BACK_GUARANTEE}</p>
                     </div>
                     <ul className="mt-7 flex-1 space-y-3">
                       {plan.highlights.map((highlight) => (
-                        <li key={highlight} className={`flex gap-3 text-sm ${featured ? "text-slate-200" : "text-[#52647A]"}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? "text-[#D5A64A]" : "text-[#16A085]"}`} />{highlight}</li>
+                        <li key={highlight} className={`flex gap-3 text-sm ${featured ? highlightFeatured : highlightDefault}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? checkFeatured : checkDefault}`} />{highlight}</li>
                       ))}
                     </ul>
-                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? "bg-white text-[#102B50] hover:bg-cyan-50" : premium ? "bg-[#D5A64A] text-[#2F291F] hover:bg-[#C69941]" : "bg-[#2563A6] text-white hover:bg-[#174A7E]"}`}><Link to="/pricing">View {plan.name} <ArrowRight className="size-4" /></Link></Button>
+                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}><Link to="/pricing">View {plan.name} <ArrowRight className="size-4" /></Link></Button>
                   </article>
                 );
               })}

@@ -1,0 +1,16 @@
+const res = await fetch('https://stocksintels.com/developers/api-keys');
+const text = await res.text();
+console.log('Length:', text.length);
+console.log('root index:', text.indexOf('id="root"'));
+console.log('Sign in to manage:', text.indexOf('Sign in to manage'));
+console.log('Generate Sandbox:', text.indexOf('Generate Sandbox'));
+console.log('Generate Production:', text.indexOf('Generate Production'));
+console.log('Email Address:', text.indexOf('Email Address'));
+console.log('Full Name:', text.indexOf('Full Name'));
+console.log('Verification Code:', text.indexOf('Verification Code'));
+console.log('Password:', text.indexOf('Password') > 0);
+console.log('Forgot password:', text.indexOf('Forgot password'));
+console.log('Create account:', text.indexOf('Create an account'));
+console.log('Sign in:', text.indexOf('Sign in'));
+console.log('Verify Email:', text.indexOf('Verify Email'));
+console.log('Reset Password:', text.indexOf('Reset Password'));

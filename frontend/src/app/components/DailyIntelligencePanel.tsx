@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Newspaper, RefreshCw, Loader2, Globe2, Landmark, Clock3 } from "lucide-react";
+import { Newspaper, RefreshCw, Loader2, Landmark, Clock3, ChevronDown, Brain } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -74,7 +74,17 @@ function IndexTile({ idx }: { idx: BriefIndex }) {
   );
 }
 
-export function DailyIntelligencePanel({ className = "", contentClassName = "" }: { className?: string; contentClassName?: string }) {
+export function DailyIntelligencePanel({ 
+  className = "", 
+  contentClassName = "",
+  compact = false,
+  onToggleCompact
+}: { 
+  className?: string; 
+  contentClassName?: string;
+  compact?: boolean;
+  onToggleCompact?: () => void;
+}) {
   const [data, setData] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -136,49 +146,52 @@ export function DailyIntelligencePanel({ className = "", contentClassName = "" }
   const global = data.globalIndices || [];
   const movers = (data.yesterdayTopMovers || []).filter((m) => m && m.symbol && m.symbol !== "--");
 
-  return (
+return (
     <Card className={`gap-0 overflow-hidden ${className}`}>
-      <div className="border-b border-border bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] px-4 py-3 text-white">
+      <div className="border-b border-border bg-gradient-to-r from-[#244470] to-[#2A5A80] px-4 py-3 text-white">
         <div className="flex flex-wrap items-center gap-2">
-          <Newspaper className="size-4" />
+          <div className="size-7 rounded-lg bg-white/15 flex items-center justify-center">
+            <Brain className="size-3.5" />
+          </div>
           <h2 className="flex-1 text-sm font-semibold">Today&apos;s Market Intelligence</h2>
           {generatedLabel && (
             <span className="inline-flex items-center gap-1 text-[10px] text-white/80">
               <Clock3 className="size-3" /> {generatedLabel}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-1 text-[11px] font-medium hover:bg-white/25 disabled:opacity-60"
-          >
-            <RefreshCw className={`size-3 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => load(true)}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-1 text-[11px] font-medium hover:bg-white/25 disabled:opacity-60"
+            >
+              <RefreshCw className={`size-3 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+            </button>
+            {onToggleCompact && (
+              <button
+                type="button"
+                onClick={onToggleCompact}
+                className="inline-flex items-center justify-center p-1.5 rounded-md bg-white/15 hover:bg-white/25 transition-colors"
+                aria-label={compact ? "Expand" : "Collapse"}
+              >
+                <ChevronDown className={`size-3.5 transition-transform ${compact ? "rotate-180" : ""}`} />
+              </button>
+            )}
+          </div>
         </div>
         {data.stale && (
           <p className="mt-1 text-[10.5px] text-amber-100">
             Showing the last successful brief — today&apos;s regeneration failed.
           </p>
         )}
-      </div>
+</div>
 
       <div className={`space-y-4 p-4 ${contentClassName}`}>
-        {/* Index strip */}
-        {(africa.length > 0 || global.length > 0) && (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="lg:col-span-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Globe2 className="size-3" /> Where markets stand
-            </div>
-            {global.map((i) => <IndexTile key={`g-${i.label}`} idx={i} />)}
-            {africa.map((i) => <IndexTile key={`a-${i.label}`} idx={i} />)}
-          </div>
-        )}
-
-        {/* The read */}
+        {/* The read - always shown if available */}
         {data.aiSignal && (
-          <div className="rounded-xl border border-[#0D7490]/20 bg-[#0D7490]/5 p-3">
-            <p className="text-[11px] font-semibold text-[#0D7490]">The read</p>
+          <div className="rounded-xl border border-[#244470]/20 bg-[#244470]/5 p-3">
+            <p className="text-[11px] font-semibold text-[#244470]">The read</p>
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-foreground">{data.aiSignal}</p>
             {data.aiSignalContext && (
               <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{data.aiSignalContext}</p>
@@ -186,101 +199,120 @@ export function DailyIntelligencePanel({ className = "", contentClassName = "" }
           </div>
         )}
 
-        {/* Stocks requiring attention */}
-        {movers.length > 0 && (
-          <div>
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Stocks requiring attention
-            </div>
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-              {movers.map((m) => {
-                const t = changeTone(m.change);
-                const { code, param } = moverMarket(m);
-                const sym = m.symbol.replace(/^(NSE|NGX|JSE):/i, "");
-                return (
-                  <Link
-                    key={m.symbol}
-                    to={`/app/stock/${sym}?market=${param}`}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/25 px-2.5 py-2 hover:bg-muted/50"
-                  >
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5">
-                        <span className="block text-xs font-semibold text-foreground">{sym}</span>
-                        <span className={`rounded px-1 py-px text-[8px] font-bold uppercase ${code === "NSE" ? "bg-[#0D7490]/15 text-[#0D7490]" : code === "NGX" ? "bg-emerald-100 text-emerald-700" : code === "JSE" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"}`}>{code}</span>
-                      </span>
-                      <span className="block truncate text-[10px] text-muted-foreground">{m.company}</span>
-                    </span>
-                    <span className={`shrink-0 text-xs font-semibold ${t?.cls || "text-muted-foreground"}`}>
-                      {t?.arrow ? `${t.arrow} ` : ""}{m.change}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* African markets breadth + top mover per exchange */}
-        {(data.africaMarkets || []).some((m) => m && m.total > 0) && (
-          <div>
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <Landmark className="size-3" /> African markets
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {(data.africaMarkets || []).filter((m) => m && m.total > 0).map((mkt) => (
-                <div key={mkt.exchange} className="rounded-xl border border-border bg-muted/25 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">{EXCHANGE_LABEL[mkt.exchange] || mkt.exchange}</span>
-                    <span className="text-[10px] font-medium text-muted-foreground">{mkt.currency}</span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2.5 text-[10px]">
-                    <span className="font-semibold text-emerald-600">{mkt.advancers} up</span>
-                    <span className="font-semibold text-red-500">{mkt.decliners} down</span>
-                    <span className="text-muted-foreground">{mkt.unchanged} flat</span>
-                    <span className="ml-auto text-muted-foreground">{mkt.total} listed</span>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    {[mkt.topGainer, mkt.topLoser].filter(Boolean).map((mv) => {
-                      const t = changeTone(mv!.change);
-                      const sym = mv!.symbol.replace(/^(NSE|NGX|JSE):/i, "");
-                      return (
-                        <Link
-                          key={mv!.symbol}
-                          to={`/app/stock/${sym}?market=${mkt.exchange.toLowerCase()}`}
-                          className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50"
-                        >
-                          <span className="min-w-0">
-                            <span className="block text-[11px] font-semibold text-foreground">{sym}</span>
-                            <span className="block truncate text-[9.5px] text-muted-foreground">{mv!.company}</span>
-                          </span>
-                          <span className={`shrink-0 text-[11px] font-semibold ${t?.cls || "text-muted-foreground"}`}>
-                            {t?.arrow ? `${t.arrow} ` : ""}{mv!.change}
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
+        {/* Expanded sections - only shown when not compact */}
+        {!compact && (
+          <>
+            {/* Stocks requiring attention */}
+            {movers.length > 0 && (
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Stocks requiring attention
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {movers.map((m) => {
+                    const t = changeTone(m.change);
+                    const { code, param } = moverMarket(m);
+                    const sym = m.symbol.replace(/^(NSE|NGX|JSE):/i, "");
+                    return (
+                      <Link
+                        key={m.symbol}
+                        to={`/app/stock/${sym}?market=${param}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/25 px-2.5 py-2 hover:bg-muted/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span className="block text-xs font-semibold text-foreground">{sym}</span>
+                            <span className={`rounded px-1 py-px text-[8px] font-bold uppercase ${code === "NSE" ? "bg-[#244470]/15 text-[#244470]" : code === "NGX" ? "bg-emerald-100 text-emerald-700" : code === "JSE" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"}`}>{code}</span>
+                          </span>
+                          <span className="block truncate text-[10px] text-muted-foreground">{m.company}</span>
+                        </span>
+                        <span className={`shrink-0 text-xs font-semibold ${t?.cls || "text-muted-foreground"}`}>
+                          {t?.arrow ? `${t.arrow} ` : ""}{m.change}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* African markets breadth + top mover per exchange */}
+            {(data.africaMarkets || []).some((m) => m && m.total > 0) && (
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Landmark className="size-3" /> African markets
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {(data.africaMarkets || []).filter((m) => m && m.total > 0).map((mkt) => (
+                    <div key={mkt.exchange} className="rounded-xl border border-border bg-muted/25 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-foreground">{EXCHANGE_LABEL[mkt.exchange] || mkt.exchange}</span>
+                        <span className="text-[10px] font-medium text-muted-foreground">{mkt.currency}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2.5 text-[10px]">
+                        <span className="font-semibold text-emerald-600">{mkt.advancers} up</span>
+                        <span className="font-semibold text-red-500">{mkt.decliners} down</span>
+                        <span className="text-muted-foreground">{mkt.unchanged} flat</span>
+                        <span className="ml-auto text-muted-foreground">{mkt.total} listed</span>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        {[mkt.topGainer, mkt.topLoser].filter(Boolean).map((mv) => {
+                          const t = changeTone(mv!.change);
+                          const sym = mv!.symbol.replace(/^(NSE|NGX|JSE):/i, "");
+                          return (
+                            <Link
+                              key={mv!.symbol}
+                              to={`/app/stock/${sym}?market=${mkt.exchange.toLowerCase()}`}
+                              className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-[11px] font-semibold text-foreground">{sym}</span>
+                                <span className="block truncate text-[9.5px] text-muted-foreground">{mv!.company}</span>
+                              </span>
+                              <span className={`shrink-0 text-[11px] font-semibold ${t?.cls || "text-muted-foreground"}`}>
+                                {t?.arrow ? `${t.arrow} ` : ""}{mv!.change}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* What a global move means locally */}
+            {data.globalToNseConnection && (
+              <div className="rounded-xl border border-border bg-muted/25 p-3">
+                <p className="text-[11px] font-semibold text-foreground">What this means for African markets</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.globalToNseConnection}</p>
+              </div>
+            )}
+
+            {data.analystTake && (
+              <div className="rounded-xl border border-border bg-muted/25 p-3">
+                <p className="text-[11px] font-semibold text-foreground">Analyst take</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.analystTake}</p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* What a global move means locally */}
-        {data.globalToNseConnection && (
-          <div className="rounded-xl border border-border bg-muted/25 p-3">
-            <p className="text-[11px] font-semibold text-foreground">What this means for African markets</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.globalToNseConnection}</p>
-          </div>
-        )}
-
-        {data.analystTake && (
-          <div className="rounded-xl border border-border bg-muted/25 p-3">
-            <p className="text-[11px] font-semibold text-foreground">Analyst take</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.analystTake}</p>
+        {/* Compact mode footer */}
+        {compact && (
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={onToggleCompact}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#244470] hover:underline"
+            >
+              Show more <ChevronDown className="size-3.5" />
+            </button>
           </div>
         )}
       </div>
     </Card>
   );
 }
+

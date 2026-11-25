@@ -25,6 +25,7 @@ const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes, getPhase1Benchmark } = require('./signalService');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
+const { getGainers, getLosers } = require('./stockAnalysisMovers');
 const universeService = require('./universeService');
 const catalogScreener = require('./catalogScreener');
 const signalSnapshotsService = require('./signalSnapshotsService');
@@ -9796,6 +9797,35 @@ app.get('/api/market/movers', async (req, res) => {
     }
     console.error('Error fetching movers:', error);
     res.status(500).json({ error: 'Failed to fetch top movers' });
+  }
+});
+
+// ── StockAnalysis.com trending (top gainers/losers) ──
+app.get('/api/market/trending', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
+    const [gainers, losers] = await Promise.all([
+      getGainers(limit),
+      getLosers(limit)
+    ]);
+    const format = (arr) => arr.map(r => ({
+      ticker: r.ticker,
+      name: r.name,
+      change: r.changePercent,
+      market: 'Global',
+      price: r.price,
+      volume: r.volume,
+      marketCap: r.marketCap
+    }));
+    res.json({
+      gainers: format(gainers),
+      losers: format(losers),
+      source: 'stockanalysis.com',
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching trending from stockanalysis:', error.message);
+    res.status(500).json({ error: 'Failed to fetch trending from stockanalysis.com' });
   }
 });
 

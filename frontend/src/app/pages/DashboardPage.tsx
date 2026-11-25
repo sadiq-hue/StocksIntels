@@ -6,18 +6,20 @@ import {
   TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight,
   DollarSign, PieChart, BarChart3, Newspaper, Star, Wallet,
   Globe2, ChevronRight, ArrowUp, Layers, X, Lightbulb,
-  LayoutGrid, Briefcase, Brain, Scale, Banknote, Rocket
+  LayoutGrid, Briefcase, Brain, Scale, Banknote, Rocket,
+  Search, Sparkles, Target, Zap, ChartLine,
+  Calendar, List, SlidersHorizontal
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   PieChart as RePieChart, Pie, Cell,
 } from "recharts";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
-import { DailyIntelligencePanel } from "../components/DailyIntelligencePanel";
-import { kenyanStocks, globalStocks } from "../data/stockUniverses";
+
+import { kenyanStocks, globalStocks, quickFinancialSymbols } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
 import type { Signal } from "../types/signals";
@@ -111,7 +113,7 @@ function formatCompactNumber(value: number) {
   }).format(value);
 }
 
-const allStocks = [...kenyanStocks, ...globalStocks];
+const allStocks = [...kenyanStocks, ...globalStocks, ...quickFinancialSymbols];
 
 interface PerformanceDataPoint {
   month: string;
@@ -198,6 +200,12 @@ export function DashboardPage() {
     } catch {}
     return { gainers: [], losers: [] };
   });
+  const [trendingStocks, setTrendingStocks] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, any>>({});
@@ -243,6 +251,140 @@ export function DashboardPage() {
       setPerfLoading(false);
     }
   }, [user?.id]);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    if (!query.trim() || query.length < 1) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      const q = query.trim();
+      if (!q) {
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+
+      interface SearchResultItem {
+        ticker: string;
+        symbol: string;
+        name: string;
+        exchange: string;
+        currency: string;
+        sector?: string;
+      }
+
+      try {
+        const [localRes, yahooRes] = await Promise.allSettled([
+          fetch(`${API_BASE}/stocks/search?q=${encodeURIComponent(q)}`),
+          fetch(`${API_BASE}/stocks/search/yahoo?q=${encodeURIComponent(q)}`),
+        ]);
+
+        const local: { ticker: string; name: string; market: string; sector?: string }[] =
+          localRes.status === "fulfilled" && localRes.value.ok
+            ? ((await localRes.value.json()) || [])
+                .filter((s: any) => s.sector && s.sector !== "N/A")
+                .map((s: any) => ({
+                  ticker: s.ticker,
+                  name: s.name,
+                  market: s.market,
+                  sector: s.sector,
+                }))
+            : [];
+
+        const yahoo: { symbol: string; name: string; exchange: string; quoteType: string }[] =
+          yahooRes.status === "fulfilled" && yahooRes.value.ok
+            ? ((await yahooRes.value.json()) || [])
+            : [];
+
+        const seen = new Set<string>();
+        const merged = [...local, ...yahoo]
+          .filter((r: any) => {
+            const key = (r.ticker || r.symbol || '').toUpperCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .slice(0, 10)
+          .map((r: any) => {
+            const ticker = r.ticker || r.symbol;
+            const isNse = r.market === "NSE" || r.exchange === "NSE" || r.market === "nse";
+            return {
+              ticker,
+              symbol: ticker,
+              name: r.name,
+              exchange: isNse ? "NSE" : r.exchange || (r.market === "global" ? "NYSE/NASDAQ" : "Global"),
+              currency: isNse ? "KES" : "USD",
+              sector: r.sector,
+            };
+          }) as SearchResultItem[];
+
+        setSearchResults(merged);
+        setShowSearchResults(merged.length > 0);
+      } catch {
+        // fallback to local search
+        const getTicker = (s: typeof allStocks[0]) => 'ticker' in s ? s.ticker : s.symbol;
+        const getName = (s: typeof allStocks[0]) => 'name' in s ? s.name : getTicker(s);
+        const results = allStocks
+          .filter((stock) => {
+            const ticker = (getTicker(stock) || '').toLowerCase();
+            const name = (getName(stock) || '').toLowerCase();
+            return ticker.includes(q.toLowerCase()) || name.includes(q.toLowerCase());
+          })
+          .slice(0, 10)
+          .map((stock): { ticker: string; symbol: string; name: string; exchange: string; currency: string } => {
+            const ticker = getTicker(stock);
+            const market = stock.market;
+            const name = getName(stock);
+            const currency = 'currency' in stock ? (stock.currency ?? (market === 'nse' ? 'KES' : 'USD')) : (market === 'nse' ? 'KES' : 'USD');
+            return {
+              ticker,
+              symbol: ticker,
+              name,
+              exchange: market === 'nse' ? 'NSE' : market === 'global' ? 'NYSE/NASDAQ' : market === 'ngx' ? 'NGX' : market === 'jse' ? 'JSE' : 'Global',
+              currency,
+            };
+          });
+        setSearchResults(results);
+        setShowSearchResults(results.length > 0);
+      }
+    }, 300);
+  }, []);
+
+  const handleSearchSelect = useCallback((result: any) => {
+    setSearchQuery(result.symbol || result.ticker);
+    setShowSearchResults(false);
+    setSearchResults([]);
+    const market = result.exchange?.toLowerCase() === "nse" ? "nse" : "us";
+    navigate(`/app/stock/${result.symbol || result.ticker}?market=${market}`);
+  }, [navigate]);
+
+  const handleSearchSubmit = useCallback(() => {
+    const query = searchQuery.trim();
+    if (!query) return;
+    
+    // Check if it's a known ticker format (e.g., AAPL, TSLA, SCOM)
+    const isTicker = /^[A-Z]{1,5}$/.test(query.toUpperCase());
+    
+    if (isTicker) {
+      // Direct navigation for ticker symbols
+      navigate(`/app/stock/${query.toUpperCase()}`);
+    } else {
+      // For company names, use the first search result or search API
+      if (searchResults.length > 0) {
+        handleSearchSelect(searchResults[0]);
+      } else {
+        // Fallback: try direct navigation
+        navigate(`/app/stock/${query.toUpperCase()}`);
+      }
+    }
+    setShowSearchResults(false);
+  }, [searchQuery, searchResults, handleSearchSelect, navigate]);
 
   useEffect(() => {
     fetchPerformance(selectedTimeRange);
@@ -307,6 +449,29 @@ export function DashboardPage() {
     };
     fetchMovers();
     const interval = setInterval(fetchMovers, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchTrending = () => {
+      fetch(`${API_BASE}/market/trending?limit=10`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          if (!cancelled && data) {
+            setTrendingStocks({
+              gainers: (data.gainers || []).slice(0, 5),
+              losers: (data.losers || []).slice(0, 5),
+            });
+            setTrendingLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setTrendingLoading(false);
+        });
+    };
+    fetchTrending();
+    const interval = setInterval(fetchTrending, 60000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
@@ -389,6 +554,9 @@ export function DashboardPage() {
 
   const topLosers = useMemo(() => movers.losers, [movers.losers]);
 
+  const trendingGainers = useMemo(() => trendingStocks.gainers, [trendingStocks.gainers]);
+  const trendingLosers = useMemo(() => trendingStocks.losers, [trendingStocks.losers]);
+
   const sectorData = useMemo(() => liveSectors, [liveSectors]);
 
 
@@ -407,7 +575,10 @@ export function DashboardPage() {
       if (s?.symbol) activeMap.set(key(s.symbol), s);
     }
     const staticMap = new Map<string, any>();
-    for (const s of allStocks) if (s?.ticker) staticMap.set(key(s.ticker), s);
+    for (const s of allStocks) {
+      const t = 'ticker' in s ? s.ticker : s.symbol;
+      if (t) staticMap.set(key(t), s);
+    }
 
     // Two live sources disagree on shape: the movers snapshot ships `change` as
     // a pre-formatted string ("+1.68%"), while /api/quotes ships a numeric
@@ -586,39 +757,6 @@ export function DashboardPage() {
     };
   }, [user?.id]);
 
-  const signalSummary = useMemo(() => {
-    const counts: Record<string, number> = { "Strong Buy": 0, Buy: 0, Hold: 0, Sell: 0, "Strong Sell": 0 };
-    // De-duplicate by ticker: the backend universe contains ARM twice (an NSE
-    // listing and a US listing share the bare ticker), so the raw array can hold
-    // two entries for the same ticker and inflate every count.
-    const seen = new Set<string>();
-    const unique = signals.filter(s => {
-      const k = String(s?.ticker ?? "").toUpperCase();
-      if (!k || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-
-    unique.forEach(s => { if (counts[s.signal] !== undefined) counts[s.signal]++; });
-    const total = unique.length;
-    const conf = (s: any) => (typeof s?.confidence === "number" && isFinite(s.confidence) ? s.confidence : 0);
-    // A missing confidence must not poison these: Math.max(0, undefined) is NaN,
-    // which would render "Avg NaN%" / "peak NaN%".
-    const avgConf = total ? Math.round(unique.reduce((a, b) => a + conf(b), 0) / total) : 0;
-    const peakConf = total ? Math.round(unique.reduce((a, b) => Math.max(a, conf(b)), 0)) : 0;
-    const strongBuy = counts["Strong Buy"] + counts.Buy;
-    const strongSell = counts.Sell + counts["Strong Sell"];
-    return {
-      total, avgConf, peakConf, strongBuy, strongSell, counts,
-      // The card is about actionable calls. Hold is the overwhelming majority of
-      // the generated set, so leading with the grand total made the tile read
-      // "480 / 0 Buy · 3 Sell" - a number that contradicts its own caption.
-      actionable: strongBuy + strongSell,
-      hold: counts.Hold,
-      unrated: total - strongBuy - strongSell - counts.Hold,
-    };
-  }, [signals]);
-
   const benchmarkMetrics = useMemo(() => {
     const numOrNull = (v: any) => (typeof v === "number" && isFinite(v) ? v : null);
     const d = Array.isArray(perfData) ? perfData.filter(p => p && typeof p === "object") : [];
@@ -729,13 +867,14 @@ export function DashboardPage() {
       </div>
 
       {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] rounded-xl p-6 text-white relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.15] rounded-full blur-xl animate-bubble-float" />
-        <div className="absolute top-4 right-20 w-12 h-12 bg-white/20 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
-        <div className="absolute -bottom-8 -right-2 w-32 h-32 bg-cyan-200/20 rounded-full animate-bubble-float" style={{ animationDelay: "3s" }} />
-        <div className="absolute bottom-0 left-8 w-8 h-8 bg-white/[0.15] rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
-        <div className="absolute -top-4 left-12 w-6 h-6 bg-white/20 rounded-full animate-bubble-float" style={{ animationDelay: "4s" }} />
-        <div className="absolute top-1/3 -left-6 w-20 h-20 bg-white/[0.12] rounded-full animate-bubble-float" style={{ animationDelay: "5s" }} />
+      <div className="bg-gradient-to-br from-[#0A1628] via-[#0D2337] to-[#112D4A] rounded-xl p-6 text-white relative overflow-hidden border border-white/10 shadow-2xl shadow-[#0A1628]/50">
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.08] rounded-full blur-xl animate-bubble-float" />
+        <div className="absolute top-4 right-20 w-12 h-12 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
+        <div className="absolute -bottom-8 -right-2 w-32 h-32 bg-blue-500/15 rounded-full animate-bubble-float" style={{ animationDelay: "3s" }} />
+        <div className="absolute bottom-0 left-8 w-8 h-8 bg-white/[0.08] rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
+        <div className="absolute -top-4 left-12 w-6 h-6 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "4s" }} />
+        <div className="absolute top-1/3 -left-6 w-20 h-20 bg-white/[0.06] rounded-full animate-bubble-float" style={{ animationDelay: "5s" }} />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(13,35,55,0.3),transparent_70%)]" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-white/80 text-sm mb-1">
@@ -773,209 +912,75 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" data-tour="portfolio-cards">
-        <Card className="col-span-2 md:col-span-1 border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20">
-          {/* Floating bubbles */}
-          <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full blur-[1px] animate-bubble-float" />
-          <div className="absolute top-2 right-16 w-10 h-10 bg-white/15 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
-          <div className="absolute -bottom-8 -right-2 w-24 h-24 bg-emerald-300/15 rounded-full animate-bubble-float" style={{ animationDelay: "3s" }} />
-          <div className="absolute bottom-0 left-8 w-6 h-6 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
-          <div className="absolute -top-2 left-10 w-5 h-5 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "4s" }} />
-          <div className="absolute top-1/2 -left-4 w-14 h-14 bg-indigo-300/10 rounded-full animate-bubble-float" style={{ animationDelay: "5s" }} />
-          {/* Soft radial glow */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="size-6 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
-                <Wallet className="size-3.5 text-white" />
-              </div>
-              <span className="text-[11px] font-medium text-white/90">Portfolio Value</span>
-              <span className="ml-auto flex items-center gap-1.5 text-[9px] font-semibold text-white/80 bg-white/10 rounded-full px-2 py-0.5">
-                <span className="size-1.5 rounded-full bg-emerald-300 animate-pulse-slow" /> Live
-              </span>
-            </div>
-            <div className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
-              {fmtKes(enhancedTotals.totalValue)}
-            </div>
-            <div className={`flex items-center gap-1 text-xs mt-2 ${enhancedTotals.pnlPercent >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-              <div className={`size-4 rounded-full flex items-center justify-center ${enhancedTotals.pnlPercent >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
-                {enhancedTotals.pnlPercent >= 0 ? <ArrowUpRight className="size-2.5" /> : <ArrowDownRight className="size-2.5" />}
-              </div>
-              <span className="font-semibold">{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% today</span>
-            </div>
-            <div className="mt-3 pt-2.5 border-t border-white/20 flex justify-between text-[11px] text-white/70">
-              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />NSE: {fmtKes(enhancedTotals.nseValue)}</span>
-              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />Global: {fmtUsd(enhancedTotals.globalValue)}</span>
-            </div>
-          </div>
-        </Card>
-
-        {(() => {
-          // Only mention benchmarks we actually have real history for, so the tile
-          // can never print a plausible-looking 0.0% placeholder.
-          const sign = (v: number) => (v >= 0 ? "+" : "");
-          const parts: string[] = [];
-          if (perfMeta.hasHistory) {
-            parts.push(`Portfolio ${sign(perfMeta.totalReturnPercent)}${perfMeta.totalReturnPercent.toFixed(1)}%`);
-          }
-          if (benchmarkMetrics.spReturn != null) {
-            parts.push(`S&P 500 ${sign(benchmarkMetrics.spReturn!)}${benchmarkMetrics.spReturn!.toFixed(1)}%`);
-          }
-          if (benchmarkMetrics.nseReturn != null) {
-            parts.push(`NSE 20 ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
-          }
-          let sub = parts.join(" · ");
-          // The NSE 20 history is accumulated server-side (no free NSE history
-          // feed is reachable), so until enough daily closes exist, say when it
-          // started collecting rather than implying a 0.0% return.
-          if (benchmarkMetrics.nseReturn == null && perfMeta.nseBenchmarkSince) {
-            sub = (sub ? sub + " · " : "") + `NSE 20 collecting since ${perfMeta.nseBenchmarkSince}`;
-          }
-          const hasAlpha = perfMeta.hasHistory && benchmarkMetrics.alpha != null;
-          return [
-          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "African Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
-          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
-          { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} African · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.actionable}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: signalSummary.actionable > 0 ? "text-foreground" : "text-muted-foreground" },
-          { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: hasAlpha ? `${sign(benchmarkMetrics.alpha!)}${benchmarkMetrics.alpha!.toFixed(1)}%` : "—", sub: sub || "No benchmark history yet", valColor: hasAlpha ? (benchmarkMetrics.alpha! >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
-          ].map((m, i) => (
-          <Card key={i} className="border shadow-sm p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`size-8 rounded-lg flex items-center justify-center ${m.color}`}>
-                <m.icon className="size-4" />
-              </div>
-              <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
-            </div>
-            <div className={`text-xl font-bold ${m.valColor}`}>{m.value}</div>
-            <div className="text-xs text-muted-foreground mt-2">{m.sub}</div>
-          </Card>
-        ));
-        })()}
-      </div>
-
-      {beginnerMode && (
+{beginnerMode && (
         <Card className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/20 border-amber-200 dark:border-amber-800/50">
           <div className="flex items-start gap-3">
             <Lightbulb className="size-4 text-amber-600 mt-0.5 shrink-0" />
             <div className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>{' '}
-              <strong>Portfolio Value</strong> = total worth of your investments. <strong>African / Global</strong> = which market your stocks trade on.
-              <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
-              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or the S&amp;P 500.
+              <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Market Indices */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3" data-tour="market-indices">
-        <Card className="h-fit gap-0 border p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+      {/* Market Indices — Institutional Grade */}
+      <Card className="border border-border/30 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden bg-gradient-to-b from-background to-muted/20">
+        <div className="border-b border-border/30 px-5 py-4 bg-gradient-to-r from-muted/30 to-transparent">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
                 <BarChart3 className="size-4 text-[#0D7490]" />
               </div>
-              <h3 className="text-sm font-semibold text-foreground">African Indices</h3>
+              <h3 className="text-sm font-semibold text-foreground">Market Indices</h3>
             </div>
-            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
+            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-1">
               All markets <ChevronRight className="size-3.5" />
             </Link>
           </div>
-          <div className="space-y-2">
-            {africanIndices.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
-            )}
-            {africanIndices.map((index) => (
-              <div key={index.symbol} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
-                <div className="min-w-0 pr-3">
-                  <div className="flex min-w-0 items-center gap-2">
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {/* Key African Indices (3) - includes JSE */}
+            {africanIndices.slice(0, 3).map((index) => (
+              <div key={index.symbol} className="rounded-lg bg-muted/30 p-4 border border-border/30 hover:border-[#0D7490]/30 hover:bg-muted/50 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span title={index.name} className="truncate text-sm font-semibold text-foreground">{index.name}</span>
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${INDEX_MARKET_BADGE[index.market] || "bg-muted text-muted-foreground"}`}>
                       {index.market}
                     </span>
                   </div>
-                  {index.volume && index.volume !== "0" && <div className="mt-0.5 text-[10px] text-muted-foreground">Volume {index.volume}</div>}
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-sm font-bold text-foreground">{index.value}</div>
-                  <div className={`flex items-center gap-0.5 justify-end text-xs font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="text-lg font-bold text-foreground tabular-nums">{index.value}</div>
+                  <div className={`flex items-center gap-1 text-sm font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {index.isPositive ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
-                    <span>{index.change}</span>
+                    <span className="tabular-nums">{index.change}</span>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
-        </Card>
-
-        <Card className="h-fit gap-0 border p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
-                <Globe2 className="size-4 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Global Indices</h3>
-            </div>
-            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
-              View all <ChevronRight className="size-3.5" />
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {globalIndices.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
-            )}
-            {globalIndices.map((index) => (
-              <div key={index.symbol} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
-                <div className="min-w-0 pr-3">
-                  <span title={index.name} className="block truncate text-sm font-semibold text-foreground">{index.name}</span>
-                  {index.volume && index.volume !== "0" && <div className="mt-0.5 text-[10px] text-muted-foreground">Volume {index.volume}</div>}
+            {/* Key Global Indices (2) */}
+            {globalIndices.slice(0, 2).map((index) => (
+              <div key={index.symbol} className="rounded-lg bg-muted/30 p-4 border border-border/30 hover:border-indigo-400/30 hover:bg-muted/50 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <span title={index.name} className="truncate text-sm font-semibold text-foreground">{index.name}</span>
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-sm font-bold text-foreground">{index.value}</div>
-                  <div className={`flex items-center gap-0.5 justify-end text-xs font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="text-lg font-bold text-foreground tabular-nums">{index.value}</div>
+                  <div className={`flex items-center gap-1 text-sm font-medium ${index.isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {index.isPositive ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
-                    <span>{index.change}</span>
+                    <span className="tabular-nums">{index.change}</span>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
-        </Card>
-
-        <Card className="h-fit gap-0 border p-5 shadow-sm lg:col-span-1" data-tour="sector-performance">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/10">
-                <Activity className="size-4 text-emerald-600" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Sector Performance</h3>
-            </div>
-            <Link to="/app/sectors" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
-              All sectors <ChevronRight className="size-3.5" />
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {sectorData.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live sector data available</div>
+            {africanIndices.length < 2 && globalIndices.length < 2 && (
+              <div className="col-span-2 lg:col-span-4 text-center py-8 text-sm text-muted-foreground">No live index data available</div>
             )}
-            {sectorData.slice(0, 6).map((s) => (
-              <div key={s.sector} className="flex min-h-14 items-center justify-between rounded-lg bg-muted/50 p-3 transition-colors hover:bg-muted/80 dark:bg-muted/30 dark:hover:bg-muted/50">
-                <div className="flex min-w-0 items-center gap-2 pr-3">
-                  <div className={`size-2 shrink-0 rounded-full ${s.avgChange >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                  <span title={s.sector} className="truncate text-sm font-semibold text-foreground">{s.sector}</span>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div className={`text-xs font-semibold ${s.avgChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {s.avgChange >= 0 ? "+" : ""}{s.avgChange.toFixed(2)}%
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">{s.count} {s.count === 1 ? "stock" : "stocks"}</div>
-                </div>
-              </div>
-            ))}
           </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       {/* Portfolio vs Benchmarks — commented out */}
       {/*
@@ -1097,327 +1102,325 @@ export function DashboardPage() {
         </Card>
         */}
 
-      {/* Top Movers — Combined NSE & Global */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-tour="top-movers">
-        <Card className="border shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
-                <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Top Gainers</h3>
-            </div>
-            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
-              All gainers <ChevronRight className="size-3.5" />
-            </Link>
-          </div>
-          <div className="space-y-1">
-            {topGainers.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live gainers available</div>
-            )}
-            {topGainers.map((stock) => {
-              const sig = signals.find(s => s.ticker === stock.ticker);
-              return (
-                  <div key={stock.ticker} onClick={() => setSelectedStock({
-                    ticker: stock.ticker, name: stock.name, price: stock.price,
-                    change: stock.change, volume: stock.volume,
-                    market: stock.market,
-                    currency: stock.currency || 'KES', signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800/50 cursor-pointer gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-9 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center shrink-0">
-                        <span className="text-emerald-700 font-bold text-xs">{stock.ticker}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
-                          <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                            {MARKET_LABEL[stock.market] || "Global"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-emerald-600 font-bold text-sm shrink-0">{stock.change > 0 ? "+" : ""}{stock.change.toFixed(2)}%</div>
-                  </div>
-              );
-            })}
-          </div>
-        </Card>
+      {/* Stock Analysis Search — Exact Reference Match */}
+      <section className="relative w-full bg-[#F5F6F8] py-8 md:py-12 lg:py-16" aria-labelledby="search-heading">
+        <div className="mx-auto max-w-[1400px] px-4 md:px-6 lg:px-8">
+          {/* Main Heading */}
+          <h1 id="search-heading" className="text-center text-[42px] md:text-[42px] font-[750] text-[#111827] leading-tight mb-6 tracking-tight">
+            Search for a stock to start your analysis
+          </h1>
 
-        <Card className="border shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
-                <TrendingDown className="size-4 text-red-600 dark:text-red-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-foreground">Top Losers</h3>
-            </div>
-            <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
-              All losers <ChevronRight className="size-3.5" />
-            </Link>
-          </div>
-          <div className="space-y-1">
-            {topLosers.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live losers available</div>
-            )}
-            {topLosers.map((stock) => {
-              const sig = signals.find(s => s.ticker === stock.ticker);
-              return (
-                <div key={stock.ticker} onClick={() => setSelectedStock({
-                  ticker: stock.ticker, name: stock.name, price: stock.price,
-                  change: stock.change, volume: stock.volume,
-                  market: stock.market === 'nse' ? 'nse' : 'global',
-                  currency: stock.currency || 'KES', signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 dark:hover:bg-red-950/30 transition-all border border-transparent hover:border-red-200 dark:hover:border-red-800/50 cursor-pointer gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-9 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center shrink-0">
-                        <span className="text-red-700 font-bold text-xs">{stock.ticker}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
-                          <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                            {MARKET_LABEL[stock.market] || "Global"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-red-500 font-bold text-sm shrink-0">{stock.change >= 0 ? "+" : ""}{stock.change.toFixed(2)}%</div>
-                  </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
+          {/* Description */}
+          <p className="mx-auto max-w-[1100px] text-center text-[22px] md:text-[22px] font-normal text-[#374151] leading-[1.6] mb-10">
+            All-in-one stock analysis platform with accurate information on 150,000+ global stocks and funds. See stock prices, news, financials, forecasts, charts and more.
+          </p>
 
-      {/* Watchlist, active names and new listings share one compact market surface. */}
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        <Card className="gap-0 border p-5 shadow-sm xl:h-[900px] xl:overflow-y-auto">
-          <div className="grid gap-6">
-            <section aria-labelledby="dashboard-watchlist-heading">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#0D7490]/10">
-                    <Star className="size-4 text-[#0D7490]" />
-                  </div>
-                  <h3 id="dashboard-watchlist-heading" className="truncate text-sm font-semibold text-foreground">Watchlist / Most Active</h3>
-                </div>
-                <Link to="/app/watchlist" className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#0D7490] hover:underline">
-                  Manage <ChevronRight className="size-3.5" />
-                </Link>
+          {/* Search Input */}
+          <div className="flex justify-center mb-8">
+            <div className="relative w-[690px] max-w-full">
+              <div className="relative bg-white border border-[#D9DEE5] rounded-[5px] shadow-sm hover:shadow-md focus-within:ring-2 focus-within:ring-[#1674C5]/20 focus-within:border-[#1674C5] transition-all">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-[#9CA3AF]" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onFocus={() => searchQuery.length >= 2 && setShowSearchResults(true)}
+                  onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                  onKeyDown={(e) => { 
+                    if (e.key === '/') { 
+                      e.preventDefault(); 
+                      e.currentTarget.focus(); 
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchSubmit();
+                    }
+                  }}
+                  placeholder="Company or stock symbol..."
+                  className="w-full pl-12 pr-18 py-3.5 bg-transparent border-0 rounded-[5px] text-[18px] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-0"
+                  autoComplete="off"
+                />
+                <kbd className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] px-2 py-1 bg-[#F5F6F8] rounded-[4px] text-[#6B7280] font-mono border border-[#E5E7EB] select-none">
+                  /
+                </kbd>
               </div>
-              <div className="space-y-1">
-                {watchlist.length === 0 && (
-                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
-                )}
-                {watchlist.map((stock) => {
-                  const fullStock = allStocks.find(s => s.ticker === stock.ticker);
-                  const sig = signals.find(s => s.ticker === stock.ticker);
-                  return (
-                    <div key={stock.ticker} onClick={() => setSelectedStock({
-                      ticker: stock.ticker,
-                      name: stock.name || fullStock?.name || stock.ticker,
-                      price: parseFloat(stock.price),
-                      change: parseFloat(stock.change),
-                      volume: stock.volume || fullStock?.volume || '0',
-                      market: stock.market,
-                      currency: stock.currency || 'KES',
-                      signal: sig,
-                    })} className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10">
-                          <span className="text-xs font-bold text-[#0D7490]">{stock.ticker}</span>
-                          {stock.alert && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-card bg-red-500" />}
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#E5E7EB] rounded-xl shadow-lg overflow-hidden z-50">
+                  <div className="max-h-72 overflow-y-auto">
+                    {searchResults.map((result, idx) => {
+                      const isNse = result.exchange === 'NSE';
+                      const badgeColor = isNse ? 'bg-[#1674C5]' : 'bg-[#1674C5]';
+                      const badgeTextColor = isNse ? 'text-[#1674C5]' : 'text-[#1674C5]';
+                      const badgeBgColor = isNse ? 'bg-[#1674C5]/10' : 'bg-[#1674C5]/10';
+                      
+                      return (
+                      <button
+                        key={`${result.symbol || result.ticker}-${idx}`}
+                        onClick={() => handleSearchSelect(result)}
+                        className="w-full px-4 py-3 text-left hover:bg-[#F9FAFB] transition-colors flex items-center gap-3 border-b last:border-0 group"
+                      >
+                        <div className="relative min-w-[56px] max-w-[76px] h-10 shrink-0">
+                          <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[#1674C5]/15 to-[#1674C5]/5 border border-[#1674C5]/20 group-hover:border-[#1674C5]/40 group-hover:from-[#1674C5]/25 group-hover:to-[#1674C5]/10 transition-all duration-200" />
+                          <div className="relative flex items-center justify-center h-full px-3">
+                            <span className="text-[13px] font-bold tracking-tight text-[#1674C5] truncate w-full">{result.symbol || result.ticker}</span>
+                          </div>
+                          {result.sector && (
+                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[8px] font-medium text-[#1674C5]/80 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              {result.sector}
+                            </div>
+                          )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{stock.name || stock.ticker}</div>
-                          <div className="truncate text-[11px] text-muted-foreground">
-                            {currencyPrefix(stock.currency)}{stock.price}
-                            {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-[#111827] truncate">{result.name || result.symbol || result.ticker}</div>
+                          <div className="text-xs text-[#6B7280] flex items-center gap-2">
+                            <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-[#F3F4F6]">{result.exchange || result.market || 'Global'}</span>
+                            {result.currency && <span className="text-[10px]">{result.currency}</span>}
                           </div>
                         </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400'}`}>
-                          {stock.change}
-                        </span>
-                        <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                          {stock.market === "nse" ? "NSE" : "Global"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section aria-labelledby="dashboard-ipos-heading" className="border-t border-border pt-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
-                    <Rocket className="size-4 text-violet-600 dark:text-violet-400" />
+                      </button>
+                      )
+                    })}
                   </div>
-                  <h3 id="dashboard-ipos-heading" className="truncate text-sm font-semibold text-foreground">Recent IPOs</h3>
+                  {searchResults.length === 0 && (
+                    <div className="px-4 py-4 text-center text-sm text-[#6B7280]">
+                      No results found for "{searchQuery}"
+                    </div>
+                  )}
                 </div>
-                <Link to="/app/ipos" className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-[#0D7490] hover:underline">
-                  View IPOs <ChevronRight className="size-3.5" />
-                </Link>
-              </div>
-              <div className="space-y-1" data-testid="recent-ipos-list">
-                {recentIposLoading && recentIpos.length === 0 && (
-                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">Loading recent IPOs...</div>
-                )}
-                {!recentIposLoading && recentIpos.length === 0 && (
-                  <div className="flex min-h-24 items-center justify-center p-6 text-center text-xs text-muted-foreground">No recent IPOs available</div>
-                )}
-                {recentIpos.map((ipo) => {
-                  const performance = typeof ipo.since_ipo_pct === "number" && Number.isFinite(ipo.since_ipo_pct) ? ipo.since_ipo_pct : null;
-                  const exchange = ipo.exchange || "Global";
-                  return (
-                    <Link key={ipo.id} to="/app/ipos" className="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-all hover:border-border hover:bg-muted/50">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 px-1">
-                          {ipo.ticker ? <span className="truncate text-[10px] font-bold text-violet-700 dark:text-violet-300">{ipo.ticker}</span> : <Rocket className="size-4 text-violet-600" />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{ipo.company_name}</div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-semibold uppercase">{exchange}</span>
-                            <span className="truncate">{formatIpoDate(ipo.listing_date)}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        {ipo.status === "current" ? (
-                          <>
-                            {performance != null && <div className={`mb-1 text-xs font-semibold ${performance >= 0 ? "text-emerald-600" : "text-red-500"}`}>{performance >= 0 ? "+" : ""}{performance.toFixed(1)}%</div>}
-                            <span className="whitespace-nowrap rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Trading Today</span>
-                          </>
-                        ) : performance == null ? (
-                          <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Listed</span>
-                        ) : (
-                          <>
-                            <div className={`text-xs font-semibold ${performance >= 0 ? "text-emerald-600" : "text-red-500"}`}>{performance >= 0 ? "+" : ""}{performance.toFixed(1)}%</div>
-                            <div className="mt-0.5 text-[9px] text-muted-foreground">Since IPO</div>
-                          </>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
+              )}
+            </div>
           </div>
-        </Card>
 
-        <DailyIntelligencePanel className="xl:h-[900px]" contentClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto" />
+          {/* Trending Stocks */}
+          <div className="flex justify-center mb-16 md:mb-20">
+            <div className="flex flex-wrap items-center justify-center gap-2 text-[18px] text-[#374151] max-w-[1100px] w-full">
+              <span className="font-medium text-[#111827] whitespace-nowrap">Trending:</span>
+              <button
+                onClick={() => handleSearchSelect({ ticker: 'NVDA', symbol: 'NVDA', name: 'NVIDIA Corporation', exchange: 'NASDAQ', currency: 'USD' })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#1674C5]/10 text-[#1674C5] hover:bg-[#1674C5]/20 transition-colors cursor-pointer font-medium whitespace-nowrap"
+              >
+                NVDA
+              </button>
+              <button
+                onClick={() => handleSearchSelect({ ticker: 'ANT', symbol: 'ANT', name: 'Ant International', exchange: 'NASDAQ', currency: 'USD' })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#1674C5]/10 text-[#1674C5] hover:bg-[#1674C5]/20 transition-colors cursor-pointer font-medium whitespace-nowrap"
+              >
+                ANT
+              </button>
+              <button
+                onClick={() => handleSearchSelect({ ticker: 'MU', symbol: 'MU', name: 'Micron Technology', exchange: 'NASDAQ', currency: 'USD' })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#1674C5]/10 text-[#1674C5] hover:bg-[#1674C5]/20 transition-colors cursor-pointer font-medium whitespace-nowrap"
+              >
+                MU
+              </button>
+              <button
+                onClick={() => handleSearchSelect({ ticker: 'SPCX', symbol: 'SPCX', name: 'SPCX ETF', exchange: 'NYSE', currency: 'USD' })}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#1674C5]/10 text-[#1674C5] hover:bg-[#1674C5]/20 transition-colors cursor-pointer font-medium whitespace-nowrap"
+              >
+                SPCX
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F3F4F6] hover:bg-[#E5E7EB] transition-colors cursor-pointer font-medium whitespace-nowrap text-[#374151] border border-[#E5E7EB]"
+              >
+                More
+                <TrendingUp className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
 
-        {/*
-        <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20" data-tour="ai-signals-section">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full animate-bubble-float" />
-          <div className="absolute top-4 right-20 w-8 h-8 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
-          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-emerald-300/10 rounded-full animate-bubble-float" style={{ animationDelay: "3.5s" }} />
-          <div className="absolute bottom-6 left-24 w-5 h-5 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "1s" }} />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
+          {/* Navigation Cards - 6 cards */}
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+            {/* Watchlist */}
+            <Link
+              to="/app/watchlist"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <List className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827]">Watchlist</span>
+            </Link>
 
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
+            {/* Stock Screener */}
+            <Link
+              to="/app/stocks"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <SlidersHorizontal className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827] leading-tight">Stock<br />Screener</span>
+            </Link>
+
+            {/* Market Movers */}
+            <Link
+              to="/app/markets"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <BarChart3 className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827] leading-tight">Market<br />Movers</span>
+            </Link>
+
+            {/* IPO Calendar */}
+            <Link
+              to="/app/ipos"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <Calendar className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827]">IPO Calendar</span>
+            </Link>
+
+            {/* Market Data */}
+            <Link
+              to="/app/markets"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <Globe2 className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827] leading-tight">Market<br />Data</span>
+            </Link>
+
+            {/* Portfolio */}
+            <Link
+              to="/app/portfolio"
+              className="group relative flex flex-col items-center justify-center w-[140px] h-[120px] bg-white border border-[#D1D5DB] rounded-[10px] shadow-sm hover:shadow-md transition-all duration-200"
+            >
+              <PieChart className="size-[28px] text-[#4B5563] group-hover:text-[#1674C5] transition-colors" aria-hidden="true" />
+              <span className="mt-2 text-center text-[14px] font-medium text-[#111827]">Portfolio</span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+{/* Watchlist & Recent IPOs — Side by side layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Watchlist / Most Active */}
+        <Card className="border border-border/10 shadow-sm hover:shadow-md transition-shadow duration-200 bg-card/50">
+          <div className="border-b border-border/10 px-5 py-4 bg-muted/30">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="size-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <Brain className="size-4" />
+                <div className="size-8 rounded-lg bg-gradient-to-br from-[#1674C5]/20 to-[#1674C5]/5 border border-[#1674C5]/20 flex items-center justify-center">
+                  <Star className="size-4 text-[#1674C5]" />
                 </div>
-                <h3 className="text-sm font-semibold">Top Market Intelligence</h3>
+                <h3 className="text-sm font-semibold text-foreground">Watchlist / Most Active</h3>
               </div>
-              <Link to="/app/signals" className="text-xs font-medium text-white/80 hover:text-white hover:underline flex items-center gap-0.5">
-                All signals <ChevronRight className="size-3.5" />
+              <Link to="/app/watchlist" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-1">
+                View all <ChevronRight className="size-3.5" />
               </Link>
             </div>
-
-            {signalsLoading ? (
-              <div className="space-y-2">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="bg-white/10 rounded-lg p-3.5 border border-white/20 animate-pulse">
-                    <div className="h-4 bg-white/20 rounded w-1/3 mb-2" />
-                    <div className="h-2 bg-white/20 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
+          </div>
+          <div className="p-4 space-y-1 max-h-[450px] overflow-y-auto">
+            {watchlist.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">No watchlist data available</div>
             ) : (
-              <>
-                {signalSummary.total > 0 && (                  <div className="bg-white/10 rounded-lg p-3 border border-white/20 mb-3">
-                    <div className="flex items-center justify-between text-[11px] text-white/70 mb-2">
-                      <span>{signalSummary.actionable} calls{signalSummary.hold > 0 ? ` · ${signalSummary.hold} on hold` : ""}</span>
-                      <span className="text-white/60">Avg {signalSummary.avgConf}% confidence</span>
-                    </div>
-                    <div className="flex h-1.5 rounded-full overflow-hidden bg-white/10">
-                      {(["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"] as const).map(type => {
-                        const count = signalSummary.counts[type];
-                        if (!count) return null;
-                        const colors: Record<string, string> = {
-                          "Strong Buy": "bg-emerald-400",
-                          "Buy": "bg-emerald-300",
-                          "Hold": "bg-yellow-300",
-                          "Sell": "bg-red-300",
-                          "Strong Sell": "bg-red-400",
-                        };
-                        return <div key={type} className={colors[type]} style={{ width: `${(count / signalSummary.total) * 100}%` }} title={`${type}: ${count}`} />;
-                      })}
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-white/60">
-                      {(["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"] as const).map(type => {
-                        const count = signalSummary.counts[type];
-                        if (!count) return null;
-                        return <span key={type}>{type}: {count}</span>;
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {topSignals.map((signal) => (
-                    <Link key={signal.ticker} to={`/app/signals?ticker=${signal.ticker}`}>
-                      <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3.5 border border-white/20 hover:bg-white/20 transition-all">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-white">{signal.ticker}</span>
-                            <span className="text-[10px] font-medium text-white/60 uppercase">{signal.market === "NSE" ? "NSE" : "Global"}</span>
-                            <Badge className={
-                              signal.signal === "Strong Buy" ? "bg-emerald-400 text-emerald-900 border-0 text-[11px] font-semibold" :
-                              signal.signal === "Buy" ? "bg-emerald-300 text-emerald-800 border-0 text-[11px] font-semibold" :
-                              signal.signal === "Sell" ? "bg-red-300 text-red-800 border-0 text-[11px] font-semibold" :
-                              signal.signal === "Strong Sell" ? "bg-red-400 text-red-900 border-0 text-[11px] font-semibold" :
-                              "bg-blue-300 text-blue-800 border-0 text-[11px] font-semibold"
-                            }>
-                              {signal.signal}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-1" style={{ color: signal.trend === "up" ? "#6EE7B7" : "#FCA5A5" }}>
-                            {signal.trend === "up" ? <ArrowUp className="size-3" /> : <ArrowDownRight className="size-3" />}
-                            <span className="text-xs font-medium">{signal.change}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${signal.confidence >= 80 ? 'bg-emerald-400' : signal.confidence >= 60 ? 'bg-yellow-400' : 'bg-red-400'}`} style={{ width: `${signal.confidence}%` }}></div>
-                          </div>
-                          <span className="text-xs text-white/70">{signal.confidence}% confidence</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          {signal.mlWinProb && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-300">ML: {signal.mlWinProb}</span>}
-                          {signal.regime && <span className="text-[10px] px-1 py-0.5 rounded bg-white/10 text-white/60">{signal.regime}</span>}
-                          {signal.weeklyTrend && <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${signal.weeklyTrend === "Bullish" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>{signal.weeklyTrend}</span>}
+              watchlist.map((stock) => {
+                const fullStock = allStocks.find(s => ('ticker' in s ? s.ticker : s.symbol) === stock.ticker);
+                const fullName = fullStock && 'name' in fullStock ? fullStock.name : stock.ticker;
+                const fullVolume = fullStock && 'volume' in fullStock ? fullStock.volume : undefined;
+                const sig = signals.find(s => s.ticker === stock.ticker);
+                return (
+                  <div key={stock.ticker} onClick={() => setSelectedStock({
+                    ticker: stock.ticker,
+                    name: stock.name || fullName,
+                    price: parseFloat(stock.price),
+                    change: parseFloat(stock.change),
+                    volume: stock.volume || fullVolume || '0',
+                    market: stock.market,
+                    currency: stock.currency || 'KES',
+                    signal: sig,
+                  })} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-all hover:bg-muted/50 hover:shadow-sm cursor-pointer relative group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#0D7490]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none" />
+                    <div className="flex items-center gap-3 min-w-0 relative z-10">
+                      <div className="relative min-w-[48px] max-w-[68px] h-9 shrink-0">
+                        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-[#1674C5]/15 to-[#1674C5]/5 border border-[#1674C5]/20 group-hover:border-[#1674C5]/40 group-hover:from-[#1674C5]/25 group-hover:to-[#1674C5]/10 transition-all duration-200" />
+                        <div className="relative flex items-center justify-center h-full px-2.5">
+                          <span className="text-[12px] font-bold tracking-tight text-[#1674C5] truncate w-full">{stock.ticker}</span>
                         </div>
                       </div>
-                    </Link>
-                  ))}
-                </div>
-              </>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{stock.name || stock.ticker}</div>
+                        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-2">
+                          <span className="font-medium tabular-nums">{currencyPrefix(stock.currency)}{stock.price}</span>
+                          {(() => {
+                            const vol = stock.volume && stock.volume !== '0' && stock.volume !== 'NaN' ? Number(stock.volume) : null;
+                            return vol && !isNaN(vol) ? <span className="text-[10px]">· Vol: {vol.toLocaleString()}</span> : null;
+                          })()}
+                          <span className={`shrink-0 px-2 py-0.5 text-[9px] font-medium rounded ${stock.market === "nse" ? "bg-[#0D7490]/10 text-[#0D7490]" : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"}`}>
+                            {stock.market === "nse" ? "NSE" : "Global"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 relative z-10">
+                      <span className={`rounded-md px-2.5 py-1 text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400'}`}>
+                        {stock.change}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+</Card>
+
+        {/* Recent IPOs */}
+        <Card className="border border-border/10 shadow-sm hover:shadow-md transition-shadow duration-200 bg-card/50">
+          <div className="border-b border-border/10 px-5 py-4 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="size-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-violet-500/5 border border-violet-500/20 flex items-center justify-center">
+                  <Rocket className="size-4 text-violet-600 dark:text-violet-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Recent IPOs</h3>
+              </div>
+              <Link to="/app/ipos" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-1">
+                View all <ChevronRight className="size-3.5" />
+              </Link>
+            </div>
+          </div>
+          <div className="p-4 space-y-1 max-h-[450px] overflow-y-auto" data-testid="recent-ipos-list">
+            {recentIposLoading && recentIpos.length === 0 && (
+              <div className="py-8 text-center text-sm text-muted-foreground">Loading recent IPOs...</div>
+            )}
+            {!recentIposLoading && recentIpos.length === 0 && (
+              <div className="py-8 text-center text-sm text-muted-foreground">No recent IPOs available</div>
+            )}
+            {recentIpos.map((ipo) => {
+              const performance = typeof ipo.since_ipo_pct === "number" && Number.isFinite(ipo.since_ipo_pct) ? ipo.since_ipo_pct : null;
+              const exchange = ipo.exchange || "Global";
+              return (
+                <Link key={ipo.id} to="/app/ipos" className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 transition-all hover:bg-muted/50 hover:shadow-sm relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none" />
+                  <div className="flex items-center gap-3 min-w-0 relative z-10">
+                    <div className="relative min-w-[48px] max-w-[68px] h-9 shrink-0">
+                      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-violet-500/15 to-violet-500/5 border border-violet-500/20 group-hover:border-violet-500/40 group-hover:from-violet-500/25 group-hover:to-violet-500/10 transition-all duration-200" />
+                      <div className="relative flex items-center justify-center h-full px-2.5">
+                        {ipo.ticker ? <span className="text-[12px] font-bold tracking-tight text-violet-600 truncate w-full">{ipo.ticker}</span> : <Rocket className="size-4 text-violet-600" />}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-foreground truncate">{ipo.company_name}</div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 rounded bg-muted px-2 py-0.5 font-semibold uppercase">{exchange}</span>
+                        <span className="truncate">{formatIpoDate(ipo.listing_date)}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right relative z-10">
+                      {ipo.status === "current" ? (
+                        <>
+                          {performance != null && <div className={`mb-1 text-xs font-semibold ${performance >= 0 ? "text-emerald-600" : "text-red-500"}`}>{performance >= 0 ? "+" : ""}{performance.toFixed(1)}%</div>}
+                          <span className="whitespace-nowrap rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Trading Today</span>
+                        </>
+                      ) : performance == null ? (
+                        <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Listed</span>
+                      ) : (
+                        <>
+                          <div className={`text-xs font-semibold ${performance >= 0 ? "text-emerald-600" : "text-red-500"}`}>{performance >= 0 ? "+" : ""}{performance.toFixed(1)}%</div>
+                          <div className="mt-0.5 text-[9px] text-muted-foreground">Since IPO</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </Card>
-        */}
       </div>
 
       {/* Holdings & Allocation — hidden until the user actually has holdings */}
@@ -1534,12 +1537,13 @@ export function DashboardPage() {
             </Link>
           </div>
           {newsLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex items-start gap-3 p-3.5 rounded-lg animate-pulse">
-                  <div className="size-8 rounded-lg bg-muted" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
+                <div key={i} className="flex gap-3 p-3 rounded-lg animate-pulse">
+                  <div className="w-[135px] h-[95px] flex-shrink-0 rounded-lg bg-muted" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-5 bg-muted rounded w-5/6" />
+                    <div className="h-4 bg-muted rounded w-1/3" />
                     <div className="h-3 bg-muted rounded w-1/4" />
                   </div>
                 </div>
@@ -1552,7 +1556,11 @@ export function DashboardPage() {
             {newsItems.map((item) => {
               const related = item.relatedStocks || [];
               return (
-              <Link key={item.id} to={related[0] ? `/app/stock/${related[0]}` : "/app/news"}>
+              <Link
+                key={item.id}
+                to={related[0] ? `/app/stock/${related[0]}` : "/app/news"}
+                className="block"
+              >
                 <div className="flex items-start gap-3 p-3.5 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border">
                   <div className="p-2.5 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 shrink-0">
                     <Newspaper className="size-4 text-[#0D7490]" />
@@ -1604,11 +1612,11 @@ export function DashboardPage() {
                   <span className="font-medium">{fmtKes(enhancedTotals.totalValue)}</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span>African Value</span>
+                  <span>African Stocks</span>
                   <span className="font-medium">{fmtKes(enhancedTotals.nseValue)} ({enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}{enhancedTotals.nsePnLPercent}%)</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span>Linked Accounts</span>
+                  <span>Global Stocks</span>
                   <span className="font-medium">{fmtUsd(enhancedTotals.globalValue)} ({enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}%)</span>
                 </div>
                 <div className="flex justify-between py-1">
@@ -1628,7 +1636,7 @@ export function DashboardPage() {
                 <span className="font-semibold text-emerald-400">{allStocks.length} stocks</span>
               </div>
               <div className="text-white/80 text-sm leading-relaxed">
-                <div className="flex justify-between py-1"><span>NSE stocks</span><span className="font-medium">{kenyanStocks.length}</span></div>
+                <div className="flex justify-between py-1"><span>African stocks</span><span className="font-medium">{kenyanStocks.length}</span></div>
                 <div className="flex justify-between py-1"><span>Global stocks</span><span className="font-medium">{globalStocks.length}</span></div>
                 <div className="flex justify-between py-1"><span>Sectors tracked</span><span className="font-medium">{sectorData.length}</span></div>
               </div>

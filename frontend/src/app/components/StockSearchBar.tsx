@@ -11,6 +11,7 @@ interface SearchResult {
   name: string;
   exchange: string;
   quoteType: string;
+  sector?: string;
 }
 
 export function StockSearchBar() {
@@ -41,12 +42,15 @@ export function StockSearchBar() {
 
         const local: SearchResult[] =
           localRes.status === "fulfilled" && localRes.value.ok
-            ? ((await localRes.value.json()) || []).map((s: any) => ({
-                symbol: s.ticker,
-                name: s.name,
-                exchange: s.market === "NSE" ? "NSE" : s.market,
-                quoteType: "EQUITY",
-              }))
+            ? ((await localRes.value.json()) || [])
+                .filter((s: any) => s.sector && s.sector !== "N/A")
+                .map((s: any) => ({
+                  symbol: s.ticker,
+                  name: s.name,
+                  exchange: s.market === "NSE" ? "NSE" : s.market,
+                  quoteType: "EQUITY",
+                  sector: s.sector,
+                }))
             : [];
 
         const yahoo: SearchResult[] =
@@ -92,6 +96,8 @@ export function StockSearchBar() {
     navigate(`/app/stock/${symbol}?market=${market}`);
   };
 
+  const isLongTicker = (symbol: string) => symbol.length > 6;
+
   return (
     <div ref={wrapperRef} className="relative flex-1">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -119,11 +125,21 @@ export function StockSearchBar() {
                   <CommandItem
                     key={result.symbol}
                     onSelect={() => selectStock(result.symbol, result.exchange)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectStock(result.symbol, result.exchange);
+                    }}
                   >
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2 min-w-0">
+                        {!isLongTicker(result.symbol) && (
+                          <span className="font-medium shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted">{result.symbol}</span>
+                        )}
                         <span className="font-medium shrink-0">{result.symbol}</span>
                         <span className="text-muted-foreground text-sm truncate">{result.name}</span>
+                        {result.sector && result.sector !== "N/A" && (
+                          <span className="text-xs text-muted-foreground shrink-0 ml-2 px-1.5 py-0.5 rounded bg-muted/50">{result.sector}</span>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0 ml-2">{result.exchange}</span>
                     </div>
