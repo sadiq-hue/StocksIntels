@@ -139,10 +139,12 @@ export function LoginPage() {
       finally { setIsLoading(false); }
     } else if (mode === "register") {
       if (regStage === "form") {
-        if (!email) { setError("Email is required"); return; }
+        const emailTrimmed = email.trim();
+        if (!emailTrimmed) { setError("Email is required"); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setError("Invalid email format"); return; }
         setIsLoading(true);
         try {
-          const res = await sendVerificationCode(email, turnstileToken);
+          const res = await sendVerificationCode(emailTrimmed, turnstileToken);
           setCountdown(res.expiresIn);
           setSuccess("Verification code sent to your email");
           setRegStage("verify");
@@ -154,11 +156,13 @@ export function LoginPage() {
         if (!fullName.trim()) { setError("Full name is required"); return; }
         if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
         if (password !== confirmPassword) { setError("Passwords do not match"); return; }
+        const emailTrimmed = email.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setError("Invalid email format"); return; }
         setIsLoading(true);
         // Try browser geolocation for accurate location
         const coords = await getBrowserCoords();
         try {
-          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined, turnstileToken);
+          await verifyEmailAndRegister(fullName.trim(), emailTrimmed, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined, turnstileToken);
           trackEvent(MetaEvents.CompleteRegistration, { method: "email" });
           trackXEvent(XEvents.Signup, { method: "email" });
           navigate(redirectTo);
@@ -167,10 +171,12 @@ export function LoginPage() {
       }
     } else if (mode === "otp-login") {
       if (otpStage === "send") {
-        if (!email) { setError("Email is required"); return; }
+        const emailTrimmed = email.trim();
+        if (!emailTrimmed) { setError("Email is required"); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setError("Invalid email format"); return; }
         setIsLoading(true);
         try {
-          const res = await sendOtp(email, turnstileToken);
+          const res = await sendOtp(emailTrimmed, turnstileToken);
           setCountdown(res.expiresIn);
           setSuccess("OTP sent to your email");
           setOtpStage("verify");
@@ -179,18 +185,21 @@ export function LoginPage() {
         finally { setIsLoading(false); }
       } else {
         if (!otpCode || otpCode.length < 6) { setError("Enter the 6-digit OTP"); return; }
+        const emailTrimmed = email.trim();
         setIsLoading(true);
         try {
-          await verifyOtp(email, otpCode);
+          await verifyOtp(emailTrimmed, otpCode);
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "OTP verification failed"); }
         finally { setIsLoading(false); }
       }
     } else if (mode === "forgot") {
-      if (!email) { setError("Email is required"); return; }
+      const emailTrimmed = email.trim();
+      if (!emailTrimmed) { setError("Email is required"); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) { setError("Invalid email format"); return; }
       setIsLoading(true);
       try {
-        const res = await forgotPassword(email, turnstileToken);
+        const res = await forgotPassword(emailTrimmed, turnstileToken);
         setCountdown(res.expiresIn);
         setSuccess("Check your email for the reset code");
         setMode("reset");
@@ -200,17 +209,19 @@ export function LoginPage() {
     } else if (mode === "reset") {
       if (!otpCode || otpCode.length < 6) { setError("Enter the 6-digit reset code"); return; }
       if (!newPassword || newPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
+      const emailTrimmed = email.trim();
       setIsLoading(true);
       try {
-        await resetPassword(email, otpCode, newPassword);
+        await resetPassword(emailTrimmed, otpCode, newPassword);
         setSuccess("Password reset successful. Sign in with your new password.");
         setTimeout(() => { setMode("login"); setPassword(""); setOtpCode(""); setNewPassword(""); }, 2000);
       } catch (err) { setError(err instanceof Error ? err.message : "Password reset failed"); }
       finally { setIsLoading(false); }
     }
-  };
 
-  const handleGoogleSuccess = useCallback(async (credentialResponse: any) => {
+    };
+
+    const handleGoogleSuccess = useCallback(async (credentialResponse: any) => {
     if (credentialResponse?.credential) {
       const decoded = jwtDecode<DecodedToken>(credentialResponse.credential);
       try { setIsLoading(true); await login(decoded.email, "google_oauth_" + decoded.sub); }
