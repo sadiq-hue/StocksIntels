@@ -23,14 +23,17 @@ const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p
 
 export function ApiPricingPage() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [freeKey, setFreeKey] = useState<{ prefix: string; suffix: string; full_key: string } | null>(null);
   const [generatingFreeKey, setGeneratingFreeKey] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
   const generateFreeKey = async () => {
-    if (!user) return;
+    if (!user) {
+      navigate("/login?redirect=/developers/pricing");
+      return;
+    }
     setGeneratingFreeKey(true);
     try {
       const res = await authFetch(`${API_BASE}/users/${user.id}/api-keys`, {
@@ -63,9 +66,8 @@ export function ApiPricingPage() {
     const plan = planById(planName);
     if (!plan) return;
 
-    // Free tier: generate a sandbox key directly (login required)
+    // Free tier: generate a production key directly (login required)
     if (plan.id === 'free' || plan.monthlyPrice === 0) {
-      if (authLoading) return;
       if (!user) {
         navigate("/login?redirect=/developers/pricing");
         return;
