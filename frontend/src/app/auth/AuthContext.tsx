@@ -165,6 +165,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       tokenRef.current = t;
       setToken(t);
       setStoreToken(t);
+      localStorage.setItem("stockintel_token", t);
     }
   };
 
