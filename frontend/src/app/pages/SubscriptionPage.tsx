@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin, Wallet, Smartphone } from "lucide-react";
+import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin, Wallet, Smartphone, Copy } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -54,6 +54,7 @@ export function SubscriptionPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [paymentRef, setPaymentRef] = useState("");
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
+  const [generatedApiKey, setGeneratedApiKey] = useState<{ prefix: string; suffix: string; full_key: string } | null>(null);
 
   // Handle Crypto, Pesapal & Bachs return redirects
   useEffect(() => {
@@ -85,6 +86,7 @@ export function SubscriptionPage() {
       }
       (async () => {
         await refreshUser();
+        await generateApiKeyAfterPayment();
         navigate("/developers/docs");
       })();
       let attempts = 0;
@@ -195,6 +197,7 @@ export function SubscriptionPage() {
                 });
                 toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
                 await refreshUser();
+                await generateApiKeyAfterPayment();
                 navigate("/developers/docs");
                 return;
               }
@@ -240,6 +243,32 @@ export function SubscriptionPage() {
     }
   };
 
+  const generateApiKeyAfterPayment = async () => {
+    if (!user) return;
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "/api";
+      const res = await fetch(`${API_URL}/users/${user.id}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "production" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratedApiKey(data.key);
+        toast.success("Production API key generated automatically!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        if (err.code === 'SUBSCRIPTION_REQUIRED') {
+          toast.error("Active subscription required. Please complete payment first.");
+        } else {
+          toast.error(err.error || "Failed to generate API key");
+        }
+      }
+    } catch (err) {
+      console.error("Auto API key generation error:", err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-muted pt-24 pb-12">
       {/* Header */}
@@ -274,11 +303,37 @@ export function SubscriptionPage() {
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-foreground mb-2">Subscription Confirmed!</h2>
               <p className="text-muted-foreground mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
+              {generatedApiKey ? (
+                <div className="space-y-4 mb-8">
+                  <div className="bg-[#0B203D] border border-white/10 rounded-lg p-4">
+                    <p className="text-xs text-[#52647A] mb-2 uppercase tracking-wider font-semibold">Production API Key</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-white px-3 py-2 rounded font-mono text-sm text-[#102B50] break-all">
+                        {generatedApiKey.full_key}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedApiKey!.full_key);
+                          toast.success("API key copied to clipboard");
+                        }}
+                      >
+                        <Copy className="size-4 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
+                    <p className="text-xs text-[#52647A] mt-2">
+                      Save this key now — it won&apos;t be shown again. Store it securely in your environment variables.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               <Button 
-                onClick={async () => { await refreshUser(); navigate("/developers/docs"); }}
+                onClick={async () => { await refreshUser(); navigate("/developers/api-keys"); }}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20"
               >
-                Get Your API Key
+                Manage API Keys
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Card>

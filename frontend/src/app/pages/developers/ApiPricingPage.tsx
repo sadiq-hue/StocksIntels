@@ -1,97 +1,39 @@
 import { PublicBrandHeader, PublicBrandFooter } from "../../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
-import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink } from "lucide-react";
+import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink, Copy } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { PLANS, planById } from "../../data/plans";
 
-const apiPricingTiers = [
-  {
-    tier: "Free",
-    requests: "1,000",
-    websocket: false,
-    access: "REST API, end-of-day data",
-    price: "Free",
-    popular: false,
-    features: [
-      { text: "REST API access", included: true },
-      { text: "End-of-day market data", included: true },
-      { text: "Basic recommended positions", included: true },
-      { text: "Community support", included: true },
-      { text: "WebSocket streaming", included: false },
-      { text: "Real-time data", included: false },
-      { text: "Webhooks", included: false },
-    ],
-  },
-  {
-    tier: "Starter",
-    requests: "10,000",
-    websocket: false,
-    access: "REST API, real-time quotes, basic recommended positions",
-    price: "$29.94/month",
-    popular: false,
-    features: [
-      { text: "REST API access", included: true },
-      { text: "Real-time market quotes", included: true },
-      { text: "10,000 requests/day", included: true },
-      { text: "Basic recommended positions", included: true },
-      { text: "Email support", included: true },
-      { text: "WebSocket streaming", included: false },
-      { text: "Advanced recommended positions", included: false },
-      { text: "Webhooks", included: false },
-    ],
-  },
-  {
-    tier: "api-pro",
-    requests: "100,000",
-    websocket: true,
-    access: "Real-time data, recommended positions, webhooks, WebSocket streaming",
-    price: "$49.83/month",
-    popular: true,
-    features: [
-      { text: "REST API + WebSocket", included: true },
-      { text: "Real-time market data", included: true },
-      { text: "100,000 requests/day", included: true },
-      { text: "Full recommended positions", included: true },
-      { text: "Webhooks & event streaming", included: true },
-      { text: "Priority email support", included: true },
-      { text: "Advanced screening", included: true },
-      { text: "SLA: 99.9% uptime", included: true },
-    ],
-  },
-  {
-    tier: "Enterprise",
-    requests: "Custom",
-    websocket: true,
-    access: "Dedicated infrastructure, SLA, tailored data access",
-    price: "Custom",
-    popular: false,
-    features: [
-      { text: "Dedicated infrastructure", included: true },
-      { text: "Custom rate limits", included: true },
-      { text: "Real-time global equities", included: true },
-      { text: "Full recommended positions", included: true },
-      { text: "Webhooks & WebSocket", included: true },
-      { text: "Dedicated support engineer", included: true },
-      { text: "Custom SLA & contracts", included: true },
-      { text: "On-premise deployment option", included: true },
-    ],
-  },
-];
+const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p.id !== 'premium' && p.id !== 'free')
+  .map(p => ({
+    tier: p.name,
+    requests: p.highlights.find(h => h.includes('requests/day'))?.replace(' requests/day', '') || p.monthlyPrice.toString(),
+    websocket: p.features.some(f => f.text.includes('WebSocket') && f.included),
+    features: p.features.filter(f => f.included).map(f => f.text),
+    price: p.monthlyPrice === 0 ? 'Free' : `$${p.monthlyPrice}/month`,
+    popular: p.popular,
+    planId: p.id,
+  }));
 
 export function ApiPricingPage() {
   const navigate = useNavigate();
 
   const handlePlanClick = (planName: string) => {
-    if (planName === "Free") {
-      navigate("/login?redirect=/developers/api-keys");
+    const plan = planById(planName);
+    if (!plan) return;
+
+    // Free tier is deactivated — redirect to trial signup instead
+    if (plan.id === 'free' || plan.monthlyPrice === 0) {
+      navigate("/login?redirect=/subscribe/starter");
       return;
     }
-    if (planName === "Enterprise") {
+    if (plan.id === 'enterprise') {
       navigate("/login?redirect=/developers/docs");
       return;
     }
     // Starter and Pro go to subscription page for payment
-    navigate(`/subscribe/${planName.toLowerCase()}`);
+    navigate(`/subscribe/${plan.id}`);
   };
 
   return (
@@ -124,7 +66,7 @@ export function ApiPricingPage() {
                   <th className="pb-3 font-semibold text-[#102B50]">Tier</th>
                   <th className="pb-3 font-semibold text-[#102B50] text-right">Requests/Day</th>
                   <th className="pb-3 font-semibold text-[#102B50] text-center">WebSocket</th>
-                  <th className="pb-3 font-semibold text-[#102B50]">Access</th>
+                  <th className="pb-3 font-semibold text-[#102B50]">Key Features</th>
                   <th className="pb-3 font-semibold text-[#102B50] text-right">Price</th>
                 </tr>
               </thead>
@@ -147,7 +89,7 @@ export function ApiPricingPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-4 text-[#52647A]">{tier.access}</td>
+                    <td className="py-4 text-[#52647A]">{tier.features.slice(0, 3).join(", ")}{tier.features.length > 3 ? "…" : ""}</td>
                     <td className="py-4 font-semibold text-[#2563A6] text-right">{tier.price}</td>
                   </tr>
                 ))}
@@ -173,14 +115,8 @@ export function ApiPricingPage() {
                   <ul className="space-y-2">
                     {tier.features.map((f, idx) => (
                       <li key={idx} className="flex items-center gap-2 text-sm">
-                        {f.included ? (
-                          <Check className="size-4 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <X className="size-4 text-gray-400 flex-shrink-0" />
-                        )}
-                        <span className={f.included ? "text-[#102B50]" : "text-[#52647A] line-through"}>
-                          {f.text}
-                        </span>
+                        <Check className="size-4 text-green-600 flex-shrink-0" />
+                        <span className="text-[#102B50]">{f}</span>
                       </li>
                     ))}
                   </ul>
@@ -192,8 +128,6 @@ export function ApiPricingPage() {
                   >
                     {tier.price === "Custom" ? (
                       <>Contact Sales <ArrowRight className="ml-2 w-4 h-4" /></>
-                    ) : tier.tier === "Free" ? (
-                      <>Get Sandbox Key <ArrowRight className="ml-2 w-4 h-4" /></>
                     ) : (
                       <>Start {tier.tier} <ArrowRight className="ml-2 w-4 h-4" /></>
                     )}
@@ -211,8 +145,8 @@ export function ApiPricingPage() {
             Choose your tier and start integrating StocksIntels Financial Intelligence API today.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <Button onClick={() => handlePlanClick("Free")} size="lg">
-              Get Sandbox Key <ArrowRight className="ml-2 w-4 h-4" />
+            <Button onClick={() => handlePlanClick("Starter")} size="lg">
+              Start Starter <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link to="/developers">Back to Developer Portal</Link>

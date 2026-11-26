@@ -8244,6 +8244,24 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 
+// --- Helper: generate a production API key for a user (called after successful payment) ---
+async function generateProductionApiKeyForUser(userId) {
+  const crypto = require('crypto');
+  const prefix = 'sk_live';
+  const randomPart = crypto.randomBytes(24).toString('base64url');
+  const fullKey = `${prefix}_${randomPart}`;
+  const keyHash = crypto.createHash('sha256').update(fullKey).digest('hex');
+  const keyPrefix = fullKey.substring(0, 12);
+  const keySuffix = fullKey.substring(fullKey.length - 8);
+  const result = await pool.query(
+    `INSERT INTO api_keys (user_id, key_hash, key_prefix, key_suffix, key_type)
+     VALUES ($1, $2, $3, $4, 'production')
+     RETURNING id, key_prefix, key_suffix, key_type, created_at`,
+    [userId, keyHash, keyPrefix, keySuffix]
+  );
+  return { ...result.rows[0], full_key: fullKey };
+}
+
 // --- API Keys Management ---
 app.get('/api/users/:id/api-keys', authenticateToken, async (req, res) => {
   try {
@@ -8281,6 +8299,27 @@ app.post('/api/users/:id/api-keys', authenticateToken, async (req, res) => {
     if (!['production', 'sandbox'].includes(type)) {
       return res.status(400).json({ error: 'Invalid key type. Must be production or sandbox' });
     }
+
+    // Production keys require an active paid subscription
+    if (type === 'production') {
+      const subRes = await pool.query(
+        `SELECT subscription_status, subscription_end_date FROM users WHERE id = $1`,
+        [id]
+      );
+      const userRow = subRes.rows[0];
+      if (!userRow) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (userRow.subscription_status !== 'active' ||
+          !userRow.subscription_end_date ||
+          new Date(userRow.subscription_end_date) < new Date()) {
+        return res.status(403).json({
+          error: 'Active subscription required for production API keys. Subscribe at /developers/pricing',
+          code: 'SUBSCRIPTION_REQUIRED',
+        });
+      }
+    }
+
     const crypto = require('crypto');
     const prefix = type === 'production' ? 'sk_live' : 'sk_sandbox';
     const randomPart = crypto.randomBytes(24).toString('base64url');
@@ -12585,6 +12624,15 @@ app.post('/api/payments/callback', async (req, res) => {
               `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
               [tier, startDate, endDate, targetUserId]
             );
+
+            // Auto-generate production API key for the newly subscribed user
+            try {
+              const newKey = await generateProductionApiKeyForUser(targetUserId);
+              console.log(`[CALLBACK] Auto-generated production API key: user=${targetUserId} key_prefix=${newKey.key_prefix}`);
+            } catch (keyErr) {
+              console.error('[CALLBACK] Failed to auto-generate production API key:', keyErr.message);
+            }
+
             // Link transaction to subscription
             if (subscriptionId) {
               await pool.query(
@@ -12678,6 +12726,15 @@ app.get('/api/payments/status', async (req, res) => {
                 `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
                 [tier, startDate, endDate, tx.rows[0].user_id]
               );
+
+              // Auto-generate production API key for the newly subscribed user
+              try {
+                const newKey = await generateProductionApiKeyForUser(tx.rows[0].user_id);
+                console.log(`[PAYMENTS-STATUS] Auto-generated production API key: user=${tx.rows[0].user_id} key_prefix=${newKey.key_prefix}`);
+              } catch (keyErr) {
+                console.error('[PAYMENTS-STATUS] Failed to auto-generate production API key:', keyErr.message);
+              }
+
               await pool.query(
                 'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
                 [subRes.rows[0]?.id || null, tx.rows[0].id]
@@ -13242,6 +13299,13 @@ async function activateBachsTransaction(reference, callbackData) {
   if (subscriptionId) {
     await pool.query('UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2', [subscriptionId, tx.id]);
   }
+  // Auto-generate production API key for the newly subscribed user
+  try {
+    const newKey = await generateProductionApiKeyForUser(tx.user_id);
+    console.log(`[BACHS] Auto-generated production API key: user=${tx.user_id} key_prefix=${newKey.key_prefix}`);
+  } catch (keyErr) {
+    console.error('[BACHS] Failed to auto-generate production API key:', keyErr.message);
+  }
   console.log(`[BACHS] Subscription activated: user=${tx.user_id} tier=${tier} months=${months}`);
   try { await awardCommission(tx.user_id, tier); } catch (e) { console.error('[BACHS] commission error:', e.message); }
   try {
@@ -13437,6 +13501,15 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
       `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid`,
       [tier, startDate, userId]
     );
+
+    // Auto-generate production API key for the trial user
+    try {
+      const newKey = await generateProductionApiKeyForUser(userId);
+      console.log(`[TRIAL] Auto-generated production API key: user=${userId} key_prefix=${newKey.key_prefix}`);
+    } catch (keyErr) {
+      console.error('[TRIAL] Failed to auto-generate production API key:', keyErr.message);
+    }
+
     console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
     res.json({ success: true, message: `7-day trial started for ${plan}!`, user: updateRes.rows[0] });
   } catch (error) {
