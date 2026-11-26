@@ -1,6 +1,6 @@
 import { PublicBrandHeader, PublicBrandFooter } from "../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
-import { Github, Terminal, BookOpen, Shield, Zap, Users, FlaskConical, Key, Copy, Check, AlertTriangle, ExternalLink, ArrowRight, CheckCircle, Server, Wifi, Clock, Database, RotateCcw, AlertCircle, Loader2 } from "lucide-react";
+import { Github, Terminal, BookOpen, Shield, Zap, Users, FlaskConical, Key, Copy, Check, AlertTriangle, ExternalLink, ArrowRight, CheckCircle, Server, Wifi, Clock, Database, RotateCcw, AlertCircle, Loader2, Lock } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -216,12 +216,75 @@ print(quote.price, quote.change_percent)`,
 };
 
 export function DevelopersPage() {
-  const { user, apiFetch } = useAuth();
+  const { user, isLoading: authContextLoading, login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, apiFetch } = useAuth();
   const [sandboxKey, setSandboxKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
 
+  // Inline auth state for unauthenticated users
+  const [authMode, setAuthMode] = useState<"login" | "register" | "verify" | "forgot">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authFullName, setAuthFullName] = useState("");
+  const [authOtpCode, setAuthOtpCode] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
+  const [showAuthConfirmPassword, setShowAuthConfirmPassword] = useState(false);
+
+  const isVerifyMode = authMode === "verify";
+  const isLoginMode = authMode === "login";
+  const isRegisterMode = authMode === "register";
+  const isForgotMode = authMode === "forgot";
+  const showPasswordFields = isLoginMode || isRegisterMode || isForgotMode;
+  const showFullNameField = isRegisterMode || isVerifyMode;
+  const showOtpField = isVerifyMode;
+  const showConfirmPassword = isRegisterMode;
+  const showPasswordToggle = !isVerifyMode && !isForgotMode;
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+    try {
+      if (authMode === "login") {
+        await login(authEmail, authPassword);
+        toast.success("Signed in successfully");
+      } else if (authMode === "register") {
+        await sendVerificationCode(authEmail);
+        setAuthMode("verify");
+        toast.success("Verification code sent to your email");
+      } else if (authMode === "verify") {
+        await verifyEmailAndRegister(authFullName, authEmail, authPassword, authOtpCode);
+        toast.success("Account created successfully");
+      } else if (authMode === "forgot") {
+        await forgotPassword(authEmail);
+        toast.success("Reset code sent to your email");
+        setAuthMode("login");
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || "An error occurred");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    setAuthMode("forgot");
+    setAuthError(null);
+  };
+
+  const handleBackToLogin = () => {
+    setAuthMode("login");
+    setAuthError(null);
+    setAuthEmail("");
+    setAuthOtpCode("");
+    setAuthFullName("");
+    setAuthPassword("");
+    setAuthConfirmPassword("");
+  };
   const generateSandboxKey = async () => {
     setGenerating(true);
     try {
@@ -277,18 +340,195 @@ export function DevelopersPage() {
               <p className="mt-6 text-lg leading-7 text-[#4386C8] max-w-xl">
                 Market data, company financials, Super Intelligence-driven research outputs, and portfolio tooling — one unified API.
               </p>
-<div className="mt-8 flex flex-wrap gap-4">
-              <Button asChild size="lg">
-                <Link to="/developers/pricing">Get API Key</Link>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link to="/developers/docs">Explore API Documentation</Link>
-              </Button>
-              <Button asChild variant="ghost" size="lg">
-                <a href="https://github.com/stocksintels" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                  View on GitHub <ExternalLink className="size-4" />
-                </a>
-              </Button>
+            <div className="mt-8 flex flex-wrap gap-4">
+              {!user && (
+                <Card className="w-full max-w-md border-[#DCE5F0]">
+                  <CardContent className="p-6 sm:p-8">
+                    <div className="text-center mb-6">
+                      <h3 className="font-semibold text-[#102B50] mb-2">
+                        {isLoginMode ? "Sign in" : "Create your developer account"}
+                      </h3>
+                      <p className="text-sm text-[#52647A]">
+                        {isLoginMode
+                          ? "Sign in to generate and manage your API keys"
+                          : "Create your StocksIntels developer account"}
+                      </p>
+                    </div>
+                    {authError && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 mb-4">
+                        <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-red-700 text-sm font-medium min-w-0">{authError}</p>
+                      </div>
+                    )}
+                    <form onSubmit={handleAuthSubmit} className="space-y-3">
+                      {!isVerifyMode && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="email" className="text-muted-foreground/70 text-xs font-medium block ml-1">
+                            Email Address
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={authEmail}
+                            onChange={(e) => setAuthEmail(e.target.value)}
+                            required
+                            disabled={authLoading}
+                          />
+                        </div>
+                      )}
+                      {isVerifyMode && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="otpCode" className="text-muted-foreground/70 text-xs font-medium block ml-1">
+                            Verification Code
+                          </Label>
+                          <Input
+                            id="otpCode"
+                            type="text"
+                            placeholder="000000"
+                            value={authOtpCode}
+                            onChange={(e) => setAuthOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            maxLength={6}
+                            required
+                            disabled={authLoading}
+                          />
+                          <p className="text-[11px] text-muted-foreground/70">Enter the 6-digit code sent to <span className="font-medium">{authEmail}</span></p>
+                        </div>
+                      )}
+                      {(isLoginMode || isRegisterMode || isForgotMode) && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="password" className="text-muted-foreground/70 text-xs font-medium block ml-1">
+                            Password
+                          </Label>
+                          <div className="relative">
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors`} />
+                            <Input
+                              id="password"
+                              type={showAuthPassword ? "text" : "password"}
+                              placeholder="********"
+                              value={authPassword}
+                              onChange={(e) => setAuthPassword(e.target.value)}
+                              required={!isVerifyMode}
+                              disabled={authLoading || isVerifyMode}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {isRegisterMode && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="fullName" className="text-muted-foreground/70 text-xs font-medium block ml-1">
+                            Full Name
+                          </Label>
+                          <Input
+                            id="fullName"
+                            type="text"
+                            placeholder="John Doe"
+                            value={authFullName}
+                            onChange={(e) => setAuthFullName(e.target.value)}
+                            required
+                            disabled={authLoading}
+                          />
+                        </div>
+                      )}
+                      {isRegisterMode && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="confirmPassword" className="text-muted-foreground/70 text-xs font-medium block ml-1">
+                            Confirm Password
+                          </Label>
+                          <Input
+                            id="confirmPassword"
+                            type={showAuthConfirmPassword ? "text" : "password"}
+                            placeholder="********"
+                            value={authConfirmPassword}
+                            onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                            required
+                            disabled={authLoading}
+                          />
+                        </div>
+                      )}
+                      {showAuthPassword && (
+                        <button type="button" onClick={() => setShowAuthPassword(!showAuthPassword)} className="text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                          {showAuthPassword ? "Hide" : "Show"}
+                        </button>
+                      )}
+                      <Button
+                        type="submit"
+                        disabled={authLoading}
+                        className="w-full h-11 bg-[#2563A6] hover:bg-[#174A7E] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm"
+                      >
+                        {authLoading ? (
+                          <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> {isLoginMode ? "Signing in..." : isRegisterMode ? "Creating account..." : isVerifyMode ? "Verifying..." : "Sending..."}</span>
+                        ) : isLoginMode ? (
+                          <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>
+                        ) : isRegisterMode ? (
+                          <span className="flex items-center gap-2">Create Account <ArrowRight className="w-4 h-4" /></span>
+                        ) : isVerifyMode ? (
+                          <span className="flex items-center gap-2">Verify & Create Account <ArrowRight className="w-4 h-4" /></span>
+                        ) : (
+                          <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-4 h-4" /></span>
+                        )}
+                      </Button>
+                    </form>
+                    <div className="mt-4 text-center">
+                      {!isVerifyMode && (
+                        <>
+                          {isLoginMode && (
+                            <>
+                              <p className="text-xs text-[#52647A] mb-2">Don't have an account?</p>
+                              <button type="button" onClick={() => setAuthMode("register")} className="text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                                Create an account
+                              </button>
+                              <p className="text-xs text-[#52647A] mt-2">Forgot password?</p>
+                              <button type="button" onClick={handleForgotPassword} className="text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                                Reset password
+                              </button>
+                            </>
+                          )}
+                          {isRegisterMode && (
+                            <>
+                              <p className="text-xs text-[#52647A] mb-2">Already have an account?</p>
+                              <button type="button" onClick={() => setAuthMode("login")} className="text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                                Sign in
+                              </button>
+                            </>
+                          )}
+                          {isVerifyMode && (
+                            <>
+                              <p className="text-xs text-[#52647A] mb-2">Didn't receive a code?</p>
+                              <button type="button" onClick={() => setAuthMode("login")} className="text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                                Back to sign in
+                              </button>
+                            </>
+                          )}
+                          {isForgotMode && (
+                            <>
+                              <p className="text-xs text-[#52647A] mb-2">Remember your password?</p>
+                              <button type="button" onClick={handleBackToLogin} className="text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
+                                Back to sign in
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {user && (
+                <>
+                  <Button asChild size="lg">
+                    <Link to="/developers/pricing">Get API Key</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link to="/developers/docs">Explore API Documentation</Link>
+                  </Button>
+                  <Button asChild variant="ghost" size="lg">
+                    <a href="https://github.com/stocksintels" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                      View on GitHub <ExternalLink className="size-4" />
+                    </a>
+                  </Button>
+                </>
+              )}
             </div>
               <p className="mt-6 text-sm text-[#52647A]">
                 Trusted by fintechs, brokerages, wealth platforms & institutional researchers across Africa

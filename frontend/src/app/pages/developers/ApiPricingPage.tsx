@@ -69,14 +69,14 @@ export function ApiPricingPage() {
     // Free tier: generate a production key directly (login required)
     if (plan.id === 'free' || plan.monthlyPrice === 0) {
       if (!user) {
-        navigate("/login?redirect=/developers/api-keys");
+        navigate("/developers");
         return;
       }
       generateFreeKey();
       return;
     }
     if (plan.id === 'enterprise') {
-      navigate("/login?redirect=/developers/docs");
+      navigate("/developers");
       return;
     }
     // Starter and Pro go to subscription page for payment
