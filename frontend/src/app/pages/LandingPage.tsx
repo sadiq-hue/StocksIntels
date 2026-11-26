@@ -930,7 +930,7 @@ export function LandingPage() {
                     style={{ transition: "all 0.3s ease" }}
                   >
                     <div className={`absolute inset-x-0 top-0 h-1 ${premium ? topBarPremium : featured ? topBarFeatured : topBarDefault}`} />
-                    <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[1.5rem]" />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[1.5rem]" />
                     <div className="relative flex items-start justify-between gap-4">
                       <div>
                         <p className={`text-[10px] font-bold uppercase tracking-[0.22em] ${featured ? labelFeatured : premium ? labelPremium : labelDefault}`}>{featured ? "Most selected" : "StocksIntels"}</p>
@@ -951,7 +951,7 @@ export function LandingPage() {
                         <li key={highlight} className={`flex gap-3 text-sm ${featured ? highlightFeatured : highlightDefault}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? checkFeatured : checkDefault}`} />{highlight}</li>
                       ))}
                     </ul>
-                    <Link to={`/pricing?plan=${plan.id}`} className={`inline-flex items-center justify-center gap-2 h-11 rounded-full px-6 text-sm font-semibold transition-colors ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}>View {plan.name} <ArrowRight className="size-4" /></Link>
+                    <Link to={`/pricing?plan=${plan.id}`} className={`relative z-10 inline-flex items-center justify-center gap-2 h-11 rounded-full px-6 text-sm font-semibold transition-colors ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}>View {plan.name} <ArrowRight className="size-4" /></Link>
                   </article>
                 );
               })}
