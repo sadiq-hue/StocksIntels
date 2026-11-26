@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { PLANS, planById } from "../../data/plans";
 import { useAuth } from "../../auth/AuthContext";
+import { authFetch } from "../../auth/tokenStore";
 import { toast } from "sonner";
 
 const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p.id !== 'premium')
@@ -22,15 +23,17 @@ const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p
 
 export function ApiPricingPage() {
   const navigate = useNavigate();
-  const { user, apiFetch } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [freeKey, setFreeKey] = useState<{ prefix: string; suffix: string; full_key: string } | null>(null);
   const [generatingFreeKey, setGeneratingFreeKey] = useState(false);
+
+  const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
   const generateFreeKey = async () => {
     if (!user) return;
     setGeneratingFreeKey(true);
     try {
-      const res = await apiFetch(`/users/${user.id}/api-keys`, {
+      const res = await authFetch(`${API_BASE}/users/${user.id}/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "sandbox" }),
@@ -56,6 +59,7 @@ export function ApiPricingPage() {
 
     // Free tier: generate a sandbox key directly (login required)
     if (plan.id === 'free' || plan.monthlyPrice === 0) {
+      if (authLoading) return;
       if (!user) {
         navigate("/login?redirect=/developers/pricing");
         return;
