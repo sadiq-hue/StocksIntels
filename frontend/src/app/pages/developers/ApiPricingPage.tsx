@@ -44,10 +44,12 @@ export function ApiPricingPage() {
         toast.success("Free sandbox API key generated (1,000 requests/day)");
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || "Failed to generate free key");
+        console.error("Free key generation failed:", res.status, err);
+        toast.error(err.error || `Failed to generate free key (${res.status})`);
       }
-    } catch (err) {
-      toast.error("Failed to generate free key");
+    } catch (err: any) {
+      console.error("Free key generation error:", err);
+      toast.error(err.message || "Failed to generate free key — is the backend running?");
     } finally {
       setGeneratingFreeKey(false);
     }
