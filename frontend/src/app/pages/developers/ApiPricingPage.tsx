@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PublicBrandHeader, PublicBrandFooter } from "../../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
-import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink, Copy } from "lucide-react";
+import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink, Copy, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { PLANS, planById } from "../../data/plans";
@@ -22,7 +22,7 @@ const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p
 
 export function ApiPricingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const [freeKey, setFreeKey] = useState<{ prefix: string; suffix: string; full_key: string } | null>(null);
   const [generatingFreeKey, setGeneratingFreeKey] = useState(false);
 
@@ -30,8 +30,7 @@ export function ApiPricingPage() {
     if (!user) return;
     setGeneratingFreeKey(true);
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "/api";
-      const res = await fetch(`${API_URL}/users/${user.id}/api-keys`, {
+      const res = await apiFetch(`/users/${user.id}/api-keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "sandbox" }),
@@ -167,9 +166,12 @@ export function ApiPricingPage() {
                     className="mt-6 w-full"
                     variant={tier.popular ? "default" : "outline"}
                     size="lg"
+                    disabled={tier.limited && generatingFreeKey}
                   >
                     {tier.price === "Custom" ? (
                       <>Contact Sales <ArrowRight className="ml-2 w-4 h-4" /></>
+                    ) : tier.limited && generatingFreeKey ? (
+                      <>Generating... <Loader2 className="ml-2 w-4 h-4 animate-spin" /></>
                     ) : (
                       <>Start {tier.tier} <ArrowRight className="ml-2 w-4 h-4" /></>
                     )}
