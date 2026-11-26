@@ -927,7 +927,7 @@ export function LandingPage() {
                   <article
                     key={plan.id}
                     className={`${cardBase} ${featured ? cardFeatured : cardDefault}`}
-                    style={{ transition: "all 0.3s ease", cursor: "pointer" }}
+                    style={{ transition: "all 0.3s ease" }}
                   >
                     <div className={`absolute inset-x-0 top-0 h-1 ${premium ? topBarPremium : featured ? topBarFeatured : topBarDefault}`} />
                     <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[1.5rem]" />
@@ -951,12 +951,12 @@ export function LandingPage() {
                         <li key={highlight} className={`flex gap-3 text-sm ${featured ? highlightFeatured : highlightDefault}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? checkFeatured : checkDefault}`} />{highlight}</li>
                       ))}
                     </ul>
-                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}><Link to={`/pricing?plan=${plan.id}`}>View {plan.name} <ArrowRight className="size-4" /></Link></Button>
+                    <Link to={`/pricing?plan=${plan.id}`} className={`inline-flex items-center justify-center gap-2 h-11 rounded-full px-6 text-sm font-semibold transition-colors ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}>View {plan.name} <ArrowRight className="size-4" /></Link>
                   </article>
                 );
               })}
             </div>
-            <div className="mt-7 flex flex-col justify-between gap-3 text-xs text-[#718196] sm:flex-row"><span>All prices are billed in USD.</span><Link to="/pricing" className="font-semibold text-[#174A7E]">Compare every feature <ArrowRight className="ml-1 inline size-3" /></Link></div>
+            <div className="mt-7 flex flex-col justify-between gap-3 text-xs text-[#718196] sm:flex-row"><span>All prices are billed in USD.</span><Link to="/pricing" className="inline-flex items-center gap-1 font-semibold text-[#174A7E] hover:text-[#102B50] hover:underline transition-colors">Compare every feature <ArrowRight className="ml-1 inline size-3" /></Link></div>
           </div>
         </section>
 
