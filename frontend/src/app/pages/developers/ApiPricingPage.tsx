@@ -37,12 +37,12 @@ export function ApiPricingPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "sandbox" }),
+        body: JSON.stringify({ type: "production" }),
       });
       if (res.ok) {
         const data = await res.json();
         setFreeKey(data.key);
-        toast.success("Free sandbox API key generated (1,000 requests/day)");
+        toast.success("Free production API key generated (1,000 requests/day)");
       } else {
         const err = await res.json().catch(() => ({}));
         console.error("Free key generation failed:", res.status, err);
@@ -199,9 +199,9 @@ export function ApiPricingPage() {
               <CardContent className="p-6 sm:p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <h3 className="font-semibold text-[#102B50] mb-1">Free Sandbox API Key Generated</h3>
+                    <h3 className="font-semibold text-[#102B50] mb-1">Free Production API Key Generated</h3>
                     <p className="text-sm text-[#52647A]">
-                      Limited to 1,000 requests/day. Use on api-sandbox.stocksintels.com only.
+                      Limited to 1,000 requests/day. Use on api.stocksintels.com.
                     </p>
                   </div>
                   <div className="flex items-center gap-3">

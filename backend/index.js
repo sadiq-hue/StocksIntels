@@ -8300,26 +8300,6 @@ app.post('/api/users/:id/api-keys', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid key type. Must be production or sandbox' });
     }
 
-    // Production keys require an active paid subscription
-    if (type === 'production') {
-      const subRes = await pool.query(
-        `SELECT subscription_status, subscription_end_date FROM users WHERE id = $1`,
-        [id]
-      );
-      const userRow = subRes.rows[0];
-      if (!userRow) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      if (userRow.subscription_status !== 'active' ||
-          !userRow.subscription_end_date ||
-          new Date(userRow.subscription_end_date) < new Date()) {
-        return res.status(403).json({
-          error: 'Active subscription required for production API keys. Subscribe at /developers/pricing',
-          code: 'SUBSCRIPTION_REQUIRED',
-        });
-      }
-    }
-
     const crypto = require('crypto');
     const prefix = type === 'production' ? 'sk_live' : 'sk_sandbox';
     const randomPart = crypto.randomBytes(24).toString('base64url');

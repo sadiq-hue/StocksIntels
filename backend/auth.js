@@ -129,18 +129,28 @@ function requireOwnership(req, res, next) {
   next();
 }
 
-// Sandbox key rate limiter: 1,000 requests/day per user (free tier limit)
-const sandboxRateLimitMap = new Map(); // key: userId, value: { count, resetDate }
+// API key rate limiter: per-user daily request limits by subscription tier
+const apiRateLimitMap = new Map(); // key: userId, value: { count, resetDate, tier }
 
-function getSandboxRateLimit(userId) {
+const TIER_DAILY_LIMITS = {
+  free: 1000,
+  starter: 10000,
+  pro: 100000,
+  enterprise: Infinity,
+  core: 1000,
+  premium: 100000,
+};
+
+function getApiRateLimit(userId, tier) {
   const now = new Date();
   const today = now.toDateString();
-  const entry = sandboxRateLimitMap.get(userId);
-  if (!entry || entry.resetDate !== today) {
-    sandboxRateLimitMap.set(userId, { count: 0, resetDate: today });
-    return { count: 0, allowed: true };
+  const entry = apiRateLimitMap.get(userId);
+  const limit = TIER_DAILY_LIMITS[tier] || TIER_DAILY_LIMITS.free;
+  if (!entry || entry.resetDate !== today || entry.tier !== tier) {
+    apiRateLimitMap.set(userId, { count: 0, resetDate: today, tier });
+    return { count: 0, allowed: true, limit };
   }
-  return entry;
+  return { count: entry.count, allowed: entry.count < limit, limit };
 }
 
 async function authenticateApiKey(req, res, next) {
@@ -156,7 +166,7 @@ async function authenticateApiKey(req, res, next) {
   try {
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
     const result = await pool.query(
-      `SELECT ak.id, ak.user_id, ak.key_type, ak.key_prefix, ak.key_suffix, u.id as owner_id, u.full_name, u.email
+      `SELECT ak.id, ak.user_id, ak.key_type, ak.key_prefix, ak.key_suffix, u.id as owner_id, u.full_name, u.email, u.subscription_tier
        FROM api_keys ak
        JOIN users u ON u.id = ak.user_id
        WHERE ak.key_hash = $1`,
@@ -167,20 +177,21 @@ async function authenticateApiKey(req, res, next) {
     }
     const key = result.rows[0];
     req.apiKey = apiKey;
-    req.apiKeyUser = { id: key.owner_id, full_name: key.full_name, email: key.email };
+    req.apiKeyUser = { id: key.owner_id, full_name: key.full_name, email: key.email, subscription_tier: key.subscription_tier };
     req.apiKeyType = key.key_type;
 
-    // Enforce free tier rate limit: 1,000 requests/day for sandbox keys
-    if (key.key_type === 'sandbox') {
-      const limit = getSandboxRateLimit(key.owner_id);
-      if (limit.count >= 1000) {
-        return res.status(429).json({
-          error: 'Free tier rate limit exceeded (1,000 requests/day). Upgrade to Starter or Pro.',
-          code: 'FREE_TIER_RATE_LIMIT',
-        });
-      }
-      limit.count++;
+    // Enforce per-tier daily rate limit on all API keys
+    const tier = key.subscription_tier || 'free';
+    const limit = getApiRateLimit(key.owner_id, tier);
+    if (!limit.allowed) {
+      return res.status(429).json({
+        error: `Free tier rate limit exceeded (${limit.limit} requests/day). Upgrade to Starter or Pro.`,
+        code: 'FREE_TIER_RATE_LIMIT',
+        limit: limit.limit,
+        used: limit.count,
+      });
     }
+    limit.count++;
 
     next();
   } catch (err) {
