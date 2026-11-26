@@ -74,11 +74,11 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
-        changeOrigin: true,
+        changeOrigin: false,
       },
       '/uploads': {
         target: 'http://localhost:3001',
-        changeOrigin: true,
+        changeOrigin: false,
       },
       '/socket.io': {
         target: 'http://localhost:3001',

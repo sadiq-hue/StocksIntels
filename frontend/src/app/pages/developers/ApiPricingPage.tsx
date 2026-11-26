@@ -35,6 +35,7 @@ export function ApiPricingPage() {
     try {
       const res = await authFetch(`${API_BASE}/users/${user.id}/api-keys`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "sandbox" }),
       });
@@ -49,7 +50,10 @@ export function ApiPricingPage() {
       }
     } catch (err: any) {
       console.error("Free key generation error:", err);
-      toast.error(err.message || "Failed to generate free key — is the backend running?");
+      toast.error(
+        err.message ||
+        "Failed to generate free key. Check that the backend is running on port 3001 and you are logged in."
+      );
     } finally {
       setGeneratingFreeKey(false);
     }
