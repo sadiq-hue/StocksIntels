@@ -129,6 +129,20 @@ function requireOwnership(req, res, next) {
   next();
 }
 
+// Sandbox key rate limiter: 1,000 requests/day per user (free tier limit)
+const sandboxRateLimitMap = new Map(); // key: userId, value: { count, resetDate }
+
+function getSandboxRateLimit(userId) {
+  const now = new Date();
+  const today = now.toDateString();
+  const entry = sandboxRateLimitMap.get(userId);
+  if (!entry || entry.resetDate !== today) {
+    sandboxRateLimitMap.set(userId, { count: 0, resetDate: today });
+    return { count: 0, allowed: true };
+  }
+  return entry;
+}
+
 async function authenticateApiKey(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const parts = authHeader.split(' ');
@@ -155,6 +169,19 @@ async function authenticateApiKey(req, res, next) {
     req.apiKey = apiKey;
     req.apiKeyUser = { id: key.owner_id, full_name: key.full_name, email: key.email };
     req.apiKeyType = key.key_type;
+
+    // Enforce free tier rate limit: 1,000 requests/day for sandbox keys
+    if (key.key_type === 'sandbox') {
+      const limit = getSandboxRateLimit(key.owner_id);
+      if (limit.count >= 1000) {
+        return res.status(429).json({
+          error: 'Free tier rate limit exceeded (1,000 requests/day). Upgrade to Starter or Pro.',
+          code: 'FREE_TIER_RATE_LIMIT',
+        });
+      }
+      limit.count++;
+    }
+
     next();
   } catch (err) {
     console.error('[AUTH] DB error during API key validation:', err.message);

@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { PublicBrandHeader, PublicBrandFooter } from "../../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
 import { ChevronRight, Check, X, Shield, Zap, Crown, ArrowRight, ExternalLink, Copy } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { PLANS, planById } from "../../data/plans";
+import { useAuth } from "../../auth/AuthContext";
+import { toast } from "sonner";
 
 const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p.id !== 'premium')
   .map(p => ({
@@ -19,14 +22,46 @@ const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p
 
 export function ApiPricingPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [freeKey, setFreeKey] = useState<{ prefix: string; suffix: string; full_key: string } | null>(null);
+  const [generatingFreeKey, setGeneratingFreeKey] = useState(false);
+
+  const generateFreeKey = async () => {
+    if (!user) return;
+    setGeneratingFreeKey(true);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "/api";
+      const res = await fetch(`${API_URL}/users/${user.id}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "sandbox" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFreeKey(data.key);
+        toast.success("Free sandbox API key generated (1,000 requests/day)");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to generate free key");
+      }
+    } catch (err) {
+      toast.error("Failed to generate free key");
+    } finally {
+      setGeneratingFreeKey(false);
+    }
+  };
 
   const handlePlanClick = (planName: string) => {
     const plan = planById(planName);
     if (!plan) return;
 
-    // Free tier is deactivated — redirect to trial signup instead
+    // Free tier: generate a sandbox key directly (login required)
     if (plan.id === 'free' || plan.monthlyPrice === 0) {
-      navigate("/login?redirect=/subscribe/starter");
+      if (!user) {
+        navigate("/login?redirect=/developers/pricing");
+        return;
+      }
+      generateFreeKey();
       return;
     }
     if (plan.id === 'enterprise') {
@@ -144,6 +179,40 @@ export function ApiPricingPage() {
             ))}
           </div>
         </section>
+
+        {/* Free Key Generated */}
+        {freeKey && (
+          <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12">
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-[#102B50] mb-1">Free Sandbox API Key Generated</h3>
+                    <p className="text-sm text-[#52647A]">
+                      Limited to 1,000 requests/day. Use on api-sandbox.stocksintels.com only.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <code className="bg-white px-3 py-2 rounded font-mono text-sm text-[#102B50] border border-amber-200 flex-1 md:w-80 break-all">
+                      {freeKey.full_key}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(freeKey.full_key);
+                        toast.success("API key copied to clipboard");
+                      }}
+                    >
+                      <Copy className="size-4 mr-1" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {/* CTA */}
         <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-12 text-center bg-[#F5F8FC] border-y border-[#DCE5F0]">
