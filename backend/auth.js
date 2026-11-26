@@ -141,7 +141,6 @@ async function authenticateApiKey(req, res, next) {
   }
   try {
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-    console.log('[DEBUG] Looking up key hash:', keyHash);
     const result = await pool.query(
       `SELECT ak.id, ak.user_id, ak.key_type, ak.key_prefix, ak.key_suffix, u.id as owner_id, u.full_name, u.email
        FROM api_keys ak
@@ -149,7 +148,6 @@ async function authenticateApiKey(req, res, next) {
        WHERE ak.key_hash = $1`,
       [keyHash]
     );
-    console.log('[DEBUG] Query rows:', result.rows.length);
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid API key.', code: 'INVALID_API_KEY' });
     }
