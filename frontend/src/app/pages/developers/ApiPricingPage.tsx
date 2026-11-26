@@ -5,7 +5,7 @@ import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { PLANS, planById } from "../../data/plans";
 
-const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p.id !== 'premium' && p.id !== 'free')
+const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p.id !== 'premium')
   .map(p => ({
     tier: p.name,
     requests: p.highlights.find(h => h.includes('requests/day'))?.replace(' requests/day', '') || p.monthlyPrice.toString(),
@@ -14,6 +14,7 @@ const apiPricingTiers = PLANS.filter(p => p.id !== 'core' && p.id !== 'pro' && p
     price: p.monthlyPrice === 0 ? 'Free' : `$${p.monthlyPrice}/month`,
     popular: p.popular,
     planId: p.id,
+    limited: p.id === 'free',
   }));
 
 export function ApiPricingPage() {
@@ -75,6 +76,7 @@ export function ApiPricingPage() {
                   <tr key={i} className={`border-b border-[#DCE5F0]/50 ${tier.popular ? "bg-[#0D7490]/5" : ""}`}>
                     <td className="py-4 font-medium text-[#102B50]">
                       {tier.popular && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#0D7490] text-white mr-2">Most Popular</span>}
+                      {tier.limited && <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 mr-2">Limited</span>}
                       {tier.tier}
                     </td>
                     <td className="py-4 text-[#52647A] text-right">{tier.requests}</td>
@@ -104,6 +106,11 @@ export function ApiPricingPage() {
                 {tier.popular && (
                   <div className="bg-[#0D7490] text-white px-4 py-1 text-center text-sm font-medium">
                     Most Popular
+                  </div>
+                )}
+                {tier.limited && (
+                  <div className="bg-amber-500 text-white px-4 py-1 text-center text-sm font-medium">
+                    Limited
                   </div>
                 )}
                 <CardHeader>
