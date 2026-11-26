@@ -208,17 +208,24 @@ export function ApiPricingPage() {
                     <code className="bg-white px-3 py-2 rounded font-mono text-sm text-[#102B50] border border-amber-200 flex-1 md:w-80 break-all">
                       {freeKey.full_key}
                     </code>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(freeKey.full_key);
-                        toast.success("API key copied to clipboard");
-                      }}
-                    >
-                      <Copy className="size-4 mr-1" />
-                      Copy
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(freeKey.full_key);
+                          toast.success("API key copied to clipboard");
+                        }}
+                      >
+                        <Copy className="size-4 mr-1" />
+                        Copy
+                      </Button>
+                      <Button asChild size="sm">
+                        <Link to="/developers/api-keys">
+                          Manage API Keys <ArrowRight className="ml-2 w-4 h-4" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
