@@ -14,8 +14,8 @@ COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 RUN mkdir -p frontend/src frontend/public
 
-# Install backend production dependencies using the workspace lockfile
-RUN pnpm install --filter backend --prod --no-frozen-lockfile
+# Install all workspace production dependencies (hoists to root node_modules)
+RUN pnpm install --prod --shamefully-hoist --no-frozen-lockfile
 
 # Copy frontend source and build
 COPY frontend/ ./frontend/

@@ -65,7 +65,7 @@ const path = require('path');
 const helmet = require('helmet');
 const { JSDOM } = require('jsdom');
 const createDOMPurify = require('dompurify');
-const { authenticateToken, requireAdmin, requireSuperAdmin, requireOwnership, generateToken, generateRefreshToken, setRefreshCookie, clearRefreshCookie, revokeRefreshTokenByHash } = require('./auth');
+const { authenticateToken, requireAdmin, requireSuperAdmin, requireOwnership, authenticateApiKey, generateToken, generateRefreshToken, setRefreshCookie, clearRefreshCookie, revokeRefreshTokenByHash } = require('./auth');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const crypto = require('crypto');
@@ -5553,7 +5553,7 @@ function isDbError(err) {
 function getMemoryWatchlist(userId) { return _watchlistMemory[userId] || []; }
 function setMemoryWatchlist(userId, items) { _watchlistMemory[userId] = items; }
 
-app.get('/api/watchlist', async (req, res) => {
+app.get('/api/watchlist', authenticateApiKey, async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -6686,7 +6686,7 @@ app.get('/api/financials/status', async (req, res) => {
 const _financialReportCache = new Map();
 const FINANCIAL_REPORT_CACHE_TTL = 6 * 60 * 60 * 1000;
 
-app.get('/api/financials/:symbol', async (req, res) => {
+app.get('/api/financials/:symbol', authenticateApiKey, async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
     const period = req.query.period || 'annual';
@@ -6708,7 +6708,7 @@ app.get('/api/financials/:symbol', async (req, res) => {
   }
 });
 
-app.get('/api/financials/:symbol/income', async (req, res) => {
+app.get('/api/financials/:symbol/income', authenticateApiKey, async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
     const data = await getIncomeStatement(symbol);
@@ -8395,7 +8395,7 @@ app.get('/api/people', async (req, res) => {
 
 // --- All stocks list & search ---
 // Returns quote for a single stock (used by StockAnalysisPage)
-app.get('/api/stock/:symbol', async (req, res) => {
+app.get('/api/stock/:symbol', authenticateApiKey, async (req, res) => {
   try {
     const { symbol } = req.params;
     const { market } = req.query;
@@ -8472,7 +8472,7 @@ app.get('/api/stock/:symbol/profile', async (req, res) => {
   }
 });
 
-app.get('/api/stock/:symbol/history', async (req, res) => {
+app.get('/api/stock/:symbol/history', authenticateApiKey, async (req, res) => {
   try {
     const { symbol } = req.params;
     const { range, interval } = req.query;    const upper = symbol.toUpperCase();
@@ -9721,7 +9721,7 @@ async function buildDailyMovers() {
   return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, premarket: snapshot.global.premarket || [], afterhours: snapshot.global.afterhours || [], active: snapshot.active, period: '1d', updatedAt: snapshot.updatedAt || new Date().toISOString() };
 }
 
-app.get('/api/market/movers', async (req, res) => {
+app.get('/api/market/movers', authenticateApiKey, async (req, res) => {
   const period = req.query.period || '1d';
   // Manual refresh: rebuild instead of serving the cached snapshot.
   if (period === '1d' && req.query.refresh === '1') {
@@ -10049,7 +10049,7 @@ app.get('/api/earnings/upcoming', async (req, res) => {
   }
 });
 
-app.get('/api/market/indices', async (req, res) => {
+app.get('/api/market/indices', authenticateApiKey, async (req, res) => {
   try {
     const all = await indicesService.getAllIndices();
     // Fixed order: the UI takes the first four Global cards.
@@ -12010,7 +12010,7 @@ app.post('/api/push/unsubscribe', authenticateToken, requireOwnership, async (re
   }
 });
 
-app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
+app.post('/api/market/quotes', marketDataLimiter, authenticateApiKey, async (req, res) => {
   try {
     const { symbols } = req.body;
     if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {

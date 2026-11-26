@@ -145,12 +145,16 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const [quickSymbol, setQuickSymbol] = useState("SCOM");
   const responseRef = useRef<HTMLPreElement>(null);
 
   const currentEndpoint = playgroundEndpoints.find(e => e.id === activeEndpoint)!;
 
   useEffect(() => {
     setParams(currentEndpoint.exampleParams || {});
+    if (currentEndpoint.exampleParams?.symbol) {
+      setQuickSymbol(currentEndpoint.exampleParams.symbol);
+    }
     setResponse(null);
     setError(null);
   }, [activeEndpoint]);
@@ -176,21 +180,55 @@ export function PlaygroundPage() {
   const handleRequest = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Simulate API call with mock data
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const mockData = mockResponses[activeEndpoint];
-      if (mockData) {
-        setResponse(mockData);
-      } else {
-        setResponse({ message: "Mock response not available for this endpoint" });
+      const url = buildUrl();
+      const headers: Record<string, string> = {};
+
+      if (currentEndpoint.requiresAuth) {
+        if (environment === "production" && !apiKey) {
+          setError("Production requests require an API key.");
+          setLoading(false);
+          return;
+        }
+        headers["Authorization"] = `Bearer ${apiKey || "sk_sandbox_..."}`;
       }
+
+      const res = await fetch(url, { headers });
+
+      if (!res.ok) {
+        let detail = "";
+        try { detail = await res.text(); } catch { /* ignore */ }
+        setError(`Request failed (${res.status}): ${detail}`);
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      setResponse(data);
     } catch (err) {
-      setError("Request failed. Check your API key and parameters.");
+      // Fallback to mock data when the sandbox is unreachable
+      if (environment === "sandbox") {
+        const mockData = mockResponses[activeEndpoint];
+        if (mockData) {
+          setResponse({ ...mockData, _note: "Sandbox unreachable — showing mock fallback data" });
+        } else {
+          setError("Sandbox unreachable and no mock data available for this endpoint.");
+        }
+      } else {
+        setError("Request failed. Check your API key and parameters.");
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleQuickTry = (symbol: string) => {
+    setQuickSymbol(symbol);
+    setActiveEndpoint("quote");
+    setParams({ symbol });
+    setResponse(null);
+    setError(null);
   };
 
   const copyResponse = () => {
@@ -223,7 +261,7 @@ export function PlaygroundPage() {
                 Developer Portal
               </Link>
               <h1 className="text-3xl font-extrabold tracking-[-0.02em] text-[#102B50]">Interactive API Playground</h1>
-              <p className="mt-2 text-[#52647A]">Test API endpoints live with your credentials. Sandbox environment uses mock data.</p>
+              <p className="mt-2 text-[#52647A]">Test API endpoints live with your credentials. Sandbox hits api-sandbox.stocksintels.com and falls back to mock data if unreachable.</p>
             </div>
             <div className="flex items-center gap-3">
               <Label className="flex items-center gap-2 text-sm text-[#52647A] cursor-pointer">
@@ -245,6 +283,67 @@ export function PlaygroundPage() {
 
         {/* Playground */}
         <section className="mx-auto max-w-[1440px] px-5 pb-16 sm:px-8 lg:px-12">
+          {/* Quick Try any stock */}
+          <Card className="border-[#DCE5F0] mb-8">
+            <CardContent className="p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-[#102B50] mb-1">Try any stock</h3>
+                  <p className="text-sm text-[#52647A]">
+                    Enter a symbol (e.g. <code className="font-mono text-[#0D7490]">SCOM</code>, <code className="font-mono text-[#0D7490]">EQTY</code>, <code className="font-mono text-[#0D7490]">AAPL</code>) and hit Send.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Input
+                    id="quick-symbol"
+                    placeholder="SCOM"
+                    value={quickSymbol}
+                    onChange={(e) => setQuickSymbol(e.target.value.toUpperCase())}
+                    className="w-full sm:w-48"
+                  />
+                  <Button
+                    onClick={() => handleQuickTry(quickSymbol || "SCOM")}
+                    disabled={loading}
+                    className="gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin mr-1" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="size-4" />
+                        Send Request
+                      </>
+                    )}
+                  </Button>
+                  {environment === "production" && !apiKey && (
+                    <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                      API key required
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <p className="text-xs text-[#52647A] mr-2">Popular:</p>
+                {["SCOM", "EQTY", "KCB", "EABL", "AAPL", "MSFT", "TSLA"].map((sym) => (
+                  <button
+                    key={sym}
+                    onClick={() => handleQuickTry(sym)}
+                    className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+                      quickSymbol === sym
+                        ? "bg-[#0D7490] text-white border-[#0D7490]"
+                        : "bg-[#F5F8FC] text-[#52647A] border-[#DCE5F0] hover:bg-white"
+                    }`}
+                  >
+                    {sym}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Sidebar - Endpoint Selection */}
             <div className="lg:col-span-1">
@@ -376,11 +475,15 @@ export function PlaygroundPage() {
                               {key} <span className="text-yellow-600">*</span>
                             </Label>
                             <Input
-                              id={key}
-                              value={params[key] || defaultValue}
-                              onChange={(e) => setParams(prev => ({ ...prev, [key]: e.target.value }))}
-                              placeholder={defaultValue}
-                            />
+                               id={key}
+                               value={params[key] || defaultValue}
+                               onChange={(e) => {
+                                 const val = e.target.value;
+                                 setParams(prev => ({ ...prev, [key]: val }));
+                                 if (key === "symbol") setQuickSymbol(val.toUpperCase());
+                               }}
+                               placeholder={defaultValue}
+                             />
                           </div>
                         ))}
                       </div>
@@ -431,7 +534,7 @@ export function PlaygroundPage() {
                     <div className="text-center py-12 text-[#52647A]">
                       <Terminal className="size-12 mx-auto mb-3 text-[#DCE5F0]" />
                       <p>Select an endpoint and click "Send Request" to see the response here.</p>
-                      <p className="text-sm mt-1">Sandbox returns mock data. Production requires valid API key.</p>
+                      <p className="text-sm mt-1">Sandbox hits api-sandbox.stocksintels.com (falls back to mock data if unreachable). Production requires a valid API key.</p>
                     </div>
                   )}
                 </CardContent>

@@ -1,12 +1,14 @@
 import { PublicBrandHeader, PublicBrandFooter } from "../components/PublicBrandChrome";
 import { Link, useNavigate } from "react-router";
-import { Github, Terminal, BookOpen, Shield, Zap, Users, FlaskConical, Key, Copy, Check, AlertTriangle, ExternalLink, ArrowRight, CheckCircle, Server, Wifi, Clock, Database, RotateCcw, AlertCircle } from "lucide-react";
+import { Github, Terminal, BookOpen, Shield, Zap, Users, FlaskConical, Key, Copy, Check, AlertTriangle, ExternalLink, ArrowRight, CheckCircle, Server, Wifi, Clock, Database, RotateCcw, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Switch } from "../components/ui/switch";
 import { useState } from "react";
+import { useAuth } from "../auth/AuthContext";
+import { toast } from "sonner";
 
 const features = [
   {
@@ -214,14 +216,41 @@ print(quote.price, quote.change_percent)`,
 };
 
 export function DevelopersPage() {
+  const { user, apiFetch } = useAuth();
   const [sandboxKey, setSandboxKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
 
-  const generateSandboxKey = () => {
-    const key = `sk_sandbox_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-    setSandboxKey(key);
-    setCopied(false);
+  const generateSandboxKey = async () => {
+    setGenerating(true);
+    try {
+      if (!user) {
+        const key = `sk_sandbox_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+        setSandboxKey(key);
+        setCopied(false);
+        toast.info("Demo sandbox key generated locally. Log in to create a real backend-backed key.");
+        return;
+      }
+      const res = await apiFetch(`/users/${user.id}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "sandbox" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSandboxKey(data.key?.full_key || null);
+        setCopied(false);
+        toast.success("Sandbox API key generated");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to generate sandbox key");
+      }
+    } catch (err) {
+      toast.error("Failed to generate sandbox key");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -644,9 +673,18 @@ export function DevelopersPage() {
                     <p className="text-sm text-[#52647A] mb-4 max-w-md mx-auto">
                       Create a sandbox credential to start testing supported endpoints. Basic sandbox access is available without a production subscription.
                     </p>
-                    <Button onClick={generateSandboxKey} className="w-full sm:w-auto">
-                      <Key className="size-4 mr-2" />
-                      Generate Sandbox Key
+                    <Button onClick={generateSandboxKey} className="w-full sm:w-auto" disabled={generating}>
+                      {generating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Key className="size-4 mr-2" />
+                          Generate Sandbox Key
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>

@@ -194,23 +194,18 @@ export function PricingPage() {
 
   const handlePlanClick = async (planName: string) => {
     if (!user) {
-      const redirectUrl = planName !== "Free" ? `/subscribe/${planName.toLowerCase()}` : "/pricing";
+      const redirectUrl = `/subscribe/${planName.toLowerCase()}`;
       navigate(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
       return;
     }
-    // Paid plans (Starter, Pro, Premium) always go to subscription page
-    // Free plan goes to trial flow
-    if (planName !== "Free") {
-      trackEvent(MetaEvents.InitiateCheckout, { content_name: planName });
-      navigate(`/subscribe/${planName.toLowerCase()}`);
-      return;
-    }
-    // Free plan - trial flow
+    // All marketing plans (Core, Pro, Premium) go through trial flow first
+    // Check if user is within trial or cannot start trial
     if (trialInfo.isWithinTrial || !trialInfo.canStartTrial) {
       trackEvent(MetaEvents.InitiateCheckout, { content_name: planName });
       navigate(`/subscribe/${planName.toLowerCase()}`);
       return;
     }
+    // Start trial flow for all plans
     handleTrialClick(planName);
   };
 
@@ -312,16 +307,16 @@ return (
                       )}
                     </div>
 
-                  <Button
+<Button
                     onClick={() => handlePlanClick(plan.name)}
-                    disabled={plan.name !== "Free" && startingTrial === plan.name}
+                    disabled={startingTrial === plan.name}
                     className={`w-full py-6 text-base font-semibold mb-2 transition-all hover:-translate-y-0.5 ${
                       plan.popular
                          ? "bg-white text-[#102B50] hover:bg-cyan-50 shadow-xl"
                         : plan.ctaVariant === "default"
                          ? plan.id === "premium" ? "bg-[#D5A64A] hover:bg-[#C69941] text-[#2F291F]" : "bg-[#2563A6] hover:bg-[#174A7E] text-white shadow-lg shadow-[#2563A6]/20"
                         : "border-border text-muted-foreground hover:bg-muted"
-                    } ${plan.name !== "Free" && startingTrial === plan.name ? "opacity-70 cursor-not-allowed" : ""}`}
+                    } ${startingTrial === plan.name ? "opacity-70 cursor-not-allowed" : ""}`}
                     variant={plan.popular ? "default" : plan.ctaVariant}
                   >
                     {startingTrial === plan.name ? (
@@ -331,7 +326,7 @@ return (
                       </>
                     ) : (
                       <>
-                        {user && trialInfo.isWithinTrial && plan.name !== "Free" ? `Subscribe to ${plan.name}` : plan.cta}
+                        {user && trialInfo.isWithinTrial ? `Subscribe to ${plan.name}` : plan.cta}
                         <ArrowRight className="ml-2 w-4 h-4" />
                       </>
                     )}
@@ -475,7 +470,7 @@ return (
         </div>
       </section>
 
-      {/* CTA */}
+{/* CTA */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
            <div className="relative bg-[#174A7E] rounded-3xl p-12 lg:p-16 text-center overflow-hidden">
@@ -490,14 +485,7 @@ return (
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-8 py-6 text-base font-semibold shadow-xl"
-                  onClick={() => {
-                    const planName = "Pro";
-                    if (user) {
-                      handleTrialClick(planName);
-                    } else {
-                      navigate("/login?redirect=/pricing");
-                    }
-                  }}
+                  onClick={() => handlePlanClick("Pro")}
                   disabled={startingTrial === "Pro"}
                 >
                   {startingTrial === "Pro" ? (
@@ -506,7 +494,7 @@ return (
                       Starting...
                     </>
                   ) : (
-                     "Start 7-Day Access"
+                       "Start 7-Day Access"
                   )}
                 </Button>
                 <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 px-8 py-6 text-base">
