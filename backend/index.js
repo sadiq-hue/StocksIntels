@@ -3087,7 +3087,18 @@ app.post('/api/auth/send-verification-code', verifyTurnstile, async (req, res) =
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await storeAndSendOtp(email, code, 'email_verify', expiresAt, sendVerificationEmail);
-    if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} verification code: ${code}`);
+    // In development, Ethereal test account does NOT deliver to real inboxes.
+    // Write the OTP to a file and log it prominently so the developer can retrieve it.
+    const otpLogLine = `[${new Date().toISOString()}] ${email} verification code: ${code} (expires in 10 min)\n`;
+    try {
+      const fs = require('fs');
+      fs.appendFileSync('./dev-otp.log', otpLogLine);
+    } catch {}
+    console.log(`\n╔════════════════════════════════════════════════════════════════╗`);
+    console.log(`║  DEV OTP for ${email.padEnd(30)}║`);
+    console.log(`║  Code: ${code.padEnd(50)}║`);
+    console.log(`║  Also written to ./dev-otp.log                               ║`);
+    console.log(`╚════════════════════════════════════════════════════════════════╝\n`);
     res.json({ message: 'Verification code sent to email', expiresIn: 600 });
   } catch (error) {
     console.error('send-verification-code error:', error.message);
