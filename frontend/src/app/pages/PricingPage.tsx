@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router";
 import {
   Check,
   X,
@@ -112,6 +112,9 @@ export function PricingPage() {
     trackEvent(MetaEvents.ViewContent, { content_name: "Pricing" });
   }, []);
 
+  const [searchParams] = useSearchParams();
+  const planParam = searchParams.get("plan");
+
   const navigate = useNavigate();
   const { user, apiFetch, updateUser, isLoading } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
@@ -119,6 +122,14 @@ export function PricingPage() {
   const [startingTrial, setStartingTrial] = useState<string | null>(null);
   const [payingCommitment, setPayingCommitment] = useState(false);
   const trialInfo = getTrialInfo(user);
+  const planCardsRef = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Scroll to the plan card when coming from landing page with ?plan= query param
+  useEffect(() => {
+    if (planParam && planCardsRef.current[planParam]) {
+      planCardsRef.current[planParam]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [planParam]);
 
   if (isLoading) {
     return (
@@ -257,15 +268,16 @@ export function PricingPage() {
               const Icon = plan.icon;
               const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
 
-              return (
+return (
                 <div
+                  ref={(el) => { planCardsRef.current[plan.id] = el; }}
                   key={plan.name}
                   className={`relative rounded-2xl p-6 sm:p-8 transition-all duration-300 ${
                     plan.popular
                        ? "bg-[#102B50] text-white border border-[#174A7E] shadow-2xl shadow-[#102B50]/20 lg:scale-[1.02] z-10"
                        : `bg-white border ${plan.id === "premium" ? "border-[#D5A64A]/60" : "border-[#D5E0EB]"} hover:shadow-xl`
-                  }`}
-                >
+                   }`}
+              >
                   {plan.popular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                       <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">

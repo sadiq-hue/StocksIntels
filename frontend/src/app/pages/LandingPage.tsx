@@ -889,7 +889,7 @@ export function LandingPage() {
               </div>
               <div className="inline-flex w-fit rounded-full border border-[#C8D6E5] bg-white p-1 relative z-10" aria-label="Pricing period">
                 <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Monthly clicked'); setYearlyPricing(false); }} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors cursor-pointer pointer-events-auto select-none z-10 ${!yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Monthly</button>
-                <button type="button" onClick={handleYearlyClick} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors pointer-events-auto ${yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Yearly <span className="ml-1 text-[#D5A64A]">{YEARLY_SAVINGS_LABEL}</span></button>
+                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.log('Yearly clicked'); setYearlyPricing(true); }} className={`rounded-full px-5 py-2 text-xs font-semibold transition-colors pointer-events-auto ${yearlyPricing ? "bg-[#102B50] text-white" : "text-[#607187]"}`}>Yearly <span className="ml-1 text-[#D5A64A]">{YEARLY_SAVINGS_LABEL}</span></button>
               </div>
             </div>
 
@@ -924,7 +924,11 @@ export function LandingPage() {
                 const btnPremium = "bg-[#D5A64A] text-[#2F291F] hover:bg-[#C69941]";
                 const btnDefault = "bg-[#2563A6] text-white hover:bg-[#174A7E]";
                 return (
-                  <article key={plan.id} className={`${cardBase} ${featured ? cardFeatured : cardDefault}`} style={{ transition: "all 0.3s ease" }}>
+                  <article
+                    key={plan.id}
+                    className={`${cardBase} ${featured ? cardFeatured : cardDefault}`}
+                    style={{ transition: "all 0.3s ease", cursor: "pointer" }}
+                  >
                     <div className={`absolute inset-x-0 top-0 h-1 ${premium ? topBarPremium : featured ? topBarFeatured : topBarDefault}`} />
                     <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[1.5rem]" />
                     <div className="relative flex items-start justify-between gap-4">
@@ -947,7 +951,7 @@ export function LandingPage() {
                         <li key={highlight} className={`flex gap-3 text-sm ${featured ? highlightFeatured : highlightDefault}`}><CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${premium ? checkFeatured : checkDefault}`} />{highlight}</li>
                       ))}
                     </ul>
-                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}><Link to="/pricing">View {plan.name} <ArrowRight className="size-4" /></Link></Button>
+                    <Button asChild className={`mt-9 h-11 rounded-full ${featured ? btnFeatured : premium ? btnPremium : btnDefault}`}><Link to={`/pricing?plan=${plan.id}`}>View {plan.name} <ArrowRight className="size-4" /></Link></Button>
                   </article>
                 );
               })}
