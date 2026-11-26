@@ -65,6 +65,7 @@ const SdksPage = React.lazy(() => import("./pages/developers/SdksPage").then(m =
 const PlaygroundPage = React.lazy(() => import("./pages/developers/PlaygroundPage").then(m => ({ default: m.PlaygroundPage })));
 const AuthGuidePage = React.lazy(() => import("./pages/developers/AuthGuidePage").then(m => ({ default: m.AuthGuidePage })));
 const ApiPricingPage = React.lazy(() => import("./pages/developers/ApiPricingPage").then(m => ({ default: m.ApiPricingPage })));
+const ApiKeysPage = React.lazy(() => import("./pages/developers/ApiKeysPage").then(m => ({ default: m.ApiKeysPage })));
 const InsiderPage = React.lazy(() => import("./pages/InsiderPage").then(m => ({ default: m.InsiderPage })));
 // const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage }))); // Derivatives page disabled
 const SpecialFundsPage = React.lazy(() => import("./pages/SpecialFundsPage").then(m => ({ default: m.SpecialFundsPage })));
@@ -198,6 +199,11 @@ const router = createBrowserRouter([
   {
     path: "/developers/pricing",
     element: <ApiPricingPage />,
+    errorElement: <NotFoundPage />,
+  },
+  {
+    path: "/developers/api-keys",
+    element: <ApiKeysPage />,
     errorElement: <NotFoundPage />,
   },
   {
