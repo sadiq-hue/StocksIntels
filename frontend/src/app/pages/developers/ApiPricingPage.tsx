@@ -69,7 +69,7 @@ export function ApiPricingPage() {
     // Free tier: generate a production key directly (login required)
     if (plan.id === 'free' || plan.monthlyPrice === 0) {
       if (!user) {
-        navigate("/login?redirect=/developers/pricing");
+        navigate("/login?redirect=/developers/api-keys");
         return;
       }
       generateFreeKey();

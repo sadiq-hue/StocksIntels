@@ -65,6 +65,31 @@ const navigate = useNavigate();
 
   const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+  // Auto-generate a free production API key when a new user lands here after registration
+  useEffect(() => {
+    if (authContextLoading || !user || apiKeys.length > 0) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authFetch(`${API_BASE}/users/${user.id}/api-keys`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "production" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.key) {
+            setNewApiKey(data.key.full_key);
+            toast.success("Free production API key generated (1,000 requests/day)");
+          }
+        }
+        await fetchApiKeys();
+      } catch (err) {
+        console.error("Auto key generation failed:", err);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [user, authContextLoading, apiKeys.length]);
+
   const fetchApiKeys = async () => {
     if (!user) return;
     try {
